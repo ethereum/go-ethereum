@@ -17,7 +17,6 @@
 package pruner
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -448,8 +447,8 @@ func extractGenesis(db ethdb.Database, stateBloom *stateBloom) error {
 					return storageIter.Error()
 				}
 			}
-			if !bytes.Equal(acc.CodeHash, types.EmptyCodeHash.Bytes()) {
-				stateBloom.Put(acc.CodeHash, nil)
+			if acc.CodeHash != types.EmptyCodeHash {
+				stateBloom.Put(acc.CodeHash.Bytes(), nil)
 			}
 		}
 	}

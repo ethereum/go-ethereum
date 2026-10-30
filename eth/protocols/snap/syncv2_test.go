@@ -1431,7 +1431,7 @@ func makeAccountTrieWithAddresses(n int, scheme string) (string, *trie.Trie, []*
 			Nonce:    i,
 			Balance:  uint256.NewInt(i),
 			Root:     types.EmptyRootHash,
-			CodeHash: types.EmptyCodeHash[:],
+			CodeHash: types.EmptyCodeHash,
 		})
 		key := crypto.Keccak256(addr[:])
 		elem := &kv{key, value}
@@ -1847,7 +1847,7 @@ func testPivotMovement(t *testing.T, scheme string, pivotMoves int) {
 			if bytes.Equal(entry.k, targetHash[:]) {
 				val, _ := rlp.EncodeToBytes(&types.StateAccount{
 					Nonce: 50, Balance: balance,
-					Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
+					Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash,
 				})
 				newElems[i] = &kv{entry.k, val}
 			} else {
@@ -2425,7 +2425,7 @@ func seedCompletedSync(t *testing.T, scheme string) *reenableFixture {
 			if bytes.Equal(entry.k, hashY[:]) {
 				val, _ := rlp.EncodeToBytes(&types.StateAccount{
 					Nonce: 50, Balance: uint256.NewInt(balance),
-					Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
+					Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash,
 				})
 				newElems[i] = &kv{entry.k, val}
 			} else {
@@ -2926,7 +2926,7 @@ func testResumeWipesUncoveredState(t *testing.T, scheme string) {
 	bogus := incHash(task.Next)
 	rawdb.WriteAccountSnapshot(db, bogus, types.SlimAccountRLP(types.StateAccount{
 		Nonce: 1, Balance: uint256.NewInt(1),
-		Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash[:],
+		Root: types.EmptyRootHash, CodeHash: types.EmptyCodeHash,
 	}))
 
 	// Second run: the resume must prune the bogus entry and complete cleanly.
@@ -3548,7 +3548,7 @@ func testCatchUpAppliesStorageBALs(t *testing.T, scheme string) {
 	contractTmpl := types.StateAccount{
 		Nonce:    7,
 		Balance:  uint256.NewInt(123456),
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	}
 
 	// Storage-less filler accounts, identical in A and A+1.
@@ -3778,7 +3778,7 @@ func testPivotMoveAbortsEmptiedStorage(t *testing.T, scheme string) {
 	contractTmpl := types.StateAccount{
 		Nonce:    7,
 		Balance:  uint256.NewInt(123456),
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	}
 	// Storage-less filler accounts, identical at A and A+1.
 	_, _, plain, _ := makeAccountTrieWithAddresses(20, scheme)
@@ -3901,7 +3901,7 @@ func testShortAccountResponseKeepsSuspendedStorage(t *testing.T, scheme string) 
 			Nonce:    nonce,
 			Balance:  uint256.NewInt(1000 + nonce),
 			Root:     types.EmptyRootHash,
-			CodeHash: types.EmptyCodeHash[:],
+			CodeHash: types.EmptyCodeHash,
 		})
 		return &kv{key.Bytes(), val}
 	}
@@ -3924,7 +3924,7 @@ func testShortAccountResponseKeepsSuspendedStorage(t *testing.T, scheme string) 
 	contractTmpl := types.StateAccount{
 		Nonce:    7,
 		Balance:  uint256.NewInt(123456),
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	}
 	accTrie, accElems, stTrie, stElems, root := makeStateWithStorageContract(scheme, plain, contractAddr, contractTmpl, slots)
 

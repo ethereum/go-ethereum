@@ -74,7 +74,7 @@ func randomAccount() []byte {
 		Balance:  uint256.NewInt(rand.Uint64()),
 		Nonce:    rand.Uint64(),
 		Root:     testrand.Hash(),
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	}
 	data, _ := rlp.EncodeToBytes(a)
 	return data

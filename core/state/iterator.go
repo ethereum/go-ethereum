@@ -17,7 +17,6 @@
 package state
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 
@@ -142,11 +141,11 @@ func (it *nodeIterator) step() error {
 	if !it.dataIt.Next(true) {
 		it.dataIt = nil
 	}
-	if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
-		it.codeHash = common.BytesToHash(account.CodeHash)
-		it.code = it.state.reader.Code(address, common.BytesToHash(account.CodeHash))
+	if account.CodeHash != types.EmptyCodeHash {
+		it.codeHash = account.CodeHash
+		it.code = it.state.reader.Code(address, account.CodeHash)
 		if len(it.code) == 0 {
-			return fmt.Errorf("code is not found: %x", account.CodeHash)
+			return fmt.Errorf("code is not found: %s", account.CodeHash)
 		}
 	}
 	it.accountHash = it.stateIt.Parent()

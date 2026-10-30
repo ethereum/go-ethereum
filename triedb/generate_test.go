@@ -93,7 +93,7 @@ func TestGenerateTrieAccountsOnly(t *testing.T) {
 				Nonce:    1,
 				Balance:  uint256.NewInt(100),
 				Root:     types.EmptyRootHash,
-				CodeHash: types.EmptyCodeHash.Bytes(),
+				CodeHash: types.EmptyCodeHash,
 			},
 		},
 		{
@@ -102,7 +102,7 @@ func TestGenerateTrieAccountsOnly(t *testing.T) {
 				Nonce:    2,
 				Balance:  uint256.NewInt(200),
 				Root:     types.EmptyRootHash,
-				CodeHash: types.EmptyCodeHash.Bytes(),
+				CodeHash: types.EmptyCodeHash,
 			},
 		},
 	}
@@ -130,7 +130,7 @@ func TestGenerateTrieWithStorage(t *testing.T) {
 				Nonce:    1,
 				Balance:  uint256.NewInt(100),
 				Root:     storageRoot,
-				CodeHash: types.EmptyCodeHash.Bytes(),
+				CodeHash: types.EmptyCodeHash,
 			},
 			storage: slots,
 		},
@@ -140,7 +140,7 @@ func TestGenerateTrieWithStorage(t *testing.T) {
 				Nonce:    0,
 				Balance:  uint256.NewInt(50),
 				Root:     types.EmptyRootHash,
-				CodeHash: types.EmptyCodeHash.Bytes(),
+				CodeHash: types.EmptyCodeHash,
 			},
 		},
 	}
@@ -172,7 +172,7 @@ func TestGenerateTrieRootMismatch(t *testing.T) {
 		Nonce:    1,
 		Balance:  uint256.NewInt(100),
 		Root:     types.EmptyRootHash,
-		CodeHash: types.EmptyCodeHash.Bytes(),
+		CodeHash: types.EmptyCodeHash,
 	}
 	rawdb.WriteAccountSnapshot(db, common.HexToHash("0x01"), types.SlimAccountRLP(acct))
 
@@ -199,7 +199,7 @@ func TestGenerateTrieFixesStaleRoots(t *testing.T) {
 				Nonce:    uint64(i),
 				Balance:  uint256.NewInt(uint64(i + 1)),
 				Root:     types.EmptyRootHash,
-				CodeHash: types.EmptyCodeHash.Bytes(),
+				CodeHash: types.EmptyCodeHash,
 			},
 		}
 		// Every third account has no storage; the rest get slots.
@@ -262,7 +262,7 @@ func TestGenerateTrieCancel(t *testing.T) {
 		rawdb.WriteAccountSnapshot(db, hash, types.SlimAccountRLP(types.StateAccount{
 			Balance:  uint256.NewInt(1),
 			Root:     types.EmptyRootHash,
-			CodeHash: types.EmptyCodeHash[:],
+			CodeHash: types.EmptyCodeHash,
 		}))
 	}
 
@@ -296,7 +296,7 @@ func TestGenerateTrieOrphanStorage(t *testing.T) {
 				Nonce:    1,
 				Balance:  uint256.NewInt(1),
 				Root:     computeStorageRootFromSlots(slotsA),
-				CodeHash: types.EmptyCodeHash.Bytes(),
+				CodeHash: types.EmptyCodeHash,
 			},
 			storage: slotsA,
 		},
@@ -306,7 +306,7 @@ func TestGenerateTrieOrphanStorage(t *testing.T) {
 				Nonce:    2,
 				Balance:  uint256.NewInt(2),
 				Root:     computeStorageRootFromSlots(slotsB),
-				CodeHash: types.EmptyCodeHash.Bytes(),
+				CodeHash: types.EmptyCodeHash,
 			},
 			storage: slotsB,
 		},
@@ -411,7 +411,7 @@ func TestGenerateTriePathSchemeNodeSet(t *testing.T) {
 				Nonce:    1,
 				Balance:  uint256.NewInt(1),
 				Root:     types.EmptyRootHash,
-				CodeHash: types.EmptyCodeHash.Bytes(),
+				CodeHash: types.EmptyCodeHash,
 			},
 		}
 	}
@@ -597,7 +597,7 @@ func TestGenerateTrieBatchFlush(t *testing.T) {
 		return common.BytesToHash([]byte{0x00, byte(i >> 16), byte(i >> 8), byte(i)})
 	}
 	acct := func(root common.Hash) types.StateAccount {
-		return types.StateAccount{Nonce: 1, Balance: uint256.NewInt(1), Root: root, CodeHash: types.EmptyCodeHash.Bytes()}
+		return types.StateAccount{Nonce: 1, Balance: uint256.NewInt(1), Root: root, CodeHash: types.EmptyCodeHash}
 	}
 	// Each fixture writes this many entries into partition 0, enough that one
 	// flush site overflows IdealBatchSize several times over.

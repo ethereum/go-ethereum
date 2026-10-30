@@ -1608,9 +1608,8 @@ var (
 )
 
 // getCodeHash returns a pseudo-random code hash
-func getCodeHash(i uint64) []byte {
-	h := codehashes[int(i)%len(codehashes)]
-	return common.CopyBytes(h[:])
+func getCodeHash(i uint64) common.Hash {
+	return codehashes[int(i)%len(codehashes)]
 }
 
 // getCodeByHash convenience function to lookup the code from the code hash
@@ -1733,7 +1732,7 @@ func makeAccountTrieWithStorageWithUniqueStorage(scheme string, accounts, slots 
 	// Create n accounts in the trie
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
-		codehash := types.EmptyCodeHash.Bytes()
+		codehash := types.EmptyCodeHash
 		if code {
 			codehash = getCodeHash(i)
 		}
@@ -1788,7 +1787,7 @@ func makeAccountTrieWithStorage(scheme string, accounts, slots int, code, bounda
 	// Create n accounts in the trie
 	for i := uint64(1); i <= uint64(accounts); i++ {
 		key := key32(i)
-		codehash := types.EmptyCodeHash.Bytes()
+		codehash := types.EmptyCodeHash
 		if code {
 			codehash = getCodeHash(i)
 		}

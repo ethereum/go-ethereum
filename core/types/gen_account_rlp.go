@@ -15,7 +15,7 @@ func (obj *StateAccount) EncodeRLP(_w io.Writer) error {
 		w.WriteUint256(obj.Balance)
 	}
 	w.WriteBytes(obj.Root[:])
-	w.WriteBytes(obj.CodeHash)
+	w.WriteBytes(obj.CodeHash[:])
 	w.ListEnd(_tmp0)
 	return w.Flush()
 }

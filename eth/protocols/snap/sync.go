@@ -1973,9 +1973,9 @@ func (s *syncer) processAccountResponse(res *accountResponse) {
 	res.task.pend = 0
 	for i, account := range res.accounts {
 		// Check if the account is a contract with an unknown code
-		if !bytes.Equal(account.CodeHash, types.EmptyCodeHash.Bytes()) {
-			if !rawdb.HasCodeWithPrefix(s.db, common.BytesToHash(account.CodeHash)) {
-				res.task.codeTasks[common.BytesToHash(account.CodeHash)] = struct{}{}
+		if account.CodeHash != types.EmptyCodeHash {
+			if !rawdb.HasCodeWithPrefix(s.db, account.CodeHash) {
+				res.task.codeTasks[account.CodeHash] = struct{}{}
 				res.task.needCode[i] = true
 				res.task.pend++
 			}
@@ -2078,7 +2078,7 @@ func (s *syncer) processBytecodeResponse(res *bytecodeResponse) {
 		}
 		// Code was delivered, mark it not needed any more
 		for j, account := range res.task.res.accounts {
-			if res.task.needCode[j] && hash == common.BytesToHash(account.CodeHash) {
+			if res.task.needCode[j] && hash == account.CodeHash {
 				res.task.needCode[j] = false
 				res.task.pend--
 			}

@@ -154,7 +154,7 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				Balance:     data.Balance.String(),
 				Nonce:       data.Nonce,
 				Root:        data.Root[:],
-				CodeHash:    data.CodeHash,
+				CodeHash:    data.CodeHash.Bytes(),
 				AddressHash: acctIt.Hash().Bytes(),
 			}
 			address *common.Address

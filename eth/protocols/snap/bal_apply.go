@@ -198,7 +198,7 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch, tr
 			isNew = true
 			account.Balance = new(uint256.Int)
 			account.Root = types.EmptyRootHash
-			account.CodeHash = types.EmptyCodeHash[:]
+			account.CodeHash = types.EmptyCodeHash
 		}
 
 		// Apply the storage writes to the storage trie as well
@@ -264,16 +264,16 @@ func (s *syncerV2) applyAccessList(b *bal.BlockAccessList, batch ethdb.Batch, tr
 		if n := len(access.CodeChanges); n > 0 {
 			code := access.CodeChanges[n-1].NewCode
 			if len(code) > 0 {
-				codeHash := crypto.Keccak256(code)
-				rawdb.WriteCode(batch, common.BytesToHash(codeHash), code)
+				codeHash := crypto.Keccak256Hash(code)
+				rawdb.WriteCode(batch, codeHash, code)
 				account.CodeHash = codeHash
 			} else {
-				account.CodeHash = types.EmptyCodeHash[:]
+				account.CodeHash = types.EmptyCodeHash
 			}
 		}
 
 		// Don't create empty accounts in flat state (EIP-161).
-		isEmpty := account.Balance.IsZero() && account.Nonce == 0 && bytes.Equal(account.CodeHash, types.EmptyCodeHash[:])
+		isEmpty := account.Balance.IsZero() && account.Nonce == 0 && account.CodeHash == types.EmptyCodeHash
 		switch {
 		case isEmpty && isNew:
 			// This covers cases where an account is created and destroyed within the

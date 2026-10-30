@@ -657,14 +657,14 @@ func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase, grou
 		account := &types.StateAccount{
 			Balance:  uint256.MustFromBig(acc.Balance),
 			Nonce:    acc.Nonce,
-			CodeHash: crypto.Keccak256Hash(acc.Code).Bytes(),
+			CodeHash: crypto.Keccak256Hash(acc.Code),
 			Root:     common.Hash{},
 		}
 		err := bt.UpdateAccount(addr, account, len(acc.Code))
 		if err != nil {
 			return nil, fmt.Errorf("error inserting account: %w", err)
 		}
-		err = bt.UpdateContractCode(addr, common.BytesToHash(account.CodeHash), acc.Code)
+		err = bt.UpdateContractCode(addr, account.CodeHash, acc.Code)
 		if err != nil {
 			return nil, fmt.Errorf("error inserting code: %w", err)
 		}

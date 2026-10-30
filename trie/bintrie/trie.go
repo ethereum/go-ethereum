@@ -230,7 +230,7 @@ func (t *BinaryTrie) GetAccount(addr common.Address) (*types.StateAccount, error
 	var balance [16]byte
 	copy(balance[:], values[BasicDataLeafKey][BasicDataBalanceOffset:])
 	acc.Balance = new(uint256.Int).SetBytes(balance[:])
-	acc.CodeHash = values[CodeHashLeafKey]
+	acc.CodeHash = common.BytesToHash(values[CodeHashLeafKey])
 
 	return acc, nil
 }

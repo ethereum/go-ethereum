@@ -260,7 +260,7 @@ func (r *ReaderWithBlockLevelAccessList) Account(addr common.Address) (*types.St
 		account.Nonce = nonce
 	}
 	if hasCode {
-		account.CodeHash = codeHash.Bytes()
+		account.CodeHash = codeHash
 	}
 	return account, nil
 }

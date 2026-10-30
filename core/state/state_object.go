@@ -89,7 +89,7 @@ type stateObject struct {
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.data.Nonce == 0 && s.data.Balance.IsZero() && bytes.Equal(s.data.CodeHash, types.EmptyCodeHash.Bytes())
+	return s.data.Nonce == 0 && s.data.Balance.IsZero() && s.data.CodeHash == types.EmptyCodeHash
 }
 
 // newObject creates a state object.
@@ -455,7 +455,7 @@ func (s *stateObject) commit() (*AccountUpdate, *trienode.NodeSet, error) {
 		if s.origin == nil {
 			op.Code.OriginHash = types.EmptyCodeHash
 		} else {
-			op.Code.OriginHash = common.BytesToHash(s.origin.CodeHash)
+			op.Code.OriginHash = s.origin.CodeHash
 		}
 	}
 	// Commit storage changes and the associated storage trie
@@ -603,7 +603,7 @@ func (s *stateObject) SetCode(codeHash common.Hash, code []byte) (prev []byte) {
 
 func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.code = code
-	s.data.CodeHash = codeHash[:]
+	s.data.CodeHash = codeHash
 	s.dirtyCode = true
 }
 
@@ -617,7 +617,7 @@ func (s *stateObject) setNonce(nonce uint64) {
 }
 
 func (s *stateObject) CodeHash() []byte {
-	return s.data.CodeHash
+	return s.data.CodeHash.Bytes()
 }
 
 func (s *stateObject) Balance() *uint256.Int {

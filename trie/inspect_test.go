@@ -185,7 +185,7 @@ func TestInspectContract(t *testing.T) {
 		Nonce:    1,
 		Balance:  uint256.NewInt(1000),
 		Root:     storageRoot,
-		CodeHash: crypto.Keccak256(nil),
+		CodeHash: types.EmptyCodeHash,
 	}
 	accountRLP, err := rlp.EncodeToBytes(&account)
 	if err != nil {
@@ -225,7 +225,7 @@ func makeAccountsWithStorage(db *testDb, size int, storage bool) (addresses [][2
 		var (
 			nonce = uint64(random.Int63())
 			root  = types.EmptyRootHash
-			code  = crypto.Keccak256(nil)
+			code  = types.EmptyCodeHash
 		)
 		if storage {
 			trie := NewEmpty(db)

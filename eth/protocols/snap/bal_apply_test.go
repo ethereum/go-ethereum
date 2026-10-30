@@ -112,7 +112,7 @@ func TestAccessListApplication(t *testing.T) {
 		Nonce:    5,
 		Balance:  uint256.NewInt(1000),
 		Root:     common.HexToHash("0xbeef"), // intentionally non-empty
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	}
 	rawdb.WriteAccountSnapshot(db, accountHash, types.SlimAccountRLP(original))
 
@@ -146,13 +146,13 @@ func TestAccessListApplication(t *testing.T) {
 	if updated.Nonce != 6 {
 		t.Errorf("nonce wrong: got %d, want 6", updated.Nonce)
 	}
-	wantCodeHash := crypto.Keccak256([]byte{0x60, 0x00})
-	if !bytes.Equal(updated.CodeHash, wantCodeHash) {
+	wantCodeHash := crypto.Keccak256Hash([]byte{0x60, 0x00})
+	if updated.CodeHash != wantCodeHash {
 		t.Errorf("code hash wrong: got %x, want %x", updated.CodeHash, wantCodeHash)
 	}
 
 	// Verify code was written
-	if code := rawdb.ReadCode(db, common.BytesToHash(wantCodeHash)); !bytes.Equal(code, []byte{0x60, 0x00}) {
+	if code := rawdb.ReadCode(db, wantCodeHash); !bytes.Equal(code, []byte{0x60, 0x00}) {
 		t.Errorf("code wrong: got %x, want 6000", code)
 	}
 
@@ -186,7 +186,7 @@ func TestAccessListApplicationMultiTx(t *testing.T) {
 		Nonce:    0,
 		Balance:  uint256.NewInt(100),
 		Root:     types.EmptyRootHash,
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	}
 	rawdb.WriteAccountSnapshot(db, accountHash, types.SlimAccountRLP(original))
 
@@ -230,7 +230,7 @@ func TestAccessListApplicationZeroStorage(t *testing.T) {
 		Nonce:    1,
 		Balance:  uint256.NewInt(1),
 		Root:     types.EmptyRootHash,
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	}
 	rawdb.WriteAccountSnapshot(db, accountHash, types.SlimAccountRLP(original))
 	rawSlot := common.HexToHash("0xaa")
@@ -569,7 +569,7 @@ func TestAccessListApplicationDestroyExisting(t *testing.T) {
 		Nonce:    0,
 		Balance:  uint256.NewInt(1000),
 		Root:     types.EmptyRootHash,
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	}
 	rawdb.WriteAccountSnapshot(db, accountHash, types.SlimAccountRLP(original))
 

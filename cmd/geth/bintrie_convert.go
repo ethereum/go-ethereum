@@ -203,7 +203,7 @@ func runConversionLoop(chaindb ethdb.Database, srcTriedb *triedb.Database, destT
 		addr := common.BytesToAddress(addrBytes)
 
 		var code []byte
-		codeHash := common.BytesToHash(acc.CodeHash)
+		codeHash := acc.CodeHash
 		if codeHash != types.EmptyCodeHash {
 			code = rawdb.ReadCode(chaindb, codeHash)
 			if code == nil {

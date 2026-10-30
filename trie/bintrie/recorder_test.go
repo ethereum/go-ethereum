@@ -44,7 +44,7 @@ func TestRecorderCapturesAccountWrite(t *testing.T) {
 	acc := &types.StateAccount{
 		Nonce:    7,
 		Balance:  uint256.NewInt(42),
-		CodeHash: common.HexToHash("aa").Bytes(),
+		CodeHash: common.HexToHash("aa"),
 	}
 	if err := tr.UpdateAccount(addr, acc, 0); err != nil {
 		t.Fatalf("UpdateAccount: %v", err)

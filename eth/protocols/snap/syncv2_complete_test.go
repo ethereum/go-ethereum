@@ -99,7 +99,7 @@ func newCompleteFixture(t *testing.T, scheme string) *completeFixture {
 		Nonce:    0,
 		Balance:  uint256.NewInt(777),
 		Root:     types.EmptyRootHash,
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	})
 	plainA := append(append([]*kv{}, plain...), &kv{f.drainHash[:], drainVal})
 
@@ -107,7 +107,7 @@ func newCompleteFixture(t *testing.T, scheme string) *completeFixture {
 	contractA := types.StateAccount{
 		Nonce:    7,
 		Balance:  uint256.NewInt(123456),
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	}
 	slotsA := map[common.Hash]common.Hash{
 		slotKeep: vKeep,
@@ -122,7 +122,7 @@ func newCompleteFixture(t *testing.T, scheme string) *completeFixture {
 	contractB := types.StateAccount{
 		Nonce:    8,
 		Balance:  uint256.NewInt(654321),
-		CodeHash: crypto.Keccak256(f.code),
+		CodeHash: crypto.Keccak256Hash(f.code),
 	}
 	slotsB := map[common.Hash]common.Hash{
 		slotKeep: vKeep,
@@ -133,7 +133,7 @@ func newCompleteFixture(t *testing.T, scheme string) *completeFixture {
 		Nonce:    1,
 		Balance:  uint256.NewInt(5000),
 		Root:     types.EmptyRootHash,
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	})
 	plainB := append(append([]*kv{}, plain...), &kv{f.newHash[:], newVal})
 	var rootB common.Hash
@@ -158,7 +158,7 @@ func newCompleteFixture(t *testing.T, scheme string) *completeFixture {
 		Nonce:    1,
 		Balance:  uint256.NewInt(6000),
 		Root:     types.EmptyRootHash,
-		CodeHash: types.EmptyCodeHash[:],
+		CodeHash: types.EmptyCodeHash,
 	})
 	plainC := append(append([]*kv{}, plain...), &kv{f.newHash[:], newValC})
 	var rootC common.Hash
@@ -385,7 +385,7 @@ func (f *completeFixture) assertStorage(t *testing.T, stateRoot, storageRoot com
 
 // sameAccount reports whether two accounts hold identical fields.
 func sameAccount(a, b *types.StateAccount) bool {
-	return a.Nonce == b.Nonce && a.Balance.Cmp(b.Balance) == 0 && a.Root == b.Root && bytes.Equal(a.CodeHash, b.CodeHash)
+	return a.Nonce == b.Nonce && a.Balance.Cmp(b.Balance) == 0 && a.Root == b.Root && a.CodeHash == b.CodeHash
 }
 
 // assertJournal checks the persisted journal is complete at the given pivot.
@@ -425,7 +425,7 @@ func testCompletePhasePivotMove(t *testing.T, scheme string) {
 	// The contract picked up its balance, nonce and code, and the flat
 	// account carries the live storage root, the same one the trie holds.
 	contract := f.flatAccount(t, f.contractHash)
-	if contract == nil || contract.Nonce != 8 || contract.Balance.Uint64() != 654321 || !bytes.Equal(contract.CodeHash, crypto.Keccak256(f.code)) {
+	if contract == nil || contract.Nonce != 8 || contract.Balance.Uint64() != 654321 || contract.CodeHash != crypto.Keccak256Hash(f.code) {
 		t.Fatalf("contract account after B: %+v", contract)
 	}
 	if contract.Root == types.EmptyRootHash {
@@ -434,7 +434,7 @@ func testCompletePhasePivotMove(t *testing.T, scheme string) {
 	if inTrie := f.trieAccount(t, f.hdrB.Root, f.contractHash); inTrie == nil || !sameAccount(inTrie, contract) {
 		t.Fatalf("contract in trie %+v differs from flat state %+v", inTrie, contract)
 	}
-	if len(rawdb.ReadCode(f.db, common.BytesToHash(contract.CodeHash))) == 0 {
+	if len(rawdb.ReadCode(f.db, contract.CodeHash)) == 0 {
 		t.Fatal("contract code not persisted")
 	}
 	// Slot by slot: the kept one unchanged, the overwritten and the new one
