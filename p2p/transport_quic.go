@@ -19,6 +19,7 @@ package p2p
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"errors"
 	"io"
 	"slices"
 	"sync"
@@ -141,20 +142,31 @@ func (q *quicTransport) doProtoHandshake(_ *devp2pProtocolHandshake) (transportH
 	return transportHello{Caps: caps, NodeID: q.conn.NodeID()}, nil
 }
 
-var browserScheme = enr.SchemeMap{
-	"browser": browserID{},
-}
-
+// browserID implements an ENR identity scheme for synthetic records which are created for
+// browser clients. These do not have a valid signature. Instead, the signature element of
+// the record is set to the generated node ID.
 type browserID struct{}
 
 func (b browserID) NodeAddr(r *enr.Record) []byte {
-	var id enode.ID
-	r.Load(enr.WithEntry("browserid", &id))
-	return id[:]
+	return r.Signature()
 }
 
 func (b browserID) Verify(r *enr.Record, sig []byte) error {
+	if len(sig) != 32 {
+		return errors.New("invalid signature size, expected 32 bytes")
+	}
 	return nil
+}
+
+var browserScheme = enr.SchemeMap{"browser": browserID{}}
+
+// signBrowser stores `id` into the node record and creates
+func signBrowser(r *enr.Record, id enode.ID) (*enode.Node, error) {
+	r.Set(enr.ID("browser"))
+	if err := r.SetSig(browserID{}, id[:]); err != nil {
+		return nil, err
+	}
+	return enode.New(browserScheme, r)
 }
 
 // browserNodeFromConn creates the node of a browser peer from its random ID
@@ -167,15 +179,6 @@ func browserNodeFromConn(conn *quic.Conn) (*enode.Node, error) {
 		r.Set(enr.IPv6Addr(ip))
 	}
 	return signBrowser(&r, conn.NodeID())
-}
-
-func signBrowser(r *enr.Record, id enode.ID) (*enode.Node, error) {
-	r.Set(enr.ID("browser"))
-	r.Set(enr.WithEntry("browserid", id))
-	if err := r.SetSig(browserID{}, []byte{}); err != nil {
-		return nil, err
-	}
-	return enode.New(browserScheme, r)
 }
 
 // isBrowser returns whether the remote node uses the browser identity scheme

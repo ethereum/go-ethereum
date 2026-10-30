@@ -17,6 +17,7 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/sha256"
@@ -34,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/quic"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -245,6 +247,27 @@ func TestQUICTransport(t *testing.T) {
 	if len(payload) != 2 || payload[0] != "hello" || payload[1] != "quic" {
 		t.Fatalf("payload mismatch: %v", payload)
 	}
+}
+
+func TestENRBrowserID(t *testing.T) {
+	var r enr.Record
+	r.Set(enr.QUIC(3333))
+	id := enode.ID{8, 8, 4, 4, 2, 2, 5, 5}
+	n, err := signBrowser(&r, id)
+	if err != nil {
+		t.Fatal("error signing record:", err)
+	}
+	if n.ID() != id {
+		t.Fatal("ID not stored on record")
+	}
+	if !bytes.Equal(n.Record().Signature(), id[:]) {
+		t.Fatal("signature is not equal to ID")
+	}
+	var qp enr.QUIC
+	if err := n.Load(&qp); err != nil || qp != 3333 {
+		t.Fatal("QUIC port not stored on signed record:", err)
+	}
+	t.Log(n.String())
 }
 
 func TestPenalizeBrowser(t *testing.T) {
