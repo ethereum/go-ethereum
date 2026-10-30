@@ -163,6 +163,8 @@ func New(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
 		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.PBTPrefix))
 		db.hasher = binaryNodeHasher
 	}
+	db.dropSupersededJournal()
+
 	// Construct the layer tree by resolving the in-disk singleton state
 	// and in-memory layer journal.
 	db.tree = newLayerTree(db.loadLayers())
