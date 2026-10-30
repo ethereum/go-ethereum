@@ -167,6 +167,10 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		Requests: requests,
 		Logs:     allLogs,
 		GasUsed:  gp.Used(),
+
+		ExecutionGasUsed: gp.CumulativeExecution(),
+		StateGasUsed:     gp.CumulativeState(),
+
 		pipeline: pipeline,
 	}, nil
 }
