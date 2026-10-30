@@ -157,6 +157,12 @@ func DeleteMerkleState(db ethdb.KeyValueStore, interrupt <-chan struct{}) error 
 	if err := batch.Write(); err != nil {
 		return err
 	}
+	// The snap-sync status among these keys can run to hundreds of MiB, and
+	// a read of any key sharing its block loads the block until the file is
+	// rewritten: rewrite it now rather than at some later compaction.
+	if err := db.Compact([]byte("Snap"), []byte("Snaq")); err != nil {
+		return err
+	}
 	stop := stopOn(interrupt)
 	for _, prefix := range MerkleKeyFamilies {
 		if err := SafeDeleteRange(db, prefix, increaseKey(bytes.Clone(prefix)), false, stop); err != nil {
