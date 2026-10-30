@@ -56,18 +56,6 @@ const (
 	pongMsg      = 0x03
 )
 
-// protoHandshake is the RLP structure of the protocol handshake.
-type protoHandshake struct {
-	Version    uint64
-	Name       string
-	Caps       []Cap
-	ListenPort uint64
-	ID         []byte // secp256k1 public key
-
-	// Ignore additional fields (for forward compatibility).
-	Rest []rlp.RawValue `rlp:"tail"`
-}
-
 // PeerEventType is the type of peer events emitted by a p2p.Server
 type PeerEventType string
 
@@ -224,6 +212,12 @@ func (p *Peer) Inbound() bool {
 	return p.rw.is(inboundConn)
 }
 
+// IsBrowser returns true if the peer is an unverified inbound peer connected
+// over QUIC, budgeted separately from other peers.
+func (p *Peer) IsBrowser() bool {
+	return p.rw.isBrowser()
+}
+
 // Trusted returns true if the peer is configured as trusted.
 // Trusted peers are accepted in above the MaxInboundConns limit.
 // The peer can be either inbound or dialed.
@@ -274,9 +268,13 @@ func (p *Peer) run() (remoteRequested bool, err error) {
 		readErr    = make(chan error, 1)
 		reason     DiscReason // sent to the peer
 	)
-	p.wg.Add(2)
+	p.wg.Add(1)
 	go p.readLoop(readErr)
-	go p.pingLoop()
+	// Browser peers do not support ping/pong.
+	if !p.rw.isBrowser() {
+		p.wg.Add(1)
+		go p.pingLoop()
+	}
 	live1min := time.NewTimer(1 * time.Minute)
 	defer live1min.Stop()
 
@@ -368,6 +366,11 @@ func (p *Peer) readLoop(errc chan<- error) {
 func (p *Peer) handle(msg Msg) error {
 	switch {
 	case msg.Code == pingMsg:
+		if p.rw.isBrowser() {
+			// browser connections ignore base protocol messages,
+			// including pingMsg.
+			return msg.Discard()
+		}
 		msg.Discard()
 		select {
 		case p.pingRecv <- struct{}{}:
