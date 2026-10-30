@@ -34,6 +34,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		MigrationWindowBlocks   uint64 `toml:",omitempty"`
 		TrienodeHistory         int64  `toml:",omitempty"`
 		PBTImport               PBTImportConfig
+		PBTRecover              bool                   `toml:"-"`
 		NodeFullValueCheckpoint uint32                 `toml:",omitempty"`
 		StateScheme             string                 `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
@@ -91,6 +92,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.MigrationWindowBlocks = c.MigrationWindowBlocks
 	enc.TrienodeHistory = c.TrienodeHistory
 	enc.PBTImport = c.PBTImport
+	enc.PBTRecover = c.PBTRecover
 	enc.NodeFullValueCheckpoint = c.NodeFullValueCheckpoint
 	enc.StateScheme = c.StateScheme
 	enc.RequiredBlocks = c.RequiredBlocks
@@ -152,6 +154,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		MigrationWindowBlocks   *uint64 `toml:",omitempty"`
 		TrienodeHistory         *int64  `toml:",omitempty"`
 		PBTImport               *PBTImportConfig
+		PBTRecover              *bool                  `toml:"-"`
 		NodeFullValueCheckpoint *uint32                `toml:",omitempty"`
 		StateScheme             *string                `toml:",omitempty"`
 		RequiredBlocks          map[uint64]common.Hash `toml:"-"`
@@ -245,6 +248,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.PBTImport != nil {
 		c.PBTImport = *dec.PBTImport
+	}
+	if dec.PBTRecover != nil {
+		c.PBTRecover = *dec.PBTRecover
 	}
 	if dec.NodeFullValueCheckpoint != nil {
 		c.NodeFullValueCheckpoint = *dec.NodeFullValueCheckpoint
