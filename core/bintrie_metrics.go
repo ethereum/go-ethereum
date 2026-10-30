@@ -18,7 +18,17 @@ package core
 
 import "github.com/ethereum/go-ethereum/metrics"
 
+// Routes a migrating node starts on, reported by pbtRouteGauge.
+const (
+	routeNone   = iota
+	routeBinary // the binary tree holds the head's state
+	routeMerkle // below the fork on the merkle trie, crossing again
+	routeReplay // binary tree rebuilt by access-list replay
+)
+
 var (
+	// pbtRouteGauge is the route the last start took.
+	pbtRouteGauge = metrics.NewRegisteredGauge("pbt/recovery/route", nil)
 	// pbtPersistedGauge is the newest post-fork block whose binary state the
 	// node put on disk on purpose; 0 until the window close does.
 	pbtPersistedGauge = metrics.NewRegisteredGauge("pbt/persisted/block", nil)

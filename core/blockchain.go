@@ -117,6 +117,7 @@ var (
 
 	errInsertionInterrupted = errors.New("insertion is interrupted")
 	errChainStopped         = errors.New("blockchain is stopped")
+	errNoBinaryState        = errors.New("binary tree state lost below the fork with the merkle state disposed: resync")
 	errInvalidOldChain      = errors.New("invalid old chain")
 	errInvalidNewChain      = errors.New("invalid new chain")
 )
@@ -194,13 +195,6 @@ type BlockChainConfig struct {
 	// anchored elsewhere.
 	PBTImport      bool
 	PBTImportForce bool
-
-	// PBTRecover reopens a node whose head crossed the fork on the merkle trie:
-	// a crash that lost the binary tree's unflushed post-fork layers leaves its
-	// live state below the fork, where no header commits it. The stock rewind
-	// lands on the last merkle state instead and the chain crosses the fork
-	// again. Needs the merkle state, i.e. a window that has not closed yet.
-	PBTRecover bool
 
 	// Number of blocks from the chain head for which trienode histories are retained.
 	// If set to 0, all trienode histories across the entire chain will be retained;
@@ -441,7 +435,7 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	if mode == modeMPT && rawdb.HasPBTState(db) {
 		return nil, errors.New(`database holds binary tree state but the config does not schedule it (genesis key "binaryTrieTime")`)
 	}
-	isPBT := mode == modePBTNative
+	isPBT, route := mode == modePBTNative, routeNone
 	if mode == modeMigration {
 		// Both trees live on the path scheme, and the shadow's configuration
 		// must be valid up front rather than stalling the follower forever.
@@ -452,21 +446,12 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 			return nil, err
 		}
 		// The canonical commitment follows the head BLOCK across the fork -
-		// during sync the header chain runs ahead of the state the node owns.
-		if head := rawdb.ReadHeadBlock(db); head != nil && resolvedConfig.IsBinaryTrie(head.Number(), head.Time()) {
-			isPBT = true
-			if cfg.PBTRecover {
-				if rawdb.ReadPBTMerkleDisposed(db) {
-					log.Warn("Nothing to recover through: merkle state disposed")
-				} else {
-					log.Warn("Recovering below the fork on the merkle trie", "head", head.Number())
-					isPBT = false
-				}
-			}
-		}
-		// A pre-fork head would execute on deleted state.
-		if !isPBT && rawdb.ReadPBTMerkleDisposed(db) {
-			return nil, errors.New("merkle state disposed at a pre-fork head: re-anchor or resync")
+		// during sync the header chain runs ahead of the state the node owns -
+		// and a disposed merkle trie leaves only the binary tree to open. The
+		// state behind the head decides below, once the tree is open.
+		route = routeMerkle
+		if head := rawdb.ReadHeadBlock(db); rawdb.ReadPBTMerkleDisposed(db) || head != nil && resolvedConfig.IsBinaryTrie(head.Number(), head.Time()) {
+			isPBT, route = true, routeBinary
 		}
 	}
 	// An import seeds the tree the follower carries to the fork: it needs a
@@ -566,7 +551,11 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 			// scheme. This situation occurs when the initial state sync is not finished
 			// yet, or the chain head is rewound below the pivot point. In both scenarios,
 			// there is no possible recovery approach except for rerunning a snap sync.
-			// Do nothing here until the state syncer picks it up.
+			// Do nothing here until the state syncer picks it up. A migrating
+			// binary tree has no genesis to sync: its seed is gone.
+			if mode == modeMigration && isPBT {
+				return nil, errNoBinaryState
+			}
 			log.Info("Genesis state is missing, wait state sync")
 		} else {
 			// Head state is missing, before the state recovery, find out the disk
@@ -593,13 +582,20 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 			} else {
 				// A migrating node that lost the binary tree's post-fork layers
 				// has its live state below the fork, where headers commit the
-				// merkle trie: the rewind below would run to genesis. The merkle
-				// trie is the way back, while the window still keeps it.
+				// merkle trie. While the window keeps that trie, reopen on it
+				// and cross the fork again; once disposed, the rewind lands on
+				// the deepest shadow record with state and the follower
+				// replays the access lists from there.
 				if mode == modeMigration && isPBT && bc.binaryStateBelowFork(head) {
 					if rawdb.ReadPBTMerkleDisposed(db) {
-						return nil, errors.New("binary tree state lost below the fork with the merkle state disposed: resync")
+						route = routeReplay
+					} else {
+						log.Warn("Recovering below the fork on the merkle trie", "head", head.Number)
+						if err := bc.reopenTrieDB(false); err != nil {
+							return nil, err
+						}
+						isPBT, route = false, routeMerkle
 					}
-					return nil, errors.New("binary tree state lost below the fork: restart with --pbt.recover to rewind onto the merkle trie and cross the fork again")
 				}
 				log.Warn("Head state missing, repairing", "number", head.Number, "hash", head.Hash())
 				if _, err := bc.setHeadBeyondRoot(head.Number.Uint64(), 0, common.Hash{}, true); err != nil {
@@ -607,6 +603,21 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 				}
 			}
 		}
+	}
+	if mode == modeMigration {
+		switch head := bc.CurrentBlock(); route {
+		case routeReplay:
+			var to *big.Int
+			if boundary := bc.boundaryAbove(head); boundary != nil {
+				to = new(big.Int).Sub(boundary.Number, common.Big1)
+			}
+			log.Warn("Rebuilding the binary tree by replay", "from", head.Number, "to", to)
+		case routeMerkle:
+			log.Info("Opened the merkle trie", "head", head.Number)
+		case routeBinary:
+			log.Info("Opened the binary tree", "head", head.Number)
+		}
+		pbtRouteGauge.Update(int64(route))
 	}
 	// Ensure that a previous crash in SetHead doesn't leave extra ancients
 	if frozen, err := bc.db.Ancients(); err == nil && frozen > 0 {
@@ -698,7 +709,9 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// An archive node keeps the follower: its only route to a merkle handle.
-	if mode == modeMigration && !rawdb.ReadPBTMerkleDisposed(db) && (!rawdb.ReadPBTMigrationDone(db) || cfg.ArchiveMode) {
+	// The replay route needs it on a disposed datadir, to carry the binary
+	// tree back to the fork.
+	if mode == modeMigration && (!rawdb.ReadPBTMerkleDisposed(db) && (!rawdb.ReadPBTMigrationDone(db) || cfg.ArchiveMode) || route == routeReplay) {
 		bc.follower = newBintrieFollower(bc)
 	}
 
@@ -1051,6 +1064,44 @@ func (bc *BlockChain) binaryStateBelowFork(head *types.Header) bool {
 	return true
 }
 
+// migrating reports whether the chain runs on a binary tree that does not
+// reach genesis: below the fork its blocks commit the merkle trie.
+func (bc *BlockChain) migrating() bool {
+	return bc.triedb.IsPBT() && !bc.chainConfig.IsBinaryTrie(bc.genesisBlock.Number(), bc.genesisBlock.Time())
+}
+
+// commitRoot returns the root the header's state is held under: its own, or,
+// for a pre-fork header while the chain runs on the binary tree, the shadow
+// root recorded for it. False when no such record exists.
+func (bc *BlockChain) commitRoot(h *types.Header) (common.Hash, bool) {
+	if !bc.migrating() || bc.chainConfig.IsBinaryTrie(h.Number, h.Time) {
+		return h.Root, true
+	}
+	return rawdb.ReadShadowStateRoot(bc.db, h.Hash(), h.Number.Uint64())
+}
+
+// boundaryAbove returns the first post-fork canonical block above the given
+// pre-fork header, the head itself if it is post-fork, nil if none exists.
+func (bc *BlockChain) boundaryAbove(h *types.Header) *types.Header {
+	for ; h != nil && !bc.chainConfig.IsBinaryTrie(h.Number, h.Time); h = bc.GetHeaderByNumber(h.Number.Uint64() + 1) {
+	}
+	return h
+}
+
+// reopenTrieDB swaps bc.triedb for a handle over the other tree. Only before
+// anything else references the handle.
+func (bc *BlockChain) reopenTrieDB(pbt bool) error {
+	config, err := bc.cfg.triedbConfig(pbt)
+	if err != nil {
+		return err
+	}
+	if err := bc.triedb.Close(); err != nil {
+		return err
+	}
+	bc.triedb = triedb.NewDatabase(bc.db, config)
+	return nil
+}
+
 // rewindPathHead implements the logic of rewindHead in the context of path scheme.
 func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*types.Header, uint64) {
 	var (
@@ -1090,14 +1141,19 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 		}
 		// Check if the associated state is available or recoverable if
 		// the requested root has already been crossed.
-		if beyondRoot && (bc.HasState(head.Root) || bc.StateRecoverable(head.Root)) {
+		if beyondRoot && bc.hasHeaderState(head) {
 			break
 		}
 		// If pivot block is reached, return the genesis block as the
 		// new chain head. Theoretically there must be a persistent
 		// state before or at the pivot block, prevent endless rewinding
-		// towards the genesis just in case.
+		// towards the genesis just in case. A migrating binary tree has
+		// no state there to reset to.
 		if pivot != nil && *pivot >= head.Number.Uint64() {
+			if bc.migrating() {
+				log.Error("No live binary state above the pivot", "number", head.Number, "hash", head.Hash())
+				return nil, rootNumber
+			}
 			log.Info("Pivot block reached, resetting to genesis", "number", head.Number, "hash", head.Hash())
 			return bc.genesisBlock.Header(), rootNumber
 		}
@@ -1106,12 +1162,20 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 		parent := bc.GetHeader(head.ParentHash, head.Number.Uint64()-1) // Keep rewinding
 		if parent == nil {
 			log.Error("Missing block in the middle, resetting to genesis", "number", head.Number.Uint64()-1, "hash", head.ParentHash)
+			if bc.migrating() {
+				return nil, rootNumber
+			}
 			return bc.genesisBlock.Header(), rootNumber
 		}
 		head = parent
 
-		// If the genesis block is reached, stop searching.
+		// If the genesis block is reached, stop searching. A migrating
+		// binary tree holds genesis only as its seed, under the record.
 		if head.Number.Uint64() == 0 {
+			if bc.migrating() && !bc.hasHeaderState(head) {
+				log.Error("No live binary state below the fork", "number", head.Number, "hash", head.Hash())
+				return nil, rootNumber
+			}
 			log.Info("Genesis block reached", "number", head.Number, "hash", head.Hash())
 			return head, rootNumber
 		}
@@ -1122,6 +1186,13 @@ func (bc *BlockChain) rewindPathHead(head *types.Header, root common.Hash) (*typ
 	// one shot.
 	log.Info("Rewound to block with available state", "number", head.Number, "hash", head.Hash())
 	return head, rootNumber
+}
+
+// hasHeaderState reports whether the state the header commits to is live or
+// recoverable.
+func (bc *BlockChain) hasHeaderState(h *types.Header) bool {
+	root, ok := bc.commitRoot(h)
+	return ok && (bc.HasState(root) || bc.StateRecoverable(root))
 }
 
 // rewindHead searches the available states in the database and returns the associated
@@ -1164,6 +1235,10 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		// Retrieve the last pivot block to short circuit rollbacks beyond it
 		// and the current freezer limit to start nuking it's underflown.
 		pivot = rawdb.ReadLastPivotNumber(bc.db)
+
+		// A migrating binary tree with no live state below the fork: the
+		// rewind found nothing to land on and the markers are left alone.
+		noState bool
 	)
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (*types.Header, bool) {
 		// Rewind the blockchain, ensuring we don't end up with a stateless head
@@ -1172,6 +1247,10 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() <= currentBlock.Number.Uint64() {
 			var newHeadBlock *types.Header
 			newHeadBlock, rootNumber = bc.rewindHead(header, root)
+			if newHeadBlock == nil {
+				noState = true
+				return currentBlock, false
+			}
 			rawdb.WriteHeadBlockHash(db, newHeadBlock.Hash())
 
 			// Degrade the chain markers if they are explicitly reverted.
@@ -1252,15 +1331,19 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, time uint64, root common.Ha
 			bc.hc.SetHead(head, updateFn, delFn)
 		}
 	}
+	if noState {
+		return 0, errNoBinaryState
+	}
 	// In the path-based scheme, the rewind loop above only locates the new head
 	// without materializing its state, so the potentially deep rollback is done
 	// here in a single shot. This rolls back the whole rewound range at once,
 	// performing a single fsync rather than one per block, which is critical when
 	// rewinding a large number of blocks.
-	if newHeadBlock := bc.CurrentBlock(); !bc.HasState(newHeadBlock.Root) {
+	if newHeadBlock := bc.CurrentBlock(); !bc.hasHeaderState(newHeadBlock) || !bc.HasState(newHeadBlock.Root) {
+		root, _ := bc.commitRoot(newHeadBlock)
 		switch {
-		case bc.StateRecoverable(newHeadBlock.Root):
-			if err := bc.triedb.Recover(newHeadBlock.Root); err != nil {
+		case bc.StateRecoverable(root):
+			if err := bc.triedb.Recover(root); err != nil {
 				// The state was confirmed recoverable just above, so a failure here
 				// can only stem from an unexpected I/O error. There is no safe way to
 				// continue with a half-rolled-back state, hence crash hard.
@@ -1822,6 +1905,27 @@ func (bc *BlockChain) writeBlockWithoutState(block *types.Block) (err error) {
 	return nil
 }
 
+// replayBlock carries a pre-fork block on the replay route: stored without
+// state, replayed into the binary tree by the follower, then made the head.
+// A follower short of it is a wait, as at the activation boundary.
+func (bc *BlockChain) replayBlock(block *types.Block, setHead bool) error {
+	if bc.follower == nil {
+		return errors.New("pre-fork block on the binary tree without a follower")
+	}
+	if !bc.HasBlock(block.Hash(), block.NumberU64()) {
+		if err := bc.writeBlockWithoutState(block); err != nil {
+			return err
+		}
+	}
+	if err := bc.follower.waitCaughtUp(block.NumberU64(), block.Hash(), activationWaitTimeout); err != nil {
+		return fmt.Errorf("%w: %w", ErrActivationWait, err)
+	}
+	if setHead {
+		bc.writeHeadBlock(block)
+	}
+	return nil
+}
+
 // writeKnownBlock updates the head block flag with a known block
 // and introduces chain reorg if necessary.
 func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
@@ -2179,6 +2283,18 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 			// We can assume that logs are empty here, since the only way for consecutive
 			// Clique blocks to have the same state is if there are no transactions.
 			lastCanon = block
+			continue
+		}
+		// On the replay route a pre-fork block has no tree to execute on:
+		// the follower rebuilds its binary state from the access list and
+		// the head marker moves past it.
+		if bc.migrating() && !bc.chainConfig.IsBinaryTrie(block.Number(), block.Time()) {
+			if err := bc.replayBlock(block, setHead); err != nil {
+				return nil, it.index, err
+			}
+			if setHead {
+				lastCanon = block
+			}
 			continue
 		}
 		// Retrieve the parent block and it's state to execute on top
