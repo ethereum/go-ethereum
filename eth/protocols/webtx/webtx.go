@@ -63,10 +63,11 @@ type TxResult struct {
 	Result uint8
 }
 
-// TxPool defines the methods needed from a transaction pool implementation to
-// support all the operations needed by the Ethereum chain protocols.
+// TxPool defines the methods required for the tx submit operation on the pool.
 type TxPool interface {
-	// Add should add the given transactions to the pool.
+	// Add puts the given transactions into the pool.
+	// Note this package expects the result to use specific errors from
+	// packages core, txpool, legacypool etc. for error code mapping.
 	Add(txs []*types.Transaction, sync bool) []error
 }
 
