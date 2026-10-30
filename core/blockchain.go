@@ -361,22 +361,23 @@ type BlockChain struct {
 	chainConfig *params.ChainConfig // Chain & network configuration
 	cfg         *BlockChainConfig   // Blockchain configuration
 
-	db              ethdb.Database                   // Low level persistent database to store final content in
-	snaps           *snapshot.Tree                   // Snapshot tree for fast trie leaf access
-	triegc          *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
-	gcproc          time.Duration                    // Accumulates canonical block processing for trie dumping
-	lastWrite       uint64                           // Last block when the state was flushed
-	flushInterval   atomic.Int64                     // Time interval (processing time) after which to flush a state
-	triedb          *triedb.Database                 // The database handler for maintaining trie nodes.
-	codedb          *state.CodeDB                    // The database handler for maintaining contract codes.
-	jumpDestCache   vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
-	precompileCache *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
-	txIndexer       *txIndexer                       // Transaction indexer, might be nil if not enabled
-	follower        *bintrieFollower                 // Shadow tree follower, nil unless migrating
-	disposer        atomic.Pointer[merkleDisposer]   // Merkle state disposal, nil unless retiring it
-	merkleRetired   atomic.Bool                      // bc.triedb retired by the disposal
-	live            atomic.Bool                      // Set by the live node, the only one to decide the disposal
-	activationAlert time.Time                        // Last "activation blocked" report (WaitActivation)
+	db                     ethdb.Database                   // Low level persistent database to store final content in
+	snaps                  *snapshot.Tree                   // Snapshot tree for fast trie leaf access
+	triegc                 *prque.Prque[int64, common.Hash] // Priority queue mapping block numbers to tries to gc
+	gcproc                 time.Duration                    // Accumulates canonical block processing for trie dumping
+	lastWrite              uint64                           // Last block when the state was flushed
+	flushInterval          atomic.Int64                     // Time interval (processing time) after which to flush a state
+	triedb                 *triedb.Database                 // The database handler for maintaining trie nodes.
+	codedb                 *state.CodeDB                    // The database handler for maintaining contract codes.
+	jumpDestCache          vm.JumpDestCache                 // Shared JUMPDEST analysis cache for block processing
+	precompileCache        *vm.PrecompileCache              // Shared precompile result cache for block processing, nil when disabled
+	txIndexer              *txIndexer                       // Transaction indexer, might be nil if not enabled
+	follower               *bintrieFollower                 // Shadow tree follower, nil unless migrating
+	disposer               atomic.Pointer[merkleDisposer]   // Merkle state disposal, nil unless retiring it
+	merkleRetired          atomic.Bool                      // bc.triedb retired by the disposal
+	live                   atomic.Bool                      // Set by the live node, the only one to decide the disposal
+	activationCheckpointed atomic.Bool                      // Merkle trie journaled at the boundary (checkpointActivation)
+	activationAlert        time.Time                        // Last "activation blocked" report (WaitActivation)
 
 	hc               *HeaderChain
 	rmLogsFeed       event.Feed
@@ -2683,6 +2684,7 @@ func (bc *BlockChain) ProcessBlock(ctx context.Context, parentRoot common.Hash, 
 		if err != nil {
 			return nil, err
 		}
+		bc.checkpointActivation(block)
 		// Update the metrics touched during block commit
 		stats.AccountCommits = statedb.AccountCommits  // Account commits are complete, we can mark them
 		stats.StorageCommits = statedb.StorageCommits  // Storage commits are complete, we can mark them

@@ -19,6 +19,9 @@ package core
 import "github.com/ethereum/go-ethereum/metrics"
 
 var (
+	// pbtPersistedGauge is the newest post-fork block whose binary state the
+	// node put on disk on purpose; 0 until the window close does.
+	pbtPersistedGauge = metrics.NewRegisteredGauge("pbt/persisted/block", nil)
 	// pbtStalledGauge is 1 while a shadow direction is stalled.
 	pbtStalledGauge = metrics.NewRegisteredGauge("pbt/follower/stalled", nil)
 )
