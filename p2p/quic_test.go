@@ -42,11 +42,12 @@ import (
 
 func newTestQUICListener(t *testing.T) *quicListener {
 	t.Helper()
-	rot, err := newQUICCertRotator()
+
+	rot, err := quic.NewCertRotator(testlog.Logger(t, log.LvlDebug))
 	if err != nil {
 		t.Fatal(err)
 	}
-	ln, err := newQUICListener("127.0.0.1:0", newQUICTLSConfig(rot), 64)
+	ln, err := newQUICListener("127.0.0.1:0", quic.NewTLSConfig(rot), 64)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,12 +57,12 @@ func newTestQUICListener(t *testing.T) *quicListener {
 // dialQUICBrowser opens a WebTransport session like a browser, announcing the
 // id-proof nonce and capabilities in the CONNECT request.
 func dialQUICBrowser(ctx context.Context, ln *quicListener, nonce []byte, caps ...string) (*quic.Conn, error) {
-	rot, err := newQUICCertRotator()
+	rot, err := quic.NewCertRotator(log.Root())
 	if err != nil {
 		return nil, err
 	}
 	wd := &webtransport.Dialer{
-		TLSClientConfig: newQUICTLSConfig(rot),
+		TLSClientConfig: quic.NewTLSConfig(rot),
 		QUICConfig:      quicConfig,
 	}
 	protos := []string{strconv.Quote(quicNonceProto + hex.EncodeToString(nonce))}
@@ -157,7 +158,7 @@ func TestServerQUICListen(t *testing.T) {
 	if port == 0 {
 		t.Fatal("quic port in node record is zero")
 	}
-	var qh quicCertHash
+	var qh quic.CertHashEntry
 	if err := srv.LocalNode().Node().Load(&qh); err != nil {
 		t.Fatal(err)
 	}

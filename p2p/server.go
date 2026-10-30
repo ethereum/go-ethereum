@@ -91,6 +91,7 @@ type Server struct {
 
 	listener     net.Listener
 	quicListener *quicListener
+	quicRotator  *quic.CertRotator
 	ourHandshake *protoHandshake
 	loopWG       sync.WaitGroup // loop, listenLoop
 	peerFeed     event.Feed
@@ -334,6 +335,9 @@ func (srv *Server) Stop() {
 	}
 	if srv.quicListener != nil {
 		srv.quicListener.Close()
+	}
+	if srv.quicRotator != nil {
+		srv.quicRotator.Stop()
 	}
 	close(srv.quit)
 	srv.lock.Unlock()
@@ -588,10 +592,11 @@ func (srv *Server) setupTCP() error {
 }
 
 func (srv *Server) setupQUIC() error {
-	rot, err := newQUICCertRotator()
+	rot, err := quic.NewCertRotator(srv.Logger)
 	if err != nil {
 		return err
 	}
+
 	// Bound concurrently served connections to the peers we could accept plus
 	// pending handshake headroom, so a flood cannot exhaust resources before the
 	// peer checks run.
@@ -600,7 +605,7 @@ func (srv *Server) setupQUIC() error {
 		pending = defaultMaxPendingPeers
 	}
 	maxConns := srv.MaxBrowserPeers + srv.MaxInboundConns() + pending
-	listener, err := newQUICListener(srv.ListenQUICAddr, newQUICTLSConfig(rot), maxConns)
+	listener, err := newQUICListener(srv.ListenQUICAddr, quic.NewTLSConfig(rot), maxConns)
 	if err != nil {
 		return err
 	}
@@ -618,34 +623,16 @@ func (srv *Server) setupQUIC() error {
 			}
 		}
 	}
-	srv.localnode.Set(rot.qh())
 
-	srv.loopWG.Add(1)
-	go srv.quicCertLoop(rot)
+	// Enable certificate updates. This is done after setting up the listener
+	// so the ENR is not modified when the listener fails.
+	srv.quicRotator = rot
+	rot.Start(srv.localnode)
+	srv.localnode.Set(rot.QHEntry())
+
 	srv.loopWG.Add(1)
 	go srv.listenLoop(listener)
 	return nil
-}
-
-// quicCertLoop rotates the QUIC TLS certificate and re-announces the hashes
-// before the current certificate expires.
-func (srv *Server) quicCertLoop(rot *quicCertRotator) {
-	defer srv.loopWG.Done()
-	timer := srv.clock.NewTimer(quicCertRotation)
-	defer timer.Stop()
-	for {
-		select {
-		case <-timer.C():
-			if err := rot.rotate(); err != nil {
-				srv.log.Error("Failed to rotate QUIC certificate", "err", err)
-			} else {
-				srv.localnode.Set(rot.qh())
-			}
-			timer.Reset(quicCertRotation)
-		case <-srv.quit:
-			return
-		}
-	}
 }
 
 func (srv *Server) setupUDPListening() (*net.UDPConn, error) {
