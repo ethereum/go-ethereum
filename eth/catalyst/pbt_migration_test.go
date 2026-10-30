@@ -695,51 +695,71 @@ func legacyDatadir(t *testing.T, genesis *core.Genesis, blocks []*types.Block) e
 // TestReplayRouteRebuildsBinaryTree: a legacy datadir reopens with no flag,
 // rewinds to the deepest shadow record whose state is live, and the blocks
 // above it come back through the follower - replayed below the fork,
-// executed above - with the bodies and receipts the rewind kept.
+// executed above - delivered again by the downloader, as a rewind below
+// the freezer boundary leaves no bodies behind.
 func TestReplayRouteRebuildsBinaryTree(t *testing.T) {
 	genesis, blocks := referenceChain(t, 8)
 	db := legacyDatadir(t, genesis, blocks)
 	engine := beacon.New(ethash.NewFaker())
-
-	chain, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
-	if err != nil {
-		t.Fatalf("reopen: %v", err)
+	open := func() *core.BlockChain {
+		t.Helper()
+		chain, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
+		if err != nil {
+			t.Fatalf("reopen: %v", err)
+		}
+		if got := startupRoute(); got != routeReplay {
+			t.Fatalf("route %d, want the replay route", got)
+		}
+		if !chain.TrieDB().IsPBT() {
+			t.Fatal("replay route opened the merkle trie")
+		}
+		return chain
 	}
-	defer chain.Stop()
-	if got := startupRoute(); got != routeReplay {
-		t.Fatalf("route %d, want the replay route", got)
-	}
-	if !chain.TrieDB().IsPBT() {
-		t.Fatal("replay route opened the merkle trie")
-	}
-	if head := chain.CurrentBlock(); head.Number.Uint64() >= 4 || !chain.HasState(head.Root) {
+	chain := open()
+	head := chain.CurrentBlock()
+	if head.Number.Uint64() >= 4 || !chain.HasState(head.Root) {
 		t.Fatalf("head %d with state %v, want a pre-fork block whose shadow state is live", head.Number, chain.HasState(head.Root))
 	}
 	// The txpool opens the head's state at start: served from the binary
 	// tree under the shadow root.
-	if _, err := chain.StateAt(chain.CurrentBlock()); err != nil {
+	if _, err := chain.StateAt(head); err != nil {
 		t.Fatalf("pre-fork head state on the replay route: %v", err)
 	}
-	if chain.GetReceiptsByHash(blocks[1].Hash()) == nil {
-		t.Fatal("the rewind dropped the receipts of a block it kept")
+	chain.Stop()
+
+	// What the rewind's freezer truncation leaves above the head.
+	for _, b := range blocks[head.Number.Uint64():] {
+		rawdb.DeleteCanonicalHash(db, b.NumberU64())
+		rawdb.DeleteBody(db, b.Hash(), b.NumberU64())
+		rawdb.DeleteAccessList(db, b.Hash(), b.NumberU64())
 	}
-	// Replay the pre-fork blocks, then restart mid-way: the next start is a
-	// replay route too, from the block the last one reached.
-	if _, err := chain.InsertChain(blocks[chain.CurrentBlock().Number.Uint64():3]); err != nil {
+	chain = open()
+	// A block delivered without its access list - the downloader fetches
+	// them best effort - is asked of the fetcher by hash: the block is not
+	// canonical until replayed. The import waits for the delivery, as at
+	// the boundary.
+	var asked []core.BALRequest
+	chain.SetBALRequester(func(reqs []core.BALRequest) {
+		asked = append(asked, reqs...)
+		for _, r := range reqs {
+			rawdb.WriteAccessList(db, r.Hash, r.Number, blocks[r.Number-1].AccessList())
+		}
+		chain.KickMigration()
+	})
+	delivered := []*types.Block{blocks[0], blocks[1].WithAccessListUnsafe(nil), blocks[2]}
+	if _, err := chain.InsertChain(delivered); err != nil {
 		t.Fatalf("replaying: %v", err)
+	}
+	if len(asked) != 1 || asked[0].Hash != blocks[1].Hash() {
+		t.Fatalf("fetcher asked for %v, want block 2", asked)
 	}
 	if head := chain.CurrentBlock(); head.Hash() != blocks[2].Hash() {
 		t.Fatalf("head %d %x after the replay, want %x", head.Number, head.Hash(), blocks[2].Hash())
 	}
+	// A restart mid-replay is a replay route too, from where the last one got.
 	chain.Stop()
-	chain, err = core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.PathScheme))
-	if err != nil {
-		t.Fatalf("reopen mid-replay: %v", err)
-	}
+	chain = open()
 	defer chain.Stop()
-	if got := startupRoute(); got != routeReplay {
-		t.Fatalf("route %d after a restart mid-replay, want the replay route", got)
-	}
 	if _, err := chain.InsertChain(blocks[3:]); err != nil {
 		t.Fatalf("rebuilding: %v", err)
 	}
