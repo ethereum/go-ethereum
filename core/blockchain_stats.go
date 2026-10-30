@@ -55,6 +55,8 @@ type ExecuteStats struct {
 	// Cache hit rates
 	StateReadCacheStats     state.ReaderStats
 	StatePrefetchCacheStats state.ReaderStats
+
+	writeDeferred bool // The chain writer commits the state and reports the commit times
 }
 
 // ProcessStats contains the statistics recorded by the Processor. The times are
@@ -129,6 +131,7 @@ type CommitStats struct {
 	AccountCommits time.Duration // Time spent on the account trie commit
 	StorageCommits time.Duration // Time spent on the storage trie commit
 	DatabaseCommit time.Duration // Time spent on database commit
+	Wait           time.Duration // Time spent waiting for the chain writer, for the parent state or room in its queue
 }
 
 // reportMetrics uploads execution statistics to the metrics system.
@@ -150,9 +153,13 @@ func (s *ExecuteStats) reportMetrics() {
 	accountUpdateTimer.Update(v.AccountUpdates) // Account updates are complete(in validation)
 	storageUpdateTimer.Update(v.StorageUpdates) // Storage updates are complete(in validation)
 	accountHashTimer.Update(v.AccountHashes)    // Account hashes are complete(in validation)
-	accountCommitTimer.Update(c.AccountCommits) // Account commits are complete, we can mark them
-	storageCommitTimer.Update(c.StorageCommits) // Storage commits are complete, we can mark them
-	triedbCommitTimer.Update(c.DatabaseCommit)  // Trie database commits are complete, we can mark them
+
+	// A deferred write reports its commit times from the chain writer
+	if !s.writeDeferred {
+		accountCommitTimer.Update(c.AccountCommits) // Account commits are complete, we can mark them
+		storageCommitTimer.Update(c.StorageCommits) // Storage commits are complete, we can mark them
+		triedbCommitTimer.Update(c.DatabaseCommit)  // Trie database commits are complete, we can mark them
+	}
 
 	blockExecutionTimer.Update(p.Execution)             // The critical-path time of the processing
 	blockValidationTimer.Update(v.Validation)           // The critical-path time of the validation
@@ -161,7 +168,7 @@ func (s *ExecuteStats) reportMetrics() {
 	blockInsertTimer.Update(s.TotalTime)                    // The total time spent on block execution
 	blockProcessTimer.Update(p.Total)                       // The wall-clock time of the processing phase
 	blockValidateTimer.Update(v.Total)                      // The wall-clock time of the validation phase
-	blockCommitTimer.Update(c.Total)                        // The wall-clock time of the write phase
+	blockCommitTimer.Update(c.Total + c.Wait)               // The wall-clock time of the write phase and the wait for the parent
 	chainMgaspsMeter.Update(time.Duration(s.MgasPerSecond)) // TODO(rjl493456442) generalize the ResettingTimer
 
 	// Cache hit rates
@@ -292,14 +299,14 @@ func (s *ExecuteStats) logSlow(block *types.Block, slowBlockThreshold time.Durat
 			ExecutionMs: durationToMs(s.Process.Execution),
 			StateReadMs: durationToMs(s.Process.stateReads()),
 			StateHashMs: durationToMs(s.Validate.stateHashes()),
-			CommitMs:    durationToMs(max(s.Commit.AccountCommits, s.Commit.StorageCommits) + s.Commit.DatabaseCommit),
+			CommitMs:    durationToMs(max(s.Commit.AccountCommits, s.Commit.StorageCommits) + s.Commit.DatabaseCommit + s.Commit.Wait),
 			TotalMs:     durationToMs(s.TotalTime),
 		},
 		Phases: slowBlockPhases{
 			PrepareMs:  durationToMs(s.Prepare),
 			ProcessMs:  durationToMs(s.Process.Total),
 			ValidateMs: durationToMs(s.Validate.Total),
-			CommitMs:   durationToMs(s.Commit.Total),
+			CommitMs:   durationToMs(s.Commit.Total + s.Commit.Wait),
 		},
 		Throughput: slowBlockThru{
 			MgasPerSec: s.MgasPerSecond,
