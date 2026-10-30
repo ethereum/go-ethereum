@@ -376,6 +376,16 @@ func (db *Database) Journal(root common.Hash) error {
 	return pdb.Journal(root)
 }
 
+// Checkpoint writes the journal like Journal but leaves the database usable;
+// path-based databases only.
+func (db *Database) Checkpoint(root common.Hash) error {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return errors.New("not supported")
+	}
+	return pdb.Checkpoint(root)
+}
+
 // Persist writes the state below the layer with the given root to disk while
 // the node keeps running, leaving that layer and its descendants in place.
 // It's only supported by path-based database and will return an error for

@@ -1190,6 +1190,28 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 	}
 }
 
+// TestCheckpointKeepsDatabaseWritable: a checkpoint writes the journal like
+// Journal does, without turning the database read-only, so a frozen tree can
+// still be retired afterwards.
+func TestCheckpointKeepsDatabaseWritable(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+	tester := newTester(t, &testerConfig{layers: 6})
+	defer tester.release()
+
+	if err := tester.db.Checkpoint(tester.lastHash()); err != nil {
+		t.Fatalf("checkpoint: %v", err)
+	}
+	if len(rawdb.ReadTrieJournal(tester.db.diskdb)) == 0 {
+		t.Fatal("checkpoint wrote no journal")
+	}
+	if err := tester.db.Retire(); err != nil {
+		t.Fatalf("retire after checkpoint: %v", err)
+	}
+}
+
 // TestDiscardedJournalWarns: a journal that no longer matches the disk layer
 // is dropped with a warning naming both roots.
 func TestDiscardedJournalWarns(t *testing.T) {
