@@ -61,6 +61,11 @@ type ProcessResult struct {
 	Logs     []*types.Log
 	GasUsed  uint64
 
+	// ExecutionGasUsed and StateGasUsed are the gas used by the transactions
+	// in each EIP-8037 dimension, GasUsed is the larger of the two.
+	ExecutionGasUsed uint64
+	StateGasUsed     uint64
+
 	// pipeline digests the receipts and the access list alongside execution
 	// and validation. It is nil for a result assembled elsewhere, and the
 	// validator computes the receipt digests itself in that case.

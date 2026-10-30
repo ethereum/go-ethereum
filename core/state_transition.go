@@ -718,39 +718,14 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		msg              = st.msg
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time)
 		contractCreation = msg.To == nil
-		floorDataGas     uint64
 	)
 	// Validate the message and pre-pay gas.
 	if err := st.preCheck(rules); err != nil {
 		return nil, err
 	}
-	// Calculate the intrinsic gas of this transaction and make sure the gas limit
-	// is sufficient to cover that.
-	intrinsicGas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules)
+	intrinsicGas, floorDataGas, err := st.checkIntrinsicGas(rules)
 	if err != nil {
 		return nil, err
-	}
-	if msg.GasLimit < intrinsicGas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, msg.GasLimit, intrinsicGas)
-	}
-	// Validate the EIP-7623 calldata floor against the gas limit. The floor inflates
-	// the total gas usage at tx end, so the gas limit must be sufficient to cover that.
-	if rules.IsPrague {
-		floorDataGas, err = FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
-		if err != nil {
-			return nil, err
-		}
-		// Make sure the transaction has sufficient gas allowance to
-		// pay the floor cost.
-		if msg.GasLimit < floorDataGas {
-			return nil, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, msg.GasLimit, floorDataGas)
-		}
-	}
-	// In Amsterdam, the transaction gas limit is allowed to exceed
-	// params.MaxTxGas, but the intrinsic cost and calldata floor
-	// cost is still capped by it.
-	if rules.IsAmsterdam && !msg.skipExecutionGasCap && max(intrinsicGas, floorDataGas) > params.MaxTxGas {
-		return nil, fmt.Errorf("%w: intrinsic cost %v, floor: %v", ErrFloorDataGas, intrinsicGas, floorDataGas)
 	}
 
 	// EIP-4762 setup
@@ -828,6 +803,44 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		Err:        vmerr,
 		ReturnData: ret,
 	}, nil
+}
+
+// checkIntrinsicGas returns the intrinsic gas and the EIP-7623 calldata floor
+// of the message, and an error if its gas limit doesn't cover them.
+func (st *stateTransition) checkIntrinsicGas(rules params.Rules) (uint64, uint64, error) {
+	var (
+		msg          = st.msg
+		floorDataGas uint64
+	)
+	// Calculate the intrinsic gas of this transaction and make sure the gas limit
+	// is sufficient to cover that.
+	intrinsicGas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules)
+	if err != nil {
+		return 0, 0, err
+	}
+	if msg.GasLimit < intrinsicGas {
+		return 0, 0, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, msg.GasLimit, intrinsicGas)
+	}
+	// Validate the EIP-7623 calldata floor against the gas limit. The floor inflates
+	// the total gas usage at tx end, so the gas limit must be sufficient to cover that.
+	if rules.IsPrague {
+		floorDataGas, err = FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
+		if err != nil {
+			return 0, 0, err
+		}
+		// Make sure the transaction has sufficient gas allowance to
+		// pay the floor cost.
+		if msg.GasLimit < floorDataGas {
+			return 0, 0, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, msg.GasLimit, floorDataGas)
+		}
+	}
+	// In Amsterdam, the transaction gas limit is allowed to exceed
+	// params.MaxTxGas, but the intrinsic cost and calldata floor
+	// cost is still capped by it.
+	if rules.IsAmsterdam && !msg.skipExecutionGasCap && max(intrinsicGas, floorDataGas) > params.MaxTxGas {
+		return 0, 0, fmt.Errorf("%w: intrinsic cost %v, floor: %v", ErrFloorDataGas, intrinsicGas, floorDataGas)
+	}
+	return intrinsicGas, floorDataGas, nil
 }
 
 // executeCreate runs the top-level frame of a contract-creation transaction

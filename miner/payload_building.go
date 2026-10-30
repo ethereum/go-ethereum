@@ -48,6 +48,7 @@ type BuildPayloadArgs struct {
 	BeaconRoot     *common.Hash          // The provided beaconRoot (Cancun)
 	SlotNum        *uint64               // The provided slotNumber (Amsterdam)
 	TargetGasLimit *uint64               // The provided target gas limit (Amsterdam)
+	InclusionList  [][]byte              // The inclusion list the payload must satisfy (Bogota)
 	Version        engine.PayloadVersion // Versioning byte for payload id calculation.
 }
 
@@ -68,6 +69,9 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	if args.TargetGasLimit != nil {
 		binary.Write(hasher, binary.BigEndian, *args.TargetGasLimit)
 	}
+	if args.InclusionList != nil {
+		rlp.Encode(hasher, args.InclusionList)
+	}
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
 	out[0] = byte(args.Version)
@@ -76,9 +80,9 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 
 // Payload wraps the built payload(block waiting for sealing). According to the
 // engine-api specification, EL should build the initial version of the payload
-// which has an empty transaction set and then keep update it in order to maximize
-// the revenue. Therefore, the empty-block here is always available and full-block
-// will be set/updated afterwards.
+// with only the required inclusion list transactions and then keep updating it
+// in order to maximize the revenue. The initial block may still be building when
+// the payload ID is returned.
 type Payload struct {
 	id           engine.PayloadID
 	empty        *types.Block
@@ -95,6 +99,7 @@ type Payload struct {
 	requests      [][]byte
 	fullFees      *big.Int
 	stop          chan struct{}
+	finished      bool // Whether the background construction has terminated
 	lock          sync.Mutex
 	cond          *sync.Cond
 }
@@ -178,11 +183,18 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
+	for payload.empty == nil && !payload.finished {
+		payload.cond.Wait()
+	}
+	if payload.empty == nil {
+		return nil
+	}
 	select {
 	case <-payload.stop:
 	default:
 		close(payload.stop)
 	}
+	payload.cond.Broadcast()
 	if payload.full != nil {
 		envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars, payload.requests)
 		if payload.fullWitness != nil {
@@ -205,6 +217,12 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
+	for payload.empty == nil && !payload.finished {
+		payload.cond.Wait()
+	}
+	if payload.empty == nil {
+		return nil
+	}
 	envelope := engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil, payload.emptyRequests)
 	if payload.emptyWitness != nil {
 		envelope.Witness = new(hexutil.Bytes)
@@ -214,20 +232,20 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 }
 
 // ResolveFull is basically identical to Resolve, but it expects full block only.
-// Don't call Resolve until ResolveFull returns, otherwise it might block forever.
 func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
-	if payload.full == nil {
+	for payload.full == nil {
 		select {
 		case <-payload.stop:
 			return nil
 		default:
 		}
-		// Wait the full payload construction. Note it might block
-		// forever if Resolve is called in the meantime which
-		// terminates the background construction process.
+		if payload.finished {
+			return nil
+		}
+		// Initial payload completion can also wake this waiter.
 		payload.cond.Wait()
 	}
 	// Terminate the background payload construction
@@ -236,6 +254,7 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	default:
 		close(payload.stop)
 	}
+	payload.cond.Broadcast()
 	envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars, payload.requests)
 	if payload.fullWitness != nil {
 		envelope.Witness = new(hexutil.Bytes)
@@ -271,9 +290,8 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 	)
 	defer spanEnd(&err)
 
-	// Build the initial version with no transaction included. It should be fast
-	// enough to run. The empty payload can at least make sure there is something
-	// to deliver for not missing slot.
+	// Build without transactions synchronously to validate the payload attributes.
+	// If an inclusion list is provided, this provisional block cannot be delivered.
 	emptyParams := &generateParams{
 		timestamp:      args.Timestamp,
 		forceTime:      true,
@@ -292,10 +310,19 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 	}
 	// Construct a payload object for return.
 	payload := newPayload(empty.block, empty.requests, empty.witness, payloadID)
+	if len(args.InclusionList) > 0 {
+		payload.empty = nil
+	}
 
 	// Spin up a routine for updating the payload in background. This strategy
 	// can maximum the revenue for including transactions with highest fee.
 	go func() {
+		defer func() {
+			payload.lock.Lock()
+			defer payload.lock.Unlock()
+			payload.finished = true
+			payload.cond.Broadcast()
+		}()
 		var iteration int
 		bCtx, bSpan, bSpanEnd := telemetry.StartSpan(ctx, "miner.background",
 			telemetry.Int64Attribute("block.number", int64(empty.block.NumberU64())),
@@ -304,6 +331,23 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 			bSpan.SetAttributes(telemetry.IntAttribute("iterations.total", iteration))
 			bSpanEnd(nil)
 		}()
+
+		// Even the initial payload must satisfy the inclusion list. Execute it
+		// in the background so its cost does not delay returning the payload ID.
+		if len(args.InclusionList) > 0 {
+			emptyParams.inclusionList = args.InclusionList
+			initial := miner.generateWork(bCtx, emptyParams, witness)
+			if initial.err != nil {
+				log.Info("Error while generating initial payload", "id", payload.id, "err", initial.err)
+				return
+			}
+			payload.lock.Lock()
+			payload.empty = initial.block
+			payload.emptyRequests = initial.requests
+			payload.emptyWitness = initial.witness
+			payload.cond.Broadcast()
+			payload.lock.Unlock()
+		}
 
 		// Setup the timer for re-building the payload. The initial clock is kept
 		// for triggering process immediately.
@@ -325,6 +369,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 			beaconRoot:     args.BeaconRoot,
 			slotNum:        args.SlotNum,
 			targetGasLimit: args.TargetGasLimit,
+			inclusionList:  args.InclusionList,
 			noTxs:          false,
 		}
 		for {
