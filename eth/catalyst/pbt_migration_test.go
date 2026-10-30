@@ -713,6 +713,10 @@ func TestReplayRouteRebuildsBinaryTree(t *testing.T) {
 		if !chain.TrieDB().IsPBT() {
 			t.Fatal("replay route opened the merkle trie")
 		}
+		// The backend wires the access-list fetcher on this.
+		if !chain.Migrating() {
+			t.Fatal("replay route does not report a migration in progress")
+		}
 		return chain
 	}
 	chain := open()
