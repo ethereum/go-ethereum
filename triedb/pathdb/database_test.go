@@ -938,7 +938,7 @@ func TestReactivationCrash(t *testing.T) {
 	var (
 		kvdb    = newSyncTracker()
 		ancient = t.TempDir()
-		tester  = newTester(t, &testerConfig{layers: 12, kvdb: kvdb, ancient: ancient})
+		tester  = newTester(t, &testerConfig{layers: 12, journalDir: filepath.Join(t.TempDir(), "triedb"), kvdb: kvdb, ancient: ancient})
 
 		released bool
 		addr     = common.Hash{0xaa}
@@ -1163,6 +1163,15 @@ func testRecoverDeletesJournal(t *testing.T, journalDir string) {
 	disk := tester.db.diskdb
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
 		t.Fatalf("Failed to journal, err: %v", err)
+	}
+	// Nodes from before the journal file keep an older journal in the key-value
+	// store, which is loaded when the file is missing.
+	if journalDir != "" {
+		blob, err := os.ReadFile(tester.db.journalPath())
+		if err != nil {
+			t.Fatalf("Failed to read the journal, err: %v", err)
+		}
+		rawdb.WriteTrieJournal(kvdb, blob)
 	}
 	tester.db.Close()
 	tester.db = New(disk, &config, false)

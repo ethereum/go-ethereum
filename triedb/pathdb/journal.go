@@ -449,7 +449,8 @@ func (db *Database) Journal(root common.Hash) error {
 }
 
 // deleteJournal removes the journal file and the key-value journal. The caller
-// must hold db.lock.
+// must hold db.lock. The key-value deletion isn't synced here: the caller must
+// sync the key-value store before it truncates or purges the state histories.
 func (db *Database) deleteJournal() error {
 	rawdb.DeleteTrieJournal(db.diskdb)
 	if path := db.journalPath(); path != "" {
