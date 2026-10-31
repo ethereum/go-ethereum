@@ -590,6 +590,54 @@ func TestTable_waitForNodesLocking(t *testing.T) {
 	}
 }
 
+// This test checks that canceling waitForNodes while it waits for Table.mutex does
+// not leave a subscription that blocks nodeFeed senders holding the mutex.
+// See https://github.com/ethereum/go-ethereum/issues/35976.
+func TestTable_waitForNodesCancelWhileLocked(t *testing.T) {
+	tab, db := newTestTable(newPingRecorder(), Config{})
+	defer db.Close()
+	defer tab.close()
+	<-tab.initDone
+
+	waitCtx, cancelWait := context.WithCancel(context.Background())
+	defer cancelWait()
+	waitDone := make(chan struct{})
+	go func() {
+		defer close(waitDone)
+		tab.waitForNodes(waitCtx, 1<<20)
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for tab.nodeFeed.Send(nil) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("waitForNodes did not subscribe to nodeFeed")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	// Wake the waiter while holding the mutex so it blocks on it, then cancel.
+	tab.mutex.Lock()
+	tab.nodeFeed.Send(nil)
+	time.Sleep(100 * time.Millisecond)
+	cancelWait()
+	time.Sleep(100 * time.Millisecond)
+
+	sent := make(chan struct{})
+	go func() {
+		tab.nodeFeed.Send(nil)
+		tab.nodeFeed.Send(nil)
+		close(sent)
+	}()
+	select {
+	case <-sent:
+	case <-time.After(5 * time.Second):
+		t.Error("deadlock detected: nodeFeed.Send blocked while holding Table.mutex")
+	}
+	tab.mutex.Unlock()
+	<-waitDone
+}
+
 func newkey() *ecdsa.PrivateKey {
 	key, err := crypto.GenerateKey()
 	if err != nil {
