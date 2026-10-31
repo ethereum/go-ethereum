@@ -251,6 +251,7 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			env := newTestEnv(t)
+
 			env.config.QuarkChain.ChainIDs = []*big.Int{big.NewInt(10001), big.NewInt(10002), big.NewInt(10003)}
 			env.chain.Config().QuarkChain.ChainIDs = []*big.Int{big.NewInt(10001), big.NewInt(10002), big.NewInt(10003)}
 			env.config.QuarkChain.PoSW.CoinbaseAmount = big.NewInt(100)
