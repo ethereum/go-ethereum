@@ -36,9 +36,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// Shard owns its blockchain and consensus engine. Its database and cluster
+// ShardBackend owns its blockchain and consensus engine. Its database and cluster
 // client are borrowed; their caller stops incoming requests before Stop.
-type Shard struct {
+type ShardBackend struct {
 	chain         *ShardChain
 	engine        consensus.Engine
 	clusterClient ClusterClient
@@ -49,7 +49,7 @@ type Shard struct {
 // New constructs a shard backend without selecting a root tip. chainConfig is
 // authoritative; it is attached to a copy of genesis without changing the caller's
 // genesis. The same borrowed database stores chain data, roots and received deposits.
-func New(chainConfig *params.ChainConfig, genesis *core.Genesis, db ethdb.Database, cache *core.BlockChainConfig, client ClusterClient) (*Shard, error) {
+func New(chainConfig *params.ChainConfig, genesis *core.Genesis, db ethdb.Database, cache *core.BlockChainConfig, client ClusterClient) (*ShardBackend, error) {
 	if chainConfig == nil || chainConfig.QuarkChain == nil {
 		return nil, errNotQuarkChain
 	}
@@ -73,17 +73,17 @@ func New(chainConfig *params.ChainConfig, genesis *core.Genesis, db ethdb.Databa
 		engine.Close()
 		return nil, err
 	}
-	return &Shard{chain: NewShardChain(db, chain), engine: engine, clusterClient: client}, nil
+	return &ShardBackend{chain: NewShardChain(db, chain), engine: engine, clusterClient: client}, nil
 }
 
 // Init selects the root checkpoint received from master. Root genesis already
 // contains the shard genesis header, so initialization does not report it again.
-func (s *Shard) Init(root *qkctypes.RootBlock) error {
+func (s *ShardBackend) Init(root *qkctypes.RootBlock) error {
 	return s.chain.Init(root)
 }
 
 // Stop releases owned resources once. The caller retains the database and client.
-func (s *Shard) Stop() error {
+func (s *ShardBackend) Stop() error {
 	s.stopOnce.Do(func() {
 		s.chain.chain.Stop()
 		s.stopErr = s.engine.Close()
@@ -94,28 +94,28 @@ func (s *Shard) Stop() error {
 // CreateBlockToMine builds an unsealed candidate on the shard head, paying
 // coinbase, and returns the adjusted difficulty its seal must meet.
 // TODO(Lun): Reuse the shard block builder and parent-state PoSW calculation.
-func (s *Shard) CreateBlockToMine(ctx context.Context, coinbase common.Address) (*types.Block, *big.Int, error) {
+func (s *ShardBackend) CreateBlockToMine(ctx context.Context, coinbase common.Address) (*types.Block, *big.Int, error) {
 	return nil, nil, errors.New("CreateBlockToMine not implemented")
 }
 
 // InsertMinedBlock imports a sealed candidate through AddShardBlock so mined
 // and received blocks follow the same cross-shard delivery and reporting path.
 // TODO(Lun): Integrate mined-block insertion with the mining lifecycle.
-func (s *Shard) InsertMinedBlock(block *types.Block) error {
+func (s *ShardBackend) InsertMinedBlock(block *types.Block) error {
 	return errors.New("InsertMinedBlock not implemented")
 }
 
 // SubscribeChainHeadEvent registers a subscription for shard head changes.
 // Until implemented, the subscription reports its error through Err().
 // TODO(Lun): Delegate to BlockChain and integrate the subscription with mining.
-func (s *Shard) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+func (s *ShardBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return event.NewSubscription(func(<-chan struct{}) error {
 		return errors.New("SubscribeChainHeadEvent not implemented")
 	})
 }
 
 // AddRootBlock imports a root and reports whether it became the root tip.
-func (s *Shard) AddRootBlock(root *qkctypes.RootBlock) (bool, error) {
+func (s *ShardBackend) AddRootBlock(root *qkctypes.RootBlock) (bool, error) {
 	if root == nil {
 		return false, fmt.Errorf("%w: nil root block", ErrInvalidRootBlock)
 	}
@@ -128,7 +128,7 @@ func (s *Shard) AddRootBlock(root *qkctypes.RootBlock) (bool, error) {
 // root that confirms it. Destinations come from config, not from emitted messages.
 // Each ClusterClient call must succeed for all hosts serving that shard. A failure
 // stops delivery; retrying repeats all deliveries by block hash.
-func (s *Shard) BroadcastXShardTxList(ctx context.Context, blockHash common.Hash) error {
+func (s *ShardBackend) BroadcastXShardTxList(ctx context.Context, blockHash common.Hash) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (s *Shard) BroadcastXShardTxList(ctx context.Context, blockHash common.Hash
 // some recipients notified. A known block must still run both propagation steps
 // on retry. Unlike Python's commit marker and per-block futures, no delivery
 // progress is tracked here; callers retry and recipients accept duplicates.
-func (s *Shard) AddShardBlock(ctx context.Context, block *types.Block) error {
+func (s *ShardBackend) AddShardBlock(ctx context.Context, block *types.Block) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -185,18 +185,18 @@ func (s *Shard) AddShardBlock(ctx context.Context, block *types.Block) error {
 }
 
 // CurrentBlock returns the canonical shard head.
-func (s *Shard) CurrentBlock() *types.Header {
+func (s *ShardBackend) CurrentBlock() *types.Header {
 	return s.chain.chain.CurrentBlock()
 }
 
 // RootTip returns the root-tip hash, or zero before Init, for mining compatibility.
-func (s *Shard) RootTip() common.Hash {
+func (s *ShardBackend) RootTip() common.Hash {
 	return s.chain.RootTip()
 }
 
 // GetRootChainStakes reads stakes at the requested shard block. Only shard zero
 // serves root-chain stakes; the blockchain enforces that restriction.
-func (s *Shard) GetRootChainStakes(address common.Address, shardBlockHash common.Hash) (*uint256.Int, common.Address, error) {
+func (s *ShardBackend) GetRootChainStakes(address common.Address, shardBlockHash common.Hash) (*uint256.Int, common.Address, error) {
 	header := s.chain.chain.GetHeaderByHash(shardBlockHash)
 	if header == nil {
 		return nil, common.Address{}, fmt.Errorf("shard block header %s not found", shardBlockHash.Hex())
@@ -207,7 +207,7 @@ func (s *Shard) GetRootChainStakes(address common.Address, shardBlockHash common
 // AddXshardTxList stores a validated remote block's deposits. An empty list is
 // still RLP-encoded and written, distinguishing it from a list not yet received.
 // The remote shard validates the list; repeated deliveries overwrite the same key.
-func (s *Shard) AddXshardTxList(shardBlockHash common.Hash, deposits []*types.DepositTx) error {
+func (s *ShardBackend) AddXshardTxList(shardBlockHash common.Hash, deposits []*types.DepositTx) error {
 	if err := rawdb.WriteXShardDepositsWithError(s.chain.db, shardBlockHash, deposits); err != nil {
 		return fmt.Errorf("store block %x cross-shard deposits: %w", shardBlockHash, err)
 	}
@@ -216,6 +216,6 @@ func (s *Shard) AddXshardTxList(shardBlockHash common.Hash, deposits []*types.De
 
 // GetUnconfirmedHeaderList returns the earliest unconfirmed canonical headers
 // selected by ShardChain, independently of propagation status.
-func (s *Shard) GetUnconfirmedHeaderList() ([]*types.Header, error) {
+func (s *ShardBackend) GetUnconfirmedHeaderList() ([]*types.Header, error) {
 	return s.chain.GetUnconfirmedHeaderList()
 }

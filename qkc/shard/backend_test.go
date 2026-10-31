@@ -172,7 +172,7 @@ func TestBackendBroadcastXShardTxList(t *testing.T) {
 		2: {}, // Configured destinations with no messages still receive a list.
 	}
 	delivered := make(map[uint32][]*types.DepositTx)
-	s := &Shard{chain: env.sc, clusterClient: &backendClusterClient{
+	s := &ShardBackend{chain: env.sc, clusterClient: &backendClusterClient{
 		broadcast: func(_ context.Context, shard uint32, hash common.Hash, list []*types.DepositTx) error {
 			if hash != block.Hash() {
 				t.Fatalf("delivered block %x, want %x", hash, block.Hash())
@@ -232,7 +232,7 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 					return nil
 				},
 			}
-			s := &Shard{chain: env.sc, clusterClient: client}
+			s := &ShardBackend{chain: env.sc, clusterClient: client}
 			if err := s.AddShardBlock(context.Background(), block); !errors.Is(err, failure) {
 				t.Fatalf("failed delivery: %v", err)
 			}
@@ -244,7 +244,7 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 			}
 			fail, reports, delivered = false, 0, make(map[uint32]bool)
 			// A fresh wrapper has no in-memory delivery progress to rely on.
-			s = &Shard{chain: env.sc, clusterClient: client}
+			s = &ShardBackend{chain: env.sc, clusterClient: client}
 			if err := s.AddShardBlock(context.Background(), block); err != nil {
 				t.Fatal(err)
 			}
@@ -276,7 +276,7 @@ func TestBackendReceivedDeposits(t *testing.T) {
 	failure := errors.New("deposit write failed")
 	db := &failingDepositDB{KeyValueStore: env.db, err: failure}
 	env.sc.db = db
-	s := &Shard{chain: env.sc}
+	s := &ShardBackend{chain: env.sc}
 	empty, full := common.Hash{1}, common.Hash{2}
 	if err := s.AddXshardTxList(empty, nil); !errors.Is(err, failure) {
 		t.Fatalf("failed write: %v", err)
@@ -296,7 +296,7 @@ func TestBackendReceivedDeposits(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The result survives replacing the ShardChain; no in-memory marker is needed.
-	s = &Shard{chain: NewShardChain(env.db, env.chain)}
+	s = &ShardBackend{chain: NewShardChain(env.db, env.chain)}
 	if !qkcrawdb.HasXShardDeposits(s.chain.db, empty) || qkcrawdb.ReadXShardDeposits(s.chain.db, empty) == nil {
 		t.Fatal("received empty list became missing")
 	}

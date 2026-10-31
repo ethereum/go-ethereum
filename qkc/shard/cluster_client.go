@@ -25,7 +25,7 @@ import (
 )
 
 // ClusterClient is implemented by the component that owns the cluster
-// connections. A Shard holds this narrow interface instead of the connections
+// connections. A ShardBackend holds this narrow interface instead of the connections
 // or wire-message encoders.
 type ClusterClient interface {
 	// BroadcastXShardTxList delivers depositTxList from minorBlockHash to the
