@@ -737,6 +737,66 @@ func (c *ShardChain) setCanonicalByHead(head *types.Header) error {
 	return nil
 }
 
+// RootTip returns the selected root-tip hash, or zero before Init succeeds.
+func (c *ShardChain) RootTip() common.Hash {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.rootTip == nil {
+		return common.Hash{}
+	}
+	return c.rootTip.Hash()
+}
+
+// GetUnconfirmedHeaderList returns the earliest canonical shard headers after
+// the current root tip's last confirmation, in ascending height order. The list
+// is capped by MaxBlocksPerRootBlock (zero means unlimited). Shard genesis
+// is already confirmed and excluded.
+//
+// The lock keeps the confirmation and canonical range consistent. Local headers
+// remain eligible while propagation is incomplete.
+func (c *ShardChain) GetUnconfirmedHeaderList() ([]*types.Header, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.rootTip == nil {
+		return nil, ErrRootChainUninitialized
+	}
+	confirmed, err := c.lastConfirmed(c.rootTip)
+	if err != nil {
+		return nil, err
+	}
+	header := c.chain.CurrentBlock()
+	start, end := confirmed.Number.Uint64(), header.Number.Uint64()
+	if start > end {
+		return nil, fmt.Errorf("%w: root confirmation is above the shard head", ErrShardStateInconsistency)
+	}
+	if limit := c.chain.Config().QuarkChain.MaxBlocksPerRootBlock; limit != 0 && end-start > limit {
+		// Keep the earliest pending headers so the next root extends its parent's
+		// confirmation without gaps. Zero means unlimited in the Go config.
+		end = start + limit
+		// Holding mu prevents ShardChain's head updates, so this canonical header
+		// belongs to the same chain as the CurrentBlock captured above.
+		header = c.chain.GetHeaderByNumber(end)
+		if header == nil {
+			return nil, fmt.Errorf("%w: canonical shard block header at height %d not found", ErrShardStateInconsistency, end)
+		}
+	}
+
+	headers := make([]*types.Header, end-start)
+	// Fill backward while following parents so the result is already ascending.
+	for i := len(headers); i > 0; i-- {
+		headers[i-1] = header
+		parentHash := header.ParentHash
+		header = c.chain.GetHeaderByHash(parentHash)
+		if header == nil {
+			return nil, fmt.Errorf("%w: shard block header %s not found", ErrShardStateInconsistency, parentHash.Hex())
+		}
+	}
+	if header.Hash() != confirmed.Hash() {
+		return nil, fmt.Errorf("%w: canonical shard block at height %d does not descend from the root confirmation", ErrShardStateInconsistency, end)
+	}
+	return headers, nil
+}
+
 // prevRootBlock returns the header of the root block referenced by a shard block.
 // Callers must handle genesis separately because G0's previous-root hash is empty.
 func (c *ShardChain) prevRootBlock(header *types.Header) (*qkctypes.RootBlockHeader, error) {
