@@ -548,33 +548,23 @@ func AssembleBlock(chain consensus.ChainHeaderReader, header *types.Header, stat
 	// The block's other digests don't depend on the state root: assemble the
 	// block on a goroutine while the root is computed. The goroutine sets the
 	// access list's hash on the header, so the header is written here only
-	// once it is done. It is joined on every exit, and its panic re-raised.
-	var (
-		block    *types.Block
-		panicked any
-		done     = make(chan struct{})
-	)
+	// once it is done.
+	blockCh := make(chan *types.Block, 1)
 	go func() {
-		defer close(done)
-		defer func() { panicked = recover() }()
 		if !rules.IsAmsterdam {
-			block = types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
+			blockCh <- types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 			return
 		}
 		// Assign the BlockAccessListHash if Amsterdam has been enabled
 		bal := blockAccessList.ToEncodingObj()
 		balHash := bal.Hash()
 		header.BlockAccessListHash = &balHash
-		block = types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessListUnsafe(bal)
+		blockCh <- types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessListUnsafe(bal)
 	}()
-	defer func() { <-done }()
-
 	// Assign the post-transition state root
 	root := state.IntermediateRoot(rules)
-	<-done
-	if panicked != nil {
-		panic(panicked)
-	}
+	block := <-blockCh
+
 	header.Root = root
 	blockHeader := block.Header()
 	blockHeader.Root = root
