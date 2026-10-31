@@ -517,7 +517,7 @@ func inspectTrie(ctx *cli.Context) error {
 		config.DumpPath = stack.ResolvePath("trie-dump.bin")
 	}
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false, false)
 	defer triedb.Close()
 
 	if contractAddr := ctx.String(inspectTrieContractFlag.Name); contractAddr != "" {
@@ -683,7 +683,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false, false)
 	defer triedb.Close()
 
 	var (
@@ -1119,7 +1119,7 @@ func inspectHistory(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, false, false)
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, false, false, false)
 	defer triedb.Close()
 
 	var (

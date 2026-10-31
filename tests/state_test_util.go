@@ -281,7 +281,11 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	// block context below.
 	isMerge := config.IsLondon(new(big.Int)) && t.json.Env.Random != nil
 	rules := config.Rules(block.Number(), isMerge, block.Time())
-	st = MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme)
+	pbt := config.IsPBT(block.Number(), block.Time())
+	if pbt {
+		scheme = rawdb.PathScheme
+	}
+	st = makePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter, scheme, pbt)
 
 	var baseFee *big.Int
 	if config.IsLondon(new(big.Int)) {
@@ -532,7 +536,11 @@ type StateTestState struct {
 
 // MakePreState creates a state containing the given allocation.
 func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string) StateTestState {
-	tconf := &triedb.Config{Preimages: true}
+	return makePreState(db, accounts, snapshotter, scheme, false)
+}
+
+func makePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bool, scheme string, pbt bool) StateTestState {
+	tconf := &triedb.Config{Preimages: true, IsPBT: pbt}
 	if scheme == rawdb.HashScheme {
 		tconf.HashDB = hashdb.Defaults
 	} else {
@@ -540,7 +548,11 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	}
 	triedb := triedb.NewDatabase(db, tconf)
 	sdb := state.NewDatabase(triedb, nil)
-	statedb, _ := state.New(types.EmptyRootHash, sdb)
+	root := types.EmptyRootHash
+	if pbt {
+		root = types.EmptyBinaryHash
+	}
+	statedb, _ := state.New(root, sdb)
 	for addr, a := range accounts {
 		statedb.SetCode(addr, a.Code, tracing.CodeChangeUnspecified)
 		statedb.SetNonce(addr, a.Nonce, tracing.NonceChangeUnspecified)
@@ -551,7 +563,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 	}
 	// Commit and re-open to start with a clean state.
 	// Materialising the alloc is not a fork-governed state transition.
-	root, _ := statedb.Commit(params.Rules{}, 0)
+	root, _ = statedb.Commit(params.Rules{}, 0)
 
 	// If snapshot is requested, initialize the snapshotter and use it in state.
 	var snaps *snapshot.Tree
@@ -564,7 +576,9 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, snapshotter bo
 		}
 		snaps, _ = snapshot.New(snapconfig, db, triedb, root)
 	}
-	sdb = state.NewMPTDatabase(triedb, nil).WithSnapshot(snaps)
+	if !pbt {
+		sdb = state.NewMPTDatabase(triedb, nil).WithSnapshot(snaps)
+	}
 	statedb, _ = state.New(root, sdb)
 	return StateTestState{statedb, triedb, snaps}
 }
