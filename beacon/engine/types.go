@@ -231,10 +231,13 @@ type ForkChoiceResponse struct {
 	PayloadID     *PayloadID      `json:"payloadId"`
 }
 
+//go:generate go run github.com/fjl/gencodec -enc=false -type ForkchoiceStateV1 -out fcs_decode.go
+
+// ForkchoiceStateV1 is the forkchoice state sent by the consensus client.
 type ForkchoiceStateV1 struct {
-	HeadBlockHash      common.Hash `json:"headBlockHash"`
-	SafeBlockHash      common.Hash `json:"safeBlockHash"`
-	FinalizedBlockHash common.Hash `json:"finalizedBlockHash"`
+	HeadBlockHash      common.Hash `json:"headBlockHash"      gencodec:"required"`
+	SafeBlockHash      common.Hash `json:"safeBlockHash"      gencodec:"required"`
+	FinalizedBlockHash common.Hash `json:"finalizedBlockHash" gencodec:"required"`
 }
 
 func encodeTransactions(txs []*types.Transaction) [][]byte {
