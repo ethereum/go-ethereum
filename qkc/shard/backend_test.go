@@ -288,7 +288,7 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 					return nil
 				},
 			}
-			s := &Shard{chain: env.sc, clusterClient: client}
+			s := &ShardBackend{chain: env.sc, clusterClient: client}
 			if err := s.AddShardBlock(context.Background(), block); !errors.Is(err, failure) {
 				t.Fatalf("failed delivery: %v", err)
 			}
@@ -303,7 +303,7 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 			}
 			fail, reports, delivered = false, 0, make(map[string]bool)
 			// A fresh wrapper has no in-memory delivery progress to rely on.
-			s = &Shard{chain: env.sc, clusterClient: client}
+			s = &ShardBackend{chain: env.sc, clusterClient: client}
 			if err := s.AddShardBlock(context.Background(), block); err != nil {
 				t.Fatal(err)
 			}
@@ -427,7 +427,7 @@ func TestBackendReceivedDeposits(t *testing.T) {
 	failure := errors.New("deposit write failed")
 	db := &failingDepositDB{KeyValueStore: env.db, err: failure}
 	env.sc.db = db
-	s := &Shard{chain: env.sc}
+	s := &ShardBackend{chain: env.sc}
 	empty, full := common.Hash{1}, common.Hash{2}
 	if err := s.AddXshardTxList(empty, nil); !errors.Is(err, failure) {
 		t.Fatalf("failed write: %v", err)
