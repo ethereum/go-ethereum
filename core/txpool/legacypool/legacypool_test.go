@@ -275,6 +275,41 @@ func validatePoolInternals(pool *LegacyPool) error {
 			return fmt.Errorf("pending nonce mismatch: have %v, want %v", nonce, last+1)
 		}
 	}
+	// Ensure the index of first transactions holds exactly the pending accounts
+	heads := pool.heads
+	var indexed int
+	for k, bucket := range heads.buckets {
+		if len(bucket.entries) == 0 {
+			return fmt.Errorf("empty fee cap bucket %d kept", k)
+		}
+		if bucket.peak >= headBucketMinPeak && len(bucket.entries) < bucket.peak/4 {
+			return fmt.Errorf("fee cap bucket %d holds %d accounts of a peak of %d", k, len(bucket.entries), bucket.peak)
+		}
+		if heads.used[k/64]&(1<<(k%64)) == 0 {
+			return fmt.Errorf("fee cap bucket %d not marked used", k)
+		}
+		for addr, entry := range bucket.entries {
+			list := pool.pending[addr]
+			if list == nil || entry.list != list {
+				return fmt.Errorf("account %x indexed with another list than its pending one", addr)
+			}
+			first := list.Flatten()[0]
+			if entry.feeCap.ToBig().Cmp(first.GasFeeCap()) != 0 || feeBucket(&entry.feeCap) != k || heads.bucket[addr] != k {
+				return fmt.Errorf("account %x indexed in bucket %d with fee cap %v, first transaction's is %v", addr, k, &entry.feeCap, first.GasFeeCap())
+			}
+			indexed++
+		}
+	}
+	if indexed != len(pool.pending) || len(heads.bucket) != len(pool.pending) {
+		return fmt.Errorf("%d accounts indexed (%d with a bucket), %d pending", indexed, len(heads.bucket), len(pool.pending))
+	}
+	for w, used := range heads.used {
+		for b := 0; b < 64; b++ {
+			if used&(1<<b) != 0 && heads.buckets[uint16(w*64+b)] == nil {
+				return fmt.Errorf("fee cap bucket %d marked used, but empty", w*64+b)
+			}
+		}
+	}
 	// Ensure all auths in pool are tracked
 	for _, tx := range pool.all.txs {
 		for _, addr := range tx.SetCodeAuthorities() {
@@ -1227,18 +1262,22 @@ func TestPendingMinTipBelowBaseFee(t *testing.T) {
 			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
 		}
 	}
+	one := uint256.NewInt(1)
 	for _, tt := range []struct {
+		minTip  *uint256.Int
 		baseFee uint64
 		want    int
 	}{
-		{baseFee: 40, want: 4},
-		{baseFee: 60, want: 2},
-		{baseFee: 95, want: 2}, // effective tip 5 of the first two
-		{baseFee: 101, want: 0},
+		{minTip: one, baseFee: 40, want: 4},
+		{minTip: one, baseFee: 60, want: 2},
+		{minTip: one, baseFee: 95, want: 2}, // effective tip 5 of the first two
+		{minTip: one, baseFee: 101, want: 0},
+		{minTip: new(uint256.Int), baseFee: 101, want: 0}, // a zero minimum tip still filters
+		{minTip: nil, baseFee: 101, want: 4},              // no minimum tip, no fee filtering
 	} {
-		pending, _ := pool.Pending(txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(tt.baseFee)})
+		pending, _ := pool.Pending(txpool.PendingFilter{MinTip: tt.minTip, BaseFee: uint256.NewInt(tt.baseFee)})
 		if have := len(pending[account]); have != tt.want {
-			t.Errorf("base fee %d: have %d pending, want %d", tt.baseFee, have, tt.want)
+			t.Errorf("min tip %v, base fee %d: have %d pending, want %d", tt.minTip, tt.baseFee, have, tt.want)
 		}
 	}
 }
