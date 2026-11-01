@@ -307,6 +307,90 @@ func TestNodeEndpoints(t *testing.T) {
 	}
 }
 
+func TestNodeAltTCPEndpoint(t *testing.T) {
+	id := HexID("00000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")
+	node := func(entries ...enr.Entry) *Node {
+		var r enr.Record
+		for _, e := range entries {
+			r.Set(e)
+		}
+		return SignNull(&r, id)
+	}
+	tests := []struct {
+		name string
+		node *Node
+		want string // empty means no alternate endpoint
+	}{
+		{
+			name: "ipv4-only",
+			node: node(enr.IPv4Addr(netip.MustParseAddr("99.22.33.1")), enr.TCP(30303)),
+		},
+		{
+			name: "ipv6-only",
+			node: node(enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")), enr.TCP6(30304)),
+		},
+		{
+			name: "dual-stack-public-tcp6",
+			node: node(
+				enr.IPv4Addr(netip.MustParseAddr("99.22.33.1")), enr.TCP(30303),
+				enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")), enr.TCP6(30304),
+			),
+			want: "[2001::ff00:42:8329]:30304",
+		},
+		{
+			name: "dual-stack-public-shared-tcp",
+			node: node(
+				enr.IPv4Addr(netip.MustParseAddr("99.22.33.1")),
+				enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")),
+				enr.TCP(30303),
+			),
+			want: "[2001::ff00:42:8329]:30303",
+		},
+		{
+			name: "dual-stack-prefers-ipv6-alt-ipv4",
+			node: node(
+				enr.IPv4Addr(netip.MustParseAddr("192.168.2.1")), enr.TCP(30303),
+				enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")), enr.TCP6(30304),
+			),
+			// IPv6 is preferred because it is more global. The private IPv4
+			// address is more local, so it is not offered as a fallback.
+		},
+		{
+			name: "dual-stack-loopback-alt-refused",
+			node: node(
+				enr.IPv4Addr(netip.MustParseAddr("99.22.33.1")), enr.TCP(30303),
+				enr.IPv6Addr(netip.MustParseAddr("::1")), enr.TCP6(22),
+			),
+		},
+		{
+			name: "dual-stack-unspecified-alt",
+			node: node(
+				enr.IPv4Addr(netip.MustParseAddr("99.22.33.1")), enr.TCP(30303),
+				enr.IPv6Addr(netip.MustParseAddr("::")), enr.TCP6(30303),
+			),
+		},
+		{
+			name: "dual-stack-no-tcp-port",
+			node: node(
+				enr.IPv4Addr(netip.MustParseAddr("99.22.33.1")),
+				enr.IPv6Addr(netip.MustParseAddr("2001::ff00:0042:8329")),
+			),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			alt, ok := test.node.AltTCPEndpoint()
+			got := ""
+			if ok {
+				got = alt.String()
+			}
+			if got != test.want {
+				t.Errorf("wrong alternate TCP endpoint %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestHexID(t *testing.T) {
 	ref := ID{0, 0, 0, 0, 0, 0, 0, 128, 106, 217, 182, 31, 165, 174, 1, 67, 7, 235, 220, 150, 66, 83, 173, 205, 159, 44, 10, 57, 42, 161, 26, 188}
 	id1 := HexID("0x00000000000000806ad9b61fa5ae014307ebdc964253adcd9f2c0a392aa11abc")

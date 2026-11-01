@@ -63,15 +63,28 @@ type nodeResolver interface {
 
 // tcpDialer implements NodeDialer using real TCP connections.
 type tcpDialer struct {
-	d *net.Dialer
+	d           *net.Dialer
+	netRestrict *netutil.Netlist // applied to the fallback endpoint, nil means no restriction
 }
 
+// Dial connects to the preferred TCP endpoint of dest. If that fails and the
+// node also announces an endpoint in the other address family, that endpoint
+// is tried next. This lets a dual-stack node be reached over IPv6 when its
+// IPv4 endpoint is unreachable, and the other way around.
 func (t tcpDialer) Dial(ctx context.Context, dest *enode.Node) (net.Conn, error) {
 	addr, ok := dest.TCPEndpoint()
 	if !ok {
 		return nil, errNoPort
 	}
-	return t.d.DialContext(ctx, "tcp", addr.String())
+	conn, err := t.d.DialContext(ctx, "tcp", addr.String())
+	if err == nil || ctx.Err() != nil {
+		return conn, err
+	}
+	alt, ok := dest.AltTCPEndpoint()
+	if !ok || (t.netRestrict != nil && !t.netRestrict.ContainsAddr(alt.Addr())) {
+		return nil, err
+	}
+	return t.d.DialContext(ctx, "tcp", alt.String())
 }
 
 // checkDial errors:
