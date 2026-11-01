@@ -278,16 +278,36 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 }
 
 func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Address, start []byte, maxResult int) (StorageRangeResult, error) {
-	storageRoot := statedb.GetStorageRoot(address)
-	if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
-		return StorageRangeResult{}, nil // empty storage
-	}
-	// TODO(rjl493456442) it's problematic for traversing the state with in-memory
-	// state mutations, specifically txIndex != 0.
-	id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
-	tr, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
-	if err != nil {
-		return StorageRangeResult{}, err
+	// Read the storage trie from the replayed state so that in-memory changes
+	// made by the transactions before the requested index are visible. The
+	// account storage root may not have been updated by those replays (it's
+	// only refreshed on IntermediateRoot), reading from the database trie with
+	// the stale root would silently return outdated values, or fail in the
+	// path-based scheme.
+	//
+	// The unified binary trie mode is an exception: there is no per-account
+	// storage trie, fall back to the database-based traversal.
+	var tr state.Trie
+	if statedb.Database().Type().Is(state.TypeUBT) {
+		storageRoot := statedb.GetStorageRoot(address)
+		if storageRoot == types.EmptyRootHash || storageRoot == (common.Hash{}) {
+			return StorageRangeResult{}, nil // empty storage
+		}
+		id := trie.StorageTrieID(root, crypto.Keccak256Hash(address.Bytes()), storageRoot)
+		st, err := trie.NewStateTrie(id, statedb.Database().TrieDB())
+		if err != nil {
+			return StorageRangeResult{}, err
+		}
+		tr = st
+	} else {
+		var err error
+		tr, err = statedb.StorageTrie(address)
+		if err != nil {
+			return StorageRangeResult{}, err
+		}
+		if tr == nil {
+			return StorageRangeResult{}, nil // empty storage
+		}
 	}
 	trieIt, err := tr.NodeIterator(start)
 	if err != nil {

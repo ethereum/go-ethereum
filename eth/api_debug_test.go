@@ -18,6 +18,7 @@ package eth
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
@@ -434,4 +435,83 @@ func TestDebugAPI_ClearTxpool(t *testing.T) {
 	}
 
 	t.Log("Successfully cleared transaction pool")
+}
+
+// TestStorageRangeAtReplayedState verifies debug_storageRangeAt observes the
+// storage writes made by the transactions before the requested index, which
+// are replayed into an in-memory state (txIndex > 0). The writes are not
+// committed, so traversing the database trie would return the pre-block
+// values.
+func TestStorageRangeAtReplayedState(t *testing.T) {
+	var (
+		contract = common.Address{0xbe, 0xef}
+		genesis  = &core.Genesis{
+			Config: &params.ChainConfig{
+				ChainID:        big.NewInt(1),
+				HomesteadBlock: big.NewInt(0),
+				Ethash:         new(params.EthashConfig),
+			},
+			Alloc: types.GenesisAlloc{
+				address: {Balance: funds},
+				// A contract that stores the value 42 in slot 0 when called.
+				contract: {Code: common.Hex2Bytes("602a600055")}, // PUSH1 0; PUSH1 42; SSTORE; STOP
+			},
+		}
+		signer = types.LatestSigner(genesis.Config)
+	)
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, func(i int, b *core.BlockGen) {
+		tx, err := types.SignTx(types.NewTransaction(0, contract, nil, 100000, big.NewInt(params.InitialBaseFee), nil), signer, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.AddTx(tx)
+		tx, err = types.SignTx(types.NewTransaction(1, common.Address{1}, big.NewInt(1), params.TxGas, big.NewInt(params.InitialBaseFee), nil), signer, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.AddTx(tx)
+	})
+	db := rawdb.NewMemoryDatabase()
+	chain, err := core.NewBlockChain(db, genesis, ethash.NewFaker(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(chain.Stop)
+	if _, err := chain.InsertChain(blocks); err != nil {
+		t.Fatal(err)
+	}
+	eth := &Ethereum{blockchain: chain, chainDb: db}
+
+	// Before the first transaction, the contract has no storage yet.
+	_, _, statedb, release, err := eth.stateAtTransaction(context.Background(), blocks[0], 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := storageRangeAt(statedb, blocks[0].Root(), contract, nil, 10)
+	release()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Storage) != 0 {
+		t.Fatalf("unexpected storage entries before the first tx: %v", result.Storage)
+	}
+
+	// After replaying the first transaction, the storage write must be visible.
+	_, _, statedb, release, err = eth.stateAtTransaction(context.Background(), blocks[0], 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err = storageRangeAt(statedb, blocks[0].Root(), contract, nil, 10)
+	release()
+	if err != nil {
+		t.Fatal(err)
+	}
+	slot := crypto.Keccak256Hash(common.Hash{}.Bytes()) // hash of storage slot 0
+	entry, exist := result.Storage[slot]
+	if !exist {
+		t.Fatalf("slot 0 not found in storage range: %v", result.Storage)
+	}
+	if entry.Value != (common.BigToHash(big.NewInt(42))) {
+		t.Fatalf("slot 0 value: have %v, want %v", entry.Value, common.BigToHash(big.NewInt(42)))
+	}
 }

@@ -297,6 +297,26 @@ func (s *stateObject) finalise() {
 	s.newContract = false
 }
 
+// storageTrie returns the associated storage trie for reading purposes, with
+// all pending in-memory storage changes applied. If there are no pending
+// changes, the trie is loaded from the database directly. Nil is returned if
+// the account has no storage.
+//
+// Note the returned trie is not committed, the in-memory changes are only
+// visible in the returned trie object.
+func (s *stateObject) storageTrie() (Trie, error) {
+	if len(s.uncommittedStorage) > 0 {
+		return s.updateTrie()
+	}
+	if s.trie != nil {
+		return s.trie, nil
+	}
+	if s.data.Root == types.EmptyRootHash || s.data.Root == (common.Hash{}) {
+		return nil, nil
+	}
+	return s.getTrie()
+}
+
 // updateTrie is responsible for persisting cached storage changes into the
 // object's storage trie. In case the storage trie is not yet loaded, this
 // function will load the trie automatically. If any issues arise during the
