@@ -62,19 +62,15 @@
       items:
         - id: admin
           to: /docs/interacting-with-geth/rpc/ns-admin
-        - id: clique
-          to: /docs/interacting-with-geth/rpc/ns-clique
         - id: debug
           to: /docs/interacting-with-geth/rpc/ns-debug
         - id: eth
           to: /docs/interacting-with-geth/rpc/ns-eth
-        - id: les
-          to: /docs/interacting-with-geth/rpc/ns-les
-        - id: miner (deprecated)
+        - id: miner
           to: /docs/interacting-with-geth/rpc/ns-miner
         - id: net
           to: /docs/interacting-with-geth/rpc/ns-net
-        - id: personal (deprecated)
+        - id: personal (removed)
           to: /docs/interacting-with-geth/rpc/ns-personal
         - id: txpool
           to: /docs/interacting-with-geth/rpc/ns-txpool

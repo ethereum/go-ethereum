@@ -3,7 +3,10 @@ title: personal Namespace
 description: Documentation for the JSON-RPC API "personal" namespace
 ---
 
-The JSON-RPC API's `personal` namespace has historically been used to manage accounts and sign transactions and data over RPC. However, it has **now been deprecated** in favour of using [Clef](/docs/tools/clef/introduction) as an external signer and account manager. One of the major changes is moving away from indiscriminate locking and unlocking of accounts and instead using Clef to explicitly approve or deny specific actions. The first section on this page shows the suggested replacement for each method in `personal`. The second section shows the deprecated methods for archival purposes.
+> ⚠️
+> **The `personal` namespace was removed in Geth v1.14.12, and Clef was removed from Geth in v1.17.4.** This page only applies to older versions.
+
+The JSON-RPC API's `personal` namespace was used to manage accounts and sign transactions and data over RPC. At the time it was superseded by [Clef](/docs/tools/clef/introduction) as an external signer and account manager. The first section on this page shows the Clef replacement for each method in `personal`. The second section shows the removed methods. Both are kept for archival purposes.
 
 ## Method replacements
 
@@ -228,7 +231,7 @@ InitializeWallet is for initializing some specific types of smartcard wallet at 
 
 ## Deprecated method documentation
 
-The personal API managed private keys in the key store. It is now deprecated in favour of using [Clef](/docs/tools/clef/introduction) for interacting with accounts. The following documentation should be treated as archive information and users should migrate to using Clef for account interactions.
+The personal API managed private keys in the key store. The following documentation should be treated as archive information.
 
 ### personal_deriveAccount {#personal-deriveaccount}
 

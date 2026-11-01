@@ -188,11 +188,11 @@ The `status` inspection property can be queried for the number of transactions c
 
 The result is an object with two fields `pending` and `queued`, each of which is a counter representing the number of transactions in that particular state.
 
-| Client  | Method invocation                             |
-| :------ | --------------------------------------------- |
-| Go      | `txpool.Status() (map[string]*rpc.HexNumber)` |
-| Console | `txpool.status`                               |
-| RPC     | `{"method": "txpool_status"}`                 |
+| Client  | Method invocation                         |
+| :------ | ----------------------------------------- |
+| Go      | `txpool.Status() map[string]hexutil.Uint` |
+| Console | `txpool.status`                           |
+| RPC     | `{"method": "txpool_status"}`             |
 
 **Example:**
 
