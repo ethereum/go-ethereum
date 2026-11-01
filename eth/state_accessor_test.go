@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
@@ -102,5 +103,51 @@ func TestStateAtTransactionCancelled(t *testing.T) {
 	cancel()
 	if _, _, _, _, err := eth.stateAtTransaction(ctx, blocks[0], 1); !errors.Is(err, context.Canceled) {
 		t.Fatalf("have %v, want %v", err, context.Canceled)
+	}
+}
+
+// The regenerated state of a block off the canonical chain re-executes its own
+// ancestry rather than the canonical blocks of the same numbers.
+func TestStateAtBlockSideChain(t *testing.T) {
+	var (
+		engine  = ethash.NewFaker()
+		genesis = &core.Genesis{
+			Config: &params.ChainConfig{ChainID: big.NewInt(1), HomesteadBlock: big.NewInt(0), Ethash: new(params.EthashConfig)},
+		}
+		sideMiner = common.Address{0xbb}
+	)
+	_, side, _ := core.GenerateChainWithGenesis(genesis, engine, 2, func(i int, b *core.BlockGen) {
+		b.SetCoinbase(sideMiner)
+	})
+	_, canonical, _ := core.GenerateChainWithGenesis(genesis, engine, state.TriesInMemory+2, func(i int, b *core.BlockGen) {
+		b.SetCoinbase(common.Address{0xaa})
+	})
+	db := rawdb.NewMemoryDatabase()
+	chain, err := core.NewBlockChain(db, genesis, engine, core.DefaultConfig().WithStateScheme(rawdb.HashScheme))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+
+	// The canonical chain supersedes the side chain and evicts its state.
+	if _, err := chain.InsertChain(side); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := chain.InsertChain(canonical); err != nil {
+		t.Fatal(err)
+	}
+	target := side[len(side)-1]
+	if chain.GetCanonicalHash(target.NumberU64()) == target.Hash() || chain.HasState(target.Root()) {
+		t.Fatal("side block is canonical or has its state")
+	}
+	eth := &Ethereum{blockchain: chain, chainDb: db}
+	statedb, release, err := eth.stateAtBlock(context.Background(), target, nil, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	rules := genesis.Config.Rules(target.Number(), false, target.Time())
+	if have, want := statedb.IntermediateRoot(rules), target.Root(); have != want {
+		t.Errorf("state root: have %x, want %x", have, want)
 	}
 }
