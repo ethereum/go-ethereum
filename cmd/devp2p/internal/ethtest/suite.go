@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
@@ -102,6 +103,7 @@ func (s *Suite) EthTests() []utesting.Test {
 		{Name: "BlobTxAvailabilityFailure", Fn: s.TestBlobTxAvailabilityFailure},
 		{Name: "GetCells", Fn: s.TestGetCells},
 		{Name: "BlobTxWithInvalidCells", Fn: s.TestBlobTxWithInvalidCells},
+		{Name: "BlobTxWithInvalidProofs", Fn: s.TestBlobTxWithInvalidProofs},
 	}
 }
 
@@ -1029,8 +1031,8 @@ func makeSidecar(data ...byte) *types.BlobTxSidecar {
 	return types.NewBlobTxSidecar(types.BlobSidecarVersion1, blobs, commitments, proofs)
 }
 
-func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte) (txs types.Transactions, blobs [][]kzg4844.Blob) {
-	from, nonce := s.chain.GetSender(5)
+func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte, sender int) (txs types.Transactions, blobs [][]kzg4844.Blob) {
+	from, nonce := s.chain.GetSender(sender)
 	for i := 0; i < txCount; i++ {
 		blobdata := make([]byte, blobCount)
 		for i := range blobdata {
@@ -1079,8 +1081,8 @@ func (s *Suite) TestBlobViolations(t *utesting.T) {
 	}
 	// Create blob txs for each tests with unique tx hashes.
 	var (
-		t1, _ = s.makeBlobTxs(2, 3, 0x1)
-		t2, _ = s.makeBlobTxs(2, 3, 0x2)
+		t1, _ = s.makeBlobTxs(2, 3, 0x1, 5)
+		t2, _ = s.makeBlobTxs(2, 3, 0x2, 5)
 	)
 	for _, test := range []struct {
 		ann  eth.NewPooledTransactionHashesPacket72
@@ -1169,14 +1171,14 @@ func mangleSidecar(tx *types.Transaction) *types.Transaction {
 
 func (s *Suite) TestBlobTxWithoutSidecar(t *utesting.T) {
 	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
-	tx, _ := s.makeBlobTxs(1, 2, 42)
+	tx, _ := s.makeBlobTxs(1, 2, 42, 5)
 	badTx := tx[0].WithoutBlobTxSidecar()
 	s.testBadBlobTx(t, tx[0], badTx)
 }
 
 func (s *Suite) TestBlobTxWithMismatchedSidecar(t *utesting.T) {
 	t.Log(`This test checks that a blob transaction first advertised/transmitted without blobs, whose commitment don't correspond to the blob_versioned_hashes in the transaction, will result in the sending peer being disconnected, and the full transaction should be successfully retrieved from another peer.`)
-	tx, _ := s.makeBlobTxs(1, 2, 43)
+	tx, _ := s.makeBlobTxs(1, 2, 43, 5)
 	badTx := mangleSidecar(tx[0])
 	s.testBadBlobTx(t, tx[0], badTx)
 }
@@ -1187,6 +1189,10 @@ func (s *Suite) TestBlobTxWithMismatchedSidecar(t *utesting.T) {
 func readUntil[T any](ctx context.Context, conn *Conn) (*T, error) {
 	// First check the buffer for a previously-stashed match.
 	for i, msg := range conn.pending {
+		if err, ok := msg.(error); ok {
+			conn.pending = append(conn.pending[:i], conn.pending[i+1:]...)
+			return nil, err
+		}
 		if t, ok := msg.(*T); ok {
 			conn.pending = append(conn.pending[:i], conn.pending[i+1:]...)
 			return t, nil
@@ -1310,7 +1316,7 @@ partial fetch GetCells should never arrive. Any GetCells that does arrive must b
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
-	txs, _ := s.makeBlobTxs(10, 2, 0x30)
+	txs, _ := s.makeBlobTxs(10, 2, 0x30, 5)
 	txsByHash := make(map[common.Hash]*types.Transaction, len(txs))
 	for i, tx := range txs {
 		tx = blobTxForProtocol(tx, eth.ETH72)
@@ -1420,9 +1426,10 @@ func readAnyFrom[T any](ctx context.Context, conns ...*Conn) (*T, *Conn, error) 
 	type result struct {
 		pkt *T
 		c   *Conn
+		err error
 	}
 	ch := make(chan result, len(conns))
-	errCh := make(chan error, len(conns))
+	errCh := make(chan result, len(conns))
 
 	var wg sync.WaitGroup
 	for _, c := range conns {
@@ -1432,11 +1439,11 @@ func readAnyFrom[T any](ctx context.Context, conns ...*Conn) (*T, *Conn, error) 
 			pkt, err := readUntil[T](ctx, c)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					errCh <- err
+					errCh <- result{c: c, err: err}
 				}
 				return
 			}
-			ch <- result{pkt, c}
+			ch <- result{pkt: pkt, c: c}
 		}(c)
 	}
 	var (
@@ -1445,21 +1452,26 @@ func readAnyFrom[T any](ctx context.Context, conns ...*Conn) (*T, *Conn, error) 
 	)
 	select {
 	case r = <-ch:
-	case err = <-errCh:
+	case r = <-errCh:
+		err = r.err
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
 	cancel()
 	wg.Wait()
 	close(ch)
+	close(errCh)
 
 	// Stash the packets read from the other conns so that later reads can
 	// still consume them.
 	for other := range ch {
 		other.c.pending = append(other.c.pending, other.pkt)
 	}
+	for other := range errCh {
+		other.c.pending = append(other.c.pending, other.err)
+	}
 	if err != nil {
-		return nil, nil, err
+		return nil, r.c, err
 	}
 	return r.pkt, r.c, nil
 }
@@ -1477,7 +1489,7 @@ and that providing valid cells causes the tx to enter the pool.`)
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
-	txs, blobs := s.makeBlobTxs(1, 2, 0x31)
+	txs, blobs := s.makeBlobTxs(1, 2, 0x31, 5)
 	tx := blobTxForProtocol(txs[0], eth.ETH72)
 	blob := blobs[0]
 
@@ -1552,93 +1564,185 @@ and that providing valid cells causes the tx to enter the pool.`)
 }
 
 func (s *Suite) TestBlobTxWithInvalidCells(t *utesting.T) {
-	t.Log(`This test checks that a peer responding to GetCells with invalid cells is disconnected, 
-while the other peer is not.`)
+	t.Log("A peer supplying both proofs and invalid cells must be disconnected.")
+	s.testInvalidBlobCells(t, false)
+}
 
+func (s *Suite) TestBlobTxWithInvalidProofs(t *utesting.T) {
+	t.Log("Invalid proofs from one peer must not cause an honest cell supplier to be disconnected.")
+	s.testInvalidBlobCells(t, true)
+}
+
+func (s *Suite) testInvalidBlobCells(t *utesting.T, corruptProofs bool) {
 	if !s.eth72Supported(t) {
 		return
 	}
-
 	custody := types.NewCustodyBitmap([]uint64{5, 21, 40, 58})
 	if err := s.engine.sendForkchoiceUpdated(&custody); err != nil {
 		t.Fatalf("send fcu failed: %v", err)
 	}
-
-	txs, blobs := s.makeBlobTxs(1, 1, 0x32)
+	// These accounts are separate from the preceding blob tests and each other.
+	sender := 6
+	if corruptProofs {
+		sender = 7
+	}
+	txs, blobs := s.makeBlobTxs(1, 1, byte(sender), sender)
 	tx := blobTxForProtocol(txs[0], eth.ETH72)
-	blob := blobs[0]
-
-	conn1, err := s.dial()
-	if err != nil {
-		t.Fatalf("dial failed: %v", err)
+	originalSidecar := tx.BlobTxSidecar()
+	if corruptProofs {
+		sidecar := originalSidecar.Copy()
+		for i := range sidecar.Proofs {
+			sidecar.Proofs[i] = originalSidecar.Proofs[(i+1)%len(sidecar.Proofs)]
+		}
+		tx = tx.WithBlobTxSidecar(sidecar)
+		if tx.Hash() != txs[0].Hash() {
+			t.Fatal("proof mutation changed the signed transaction hash")
+		}
 	}
-	defer conn1.Close()
-	if err := conn1.peer(s.chain, nil); err != nil {
+	conns, err := s.dialPeers(2)
+	if err != nil {
 		t.Fatalf("peering failed: %v", err)
 	}
-
-	conn2, err := s.dial()
-	if err != nil {
-		t.Fatalf("dial failed: %v", err)
-	}
-	defer conn2.Close()
-	if err := conn2.peer(s.chain, nil); err != nil {
-		t.Fatalf("peering failed: %v", err)
-	}
-
+	defer closeConns(conns)
+	proofPeer, honestPeer := conns[0], conns[1]
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
 	ann := eth.NewPooledTransactionHashesPacket72{
 		Types:  []byte{types.BlobTxType},
 		Sizes:  []uint32{uint32(tx.Size())},
 		Hashes: []common.Hash{tx.Hash()},
 		Mask:   types.CustodyBitmapAll,
 	}
-	if err := conn1.WriteAnnounce(ann); err != nil {
-		t.Fatalf("conn1 announce failed: %v", err)
+	if err := proofPeer.WriteAnnounce(ann); err != nil {
+		t.Fatalf("announce failed: %v", err)
 	}
-	if err := conn2.WriteAnnounce(ann); err != nil {
-		t.Fatalf("conn2 announce failed: %v", err)
-	}
-
-	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](context.Background(), conn1, conn2)
+	pooledReq, err := readUntil[eth.GetPooledTransactionsPacket](ctx, proofPeer)
 	if err != nil {
 		t.Fatalf("failed to read GetPooledTransactions: %v", err)
 	}
-	encTxs, _ := rlp.EncodeToRawList([]*types.Transaction{tx})
-	if err := pc.Write(ethProto, eth.PooledTransactionsMsg,
+	if !slices.Equal(pooledReq.GetPooledTransactionsRequest, ann.Hashes) {
+		t.Fatalf("GetPooledTransactions for wrong hashes: %v", pooledReq.GetPooledTransactionsRequest)
+	}
+	encTxs, err := rlp.EncodeToRawList([]*types.Transaction{tx})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := proofPeer.Write(ethProto, eth.PooledTransactionsMsg,
 		eth.PooledTransactionsPacket{RequestId: pooledReq.RequestId, List: encTxs}); err != nil {
 		t.Fatalf("writing pooled tx response failed: %v", err)
 	}
-
-	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](context.Background(), conn1, conn2)
+	// A second full-availability announcement also enables the sampling path.
+	if err := honestPeer.WriteAnnounce(ann); err != nil {
+		t.Fatalf("honest peer announce failed: %v", err)
+	}
+	wantCellPeer := proofPeer
+	if corruptProofs {
+		wantCellPeer = honestPeer
+	}
+	var requested, supplied types.CustodyBitmap
+	activePeers := conns
+	disconnected := false
+	for {
+		// Drain split requests as well as the first delivery. A quiet window
+		// is sufficient only after the intended supplier covered every request.
+		complete := requested.OneCount() > 0 && requested.Difference(supplied).OneCount() == 0 &&
+			(supplied.OneCount() >= kzg4844.DataPerBlob || custody.Difference(supplied).OneCount() == 0)
+		readCtx := ctx
+		readCancel := func() {}
+		if complete {
+			readCtx, readCancel = context.WithTimeout(ctx, timeout)
+		}
+		cellsReq, cellPeer, err := readAnyFrom[eth.GetCellsRequestPacket](readCtx, activePeers...)
+		readCancel()
+		if err != nil {
+			if err == errDisc && cellPeer == proofPeer {
+				if corruptProofs {
+					activePeers = []*Conn{honestPeer}
+					continue
+				}
+				if supplied.OneCount() > 0 {
+					disconnected = true
+					break
+				}
+			}
+			if complete && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)) {
+				break
+			}
+			t.Fatalf("failed to read GetCells: %v", err)
+		}
+		if !slices.Equal(cellsReq.Hashes, ann.Hashes) || cellsReq.Mask.OneCount() == 0 {
+			t.Fatalf("unexpected GetCells: hashes %v, mask %v", cellsReq.Hashes, cellsReq.Mask)
+		}
+		requested = requested.Union(cellsReq.Mask)
+		if cellPeer != wantCellPeer {
+			// Omit these cells so subsequent requests use the intended supplier.
+			if err := cellPeer.Write(ethProto, eth.CellsMsg, eth.CellsPacket{
+				RequestId: cellsReq.RequestId,
+				Cells:     encodeCells(nil),
+				Mask:      cellsReq.Mask,
+			}); err != nil {
+				t.Fatalf("writing empty cells response failed: %v", err)
+			}
+			continue
+		}
+		cells := buildCells(blobs[0], cellsReq.Mask)
+		sidecar := &types.BlobTxCellSidecar{
+			Version:     originalSidecar.Version,
+			Cells:       cells,
+			Commitments: originalSidecar.Commitments,
+			Proofs:      originalSidecar.Proofs,
+			Custody:     cellsReq.Mask,
+		}
+		if err := txpool.ValidateCells(sidecar); err != nil {
+			t.Fatalf("original cells/proofs are invalid: %v", err)
+		}
+		if corruptProofs {
+			sidecar.Proofs = tx.BlobTxSidecar().Proofs
+		} else {
+			for i := range cells {
+				cells[i][31] ^= 0x01
+			}
+		}
+		if err := txpool.ValidateCells(sidecar); err == nil {
+			t.Fatal("corrupted cells/proofs unexpectedly verify")
+		}
+		if err := cellPeer.Write(ethProto, eth.CellsMsg, eth.CellsPacket{
+			RequestId: cellsReq.RequestId,
+			Hashes:    ann.Hashes,
+			Cells:     encodeCells([][]kzg4844.Cell{cells}),
+			Mask:      cellsReq.Mask,
+		}); err != nil {
+			t.Fatalf("writing cells response failed: %v", err)
+		}
+		supplied = supplied.Union(cellsReq.Mask)
+	}
+	if !corruptProofs && !disconnected && !readUntilDisconnect(proofPeer) {
+		t.Fatal("expected peer to be disconnected after supplying invalid cells with its own proofs")
+	}
+	if readUntilDisconnect(honestPeer) {
+		t.Fatal("honest peer was disconnected")
+	}
+	// A response also detects closed sockets that sent no Disconnect message.
+	req := &eth.GetBlockHeadersPacket{
+		RequestId: 123,
+		GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+			Origin: eth.HashOrNumber{Hash: s.chain.Head().Hash()},
+			Amount: 1,
+		},
+	}
+	if err := honestPeer.Write(ethProto, eth.GetBlockHeadersMsg, req); err != nil {
+		t.Fatalf("writing to honest peer failed: %v", err)
+	}
+	headerCtx, headerCancel := context.WithTimeout(context.Background(), timeout)
+	defer headerCancel()
+	resp, err := readUntil[eth.BlockHeadersPacket](headerCtx, honestPeer)
 	if err != nil {
-		t.Fatalf("failed to read GetCells: %v", err)
+		t.Fatalf("honest peer did not respond: %v", err)
 	}
-
-	corrupted := buildCells(blob, cellsReq.Mask)
-	for i := range corrupted {
-		corrupted[i][31] ^= 0x01
+	if resp.RequestId != req.RequestId {
+		t.Fatalf("unexpected header response ID: %d", resp.RequestId)
 	}
-	badResp := eth.CellsPacket{
-		RequestId: cellsReq.RequestId,
-		Hashes:    []common.Hash{tx.Hash()},
-		Cells:     encodeCells([][]kzg4844.Cell{corrupted}),
-		Mask:      cellsReq.Mask,
-	}
-	if err := cc.Write(ethProto, eth.CellsMsg, badResp); err != nil {
-		t.Fatalf("writing bad cells response failed: %v", err)
-	}
-
-	// The peer that sent corrupted cells must be disconnected.
-	if !readUntilDisconnect(cc) {
-		t.Fatalf("expected peer to be disconnected after invalid cells")
-	}
-
-	// The innocent peer must stay connected.
-	otherConn := conn1
-	if cc == conn1 {
-		otherConn = conn2
-	}
-	if readUntilDisconnect(otherConn) {
-		t.Fatalf("innocent peer should not be disconnected")
+	if err := s.checkHeadersAgainstChain(req, resp); err != nil {
+		t.Fatal(err)
 	}
 }
