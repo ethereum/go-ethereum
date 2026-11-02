@@ -66,8 +66,10 @@ func (c ConsensusType) Check() error {
 // QuarkChainConfig is the configuration of a QuarkChain shard chain. Its
 // presence in the chain config enables the QuarkChain specific features.
 type QuarkChainConfig struct {
-	ShardID  uint32   `json:"shardId"`  // ID of this shard
-	ShardIDs []uint32 `json:"shardIds"` // IDs of all shards in the network, this one included
+	// These existing routing fields carry the EVM chain IDs. Network loading
+	// derives them from ChainConfig.ChainID; they cannot be configured separately.
+	ShardID  uint32   `json:"shardId" toml:"-"`
+	ShardIDs []uint32 `json:"shardIds" toml:"-"`
 
 	ConsensusType ConsensusType `json:"consensusType,omitempty"`
 	PoSW          *PoSWConfig   `json:"posw"` // Required consensus configuration for this shard.

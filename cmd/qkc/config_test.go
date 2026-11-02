@@ -50,7 +50,7 @@ func readQKCFlags(args ...string) (*qkcconfig.NodeConfig, error) {
 }
 
 func TestQKCConfigPrecedence(t *testing.T) {
-	cfg, err := readQKCFlags("--config", qkcExampleCluster, "--qkc.role", "shard", "--qkc.shard", "0")
+	cfg, err := readQKCFlags("--config", qkcExampleCluster, "--qkc.role", "shard", "--qkc.chain", "100001")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestQKCConfigPrecedence(t *testing.T) {
 		t.Fatalf("network file resolved incorrectly: %s", cfg.NetworkFile)
 	}
 
-	cfg, err = readQKCFlags("--config", qkcExampleCluster, "--qkc.role", "shard", "--qkc.shard", "0",
+	cfg, err = readQKCFlags("--config", qkcExampleCluster, "--qkc.role", "shard", "--qkc.chain", "100001",
 		"--http=false", "--http.port", "28545", "--ws", "--ws.addr", "127.0.0.2", "--ws.port", "0",
 		"--datadir", "./cli-data", "--syncmode", "full", "--rpc.gascap", "0", "--rpc.evmtimeout", "2s", "--rpc.txfeecap", "0")
 	if err != nil {
@@ -90,7 +90,7 @@ func TestQKCConfigPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if master.Eth != nil || master.Node.P2P.MaxPeers != 0 || master.Node.P2P.NoDiscovery || len(master.ShardEndpoints) != 2 || master.ShardEndpoints[0] != "127.0.0.1:38000" {
+	if master.Eth != nil || master.Node.P2P.MaxPeers != 0 || master.Node.P2P.NoDiscovery || len(master.ShardEndpoints) != 2 || master.ShardEndpoints[100001] != "127.0.0.1:38000" {
 		t.Fatal("master selection, overrides or derived endpoints are incorrect")
 	}
 	if master.CoinbaseAddress != common.HexToAddress("0x1111111111111111111111111111111111111111") {
@@ -110,12 +110,12 @@ func TestQKCNetworkOverride(t *testing.T) {
 	if err := os.WriteFile(file, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := readQKCFlags("--config", file, "--qkc.role", "shard", "--qkc.shard", "0", "--qkc.network", qkcExampleNetwork, "--networkid", "2")
+	cfg, err := readQKCFlags("--config", file, "--qkc.role", "shard", "--qkc.chain", "100001", "--qkc.network", qkcExampleNetwork, "--networkid", "2")
 	if err != nil || cfg.Eth.NetworkId != 2 {
 		t.Fatalf("CLI did not override local network settings: %v", err)
 	}
 	// An override must not repair the conflicting NetworkId of another process.
-	_, err = readQKCFlags("--config", file, "--qkc.role", "shard", "--qkc.shard", "1", "--qkc.network", qkcExampleNetwork, "--networkid", "2")
+	_, err = readQKCFlags("--config", file, "--qkc.role", "shard", "--qkc.chain", "100002", "--qkc.network", qkcExampleNetwork, "--networkid", "2")
 	if err == nil || !strings.Contains(err.Error(), "ShardNodes[0]: Eth.NetworkId 99 conflicts") {
 		t.Fatalf("CLI overrides affected an unselected process: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestQKCEndpointOverrides(t *testing.T) {
 		{[]string{"--http=false", "--http.port", "18546"}, "", ""},
 		{[]string{"--ws"}, "127.0.0.1", "localhost"},
 	} {
-		cfg, err := readQKCFlags(append([]string{"--config", qkcExampleCluster, "--qkc.role", "shard", "--qkc.shard", "0"}, test.args...)...)
+		cfg, err := readQKCFlags(append([]string{"--config", qkcExampleCluster, "--qkc.role", "shard", "--qkc.chain", "100001"}, test.args...)...)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -172,7 +172,7 @@ func TestQKCConfigInvalidFlags(t *testing.T) {
 		{[]string{"extra"}, "no positional arguments"},
 	} {
 		t.Run(strings.Join(test.args, " "), func(t *testing.T) {
-			_, err := readQKCFlags(append([]string{"--config", qkcExampleCluster, "--qkc.role", "shard", "--qkc.shard", "0"}, test.args...)...)
+			_, err := readQKCFlags(append([]string{"--config", qkcExampleCluster, "--qkc.role", "shard", "--qkc.chain", "100001"}, test.args...)...)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("have %v, want error containing %q", err, test.want)
 			}
@@ -190,11 +190,14 @@ func TestQKCProcessFlags(t *testing.T) {
 	}{
 		{nil, "set --qkc.role"},
 		{[]string{"--qkc.role", "slave"}, "set --qkc.role"},
-		{[]string{"--qkc.role", "master", "--qkc.shard", "0"}, "master cannot select"},
-		{[]string{"--qkc.role", "shard"}, "requires a shard ID"},
-		{[]string{"--qkc.role", "shard", "--qkc.shard", "100001"}, "not in the deployment"},
-		{[]string{"--qkc.role", "shard", "--qkc.shard", "4294967295"}, "reserved root ID"},
-		{[]string{"--qkc.role", "shard", "--qkc.shard", "4294967296"}, "uint32 routing ID"},
+		{[]string{"--qkc.role", "master", "--qkc.chain", "100001"}, "master cannot select"},
+		{[]string{"--qkc.role", "shard"}, "requires a chain ID"},
+		{[]string{"--qkc.role", "shard", "--qkc.chain", "0"}, "positive uint32 chain ID"},
+		{[]string{"--qkc.role", "shard", "--qkc.chain", "1"}, "not in the deployment"},
+		{[]string{"--qkc.role", "shard", "--qkc.shard", "0"}, "flag provided but not defined: -qkc.shard"},
+		{[]string{"--qkc.role", "shard", "--qkc.chain", "100003"}, "not in the deployment"},
+		{[]string{"--qkc.role", "shard", "--qkc.chain", "4294967295"}, "reserved root ID"},
+		{[]string{"--qkc.role", "shard", "--qkc.chain", "4294967296"}, "positive uint32 chain ID"},
 		{[]string{"--qkc.role", "master", "--syncmode", "full"}, "requires shard role"},
 		{[]string{"--qkc.role", "master", "--rpc.gascap", "0"}, "requires shard role"},
 		{[]string{"--qkc.role", "master", "--networkid", "100001"}, "must match the positive NetworkID"},
@@ -218,8 +221,8 @@ func TestCheckQKCConfig(t *testing.T) {
 		want string
 	}{
 		{[]string{"--qkc.role", "master"}, "master"},
-		{[]string{"--qkc.role", "shard", "--qkc.shard", "0"}, "shard 0, EVM chain ID 100001"},
-		{[]string{"--qkc.role", "shard", "--qkc.shard", "1"}, "shard 1, EVM chain ID 100002"},
+		{[]string{"--qkc.role", "shard", "--qkc.chain", "100001"}, "shard, chain ID 100001"},
+		{[]string{"--qkc.role", "shard", "--qkc.chain", "100002"}, "shard, chain ID 100002"},
 	} {
 		var out bytes.Buffer
 		datadir := filepath.Join(t.TempDir(), "unused")

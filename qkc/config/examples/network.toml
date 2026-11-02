@@ -1,10 +1,11 @@
-# Shared network definitions. EVM ChainID values identify individual shards.
-# The shard count comes from the [[Shards]] entries; IDs must cover 0..N-1.
-# This example has two shards, so each internal ShardIDs list is generated as [0, 1].
+# Shared network definitions. ChainID identifies each shard for EVM execution and routing.
+# Internal routing lists are derived from the configured chain IDs: [100001, 100002].
 NetworkID = 2
 
 [Root]
 ConsensusType = "POW_ETHASH"
+# Intended root reward and staking chain; runtime integration follows separately.
+CoinbaseChainID = 100001
 
 [Root.PoSW]
 AdjustmentCutoff = 7
@@ -33,7 +34,6 @@ BerlinBlock = "0"
 LondonBlock = "0"
 
 [Shards.QuarkChain]
-ShardID = 0
 ConsensusType = "POW_ETHASH"
 # Maximum blocks of this shard confirmed per root block; 0 means no cap.
 MaxBlocksPerRootBlock = 18
@@ -63,7 +63,6 @@ BerlinBlock = "0"
 LondonBlock = "0"
 
 [Shards.QuarkChain]
-ShardID = 1
 ConsensusType = "POW_SIMULATE"
 MaxBlocksPerRootBlock = 18
 

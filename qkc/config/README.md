@@ -21,13 +21,13 @@ the configuration for each process:
 go run ./cmd/qkc checkconfig \
   --config qkc/config/examples/cluster.toml --qkc.role master
 
-# Shard 0
+# Chain 100001
 go run ./cmd/qkc checkconfig \
-  --config qkc/config/examples/cluster.toml --qkc.role shard --qkc.shard 0
+  --config qkc/config/examples/cluster.toml --qkc.role shard --qkc.chain 100001
 
-# Shard 1, with its configured HTTP endpoint disabled
+# Chain 100002, with its configured HTTP endpoint disabled
 go run ./cmd/qkc checkconfig \
-  --config qkc/config/examples/cluster.toml --qkc.role shard --qkc.shard 1 --http=false
+  --config qkc/config/examples/cluster.toml --qkc.role shard --qkc.chain 100002 --http=false
 ```
 
 Each command applies overrides to the selected process, then validates the
@@ -44,24 +44,30 @@ To build the standalone CLI, run `make qkc`. You can then replace
 The network file defines the root chain's consensus settings and each shard's
 EVM chain ID, forks, and consensus settings. All processes share these rules.
 
-### Network ID, shard ID, and EVM chain ID
+### Network ID and chain ID
 
 These IDs serve different purposes:
 
 | Field | Purpose | Requirement |
 | --- | --- | --- |
 | `NetworkID` | Identifies the P2P network. | Positive `uint32`. |
-| `Shards.QuarkChain.ShardID` | Routes traffic to a shard within the network. | IDs must cover `0..N-1` exactly once, where `N` is the number of `[[Shards]]` entries. `4294967295` is reserved for root-chain traffic. |
-| `Shards.ChainID` | Protects EVM transactions against replay across chains. | Positive `uint256`, unique among the network's shards. |
+| `Shards.ChainID` | Identifies a shard for both EVM replay protection and internal routing. | Unique positive `uint32`, at most `4294967294`. `4294967295` is reserved for root-chain traffic. |
+| `Root.CoinbaseChainID` | Records the intended chain for root rewards and the root staking contract. | Required; must match one of the configured `Shards.ChainID` values. |
 
-A network ID may have the same numeric value as an EVM chain ID. Shard 0 is
-required for root rewards and staking.
+A network ID may have the same numeric value as a chain ID. The example uses
+chain IDs `100001` and `100002`, with `Root.CoinbaseChainID = 100001`.
 
-The shard count is derived from the `[[Shards]]` entries. Their order in the file
-does not matter, but routing IDs must cover `0..N-1` without gaps or duplicates.
-The loader generates each shard's internal `ShardIDs` list as `[0, ..., N-1]`,
-including itself. For the two-shard example, both lists are `[0, 1]`.
-Do not set `ShardIDs` in the TOML file; explicit lists are rejected.
+The shard count is derived from the `[[Shards]]` entries. Their order does not
+matter, and chain IDs may have gaps. The loader fills the existing internal
+`QuarkChain.ShardID` field with the EVM `ChainID`, and `QuarkChain.ShardIDs` with
+all configured chain IDs in ascending order, including itself. Both lists in the
+example are `[100001, 100002]`. These fields retain their existing names for
+runtime compatibility and cannot be supplied in TOML. There is no separate
+routing ID.
+
+`Root.CoinbaseChainID` is parsed and validated here. Runtime root reward delivery
+and staking still use the existing shard-zero rules; applying this setting to
+execution is follow-up work alongside genesis generation and service startup.
 
 ### PoSW and staking
 
@@ -108,7 +114,7 @@ have different responsibilities:
 
 - **Master** connects to the external P2P network. Configure its process settings
   under `[Master.Node]` and external devp2p under `[Master.Node.P2P]`.
-- **Each shard** has a `[[ShardNodes]]` entry. Set `ShardID` to its routing ID and
+- **Each shard** has a `[[ShardNodes]]` entry. Set `ChainID` to its EVM chain ID and
   `PrivateHost` and `PrivatePort` to its internal TCP endpoint. Set `PublicHost`
   and `PublicPort` for client-facing HTTP JSON-RPC. Put other process settings
   under `[ShardNodes.Node]` and execution settings under `[ShardNodes.Eth]`.
@@ -123,10 +129,9 @@ in MiB. Omitted execution settings inherit geth defaults.
 ### Select a process
 
 Use `--qkc.role master` to select Master. Use
-`--qkc.role shard --qkc.shard <id>` to select a shard. The shard selector is
-required even for shard 0, and it uses the **routing ID**, not the EVM chain ID.
-For example, the sample's shard 0 has EVM chain ID `100001`, but you select it
-with `--qkc.shard 0`.
+`--qkc.role shard --qkc.chain <id>` to select a shard. The chain selector is
+required and uses the same ID as EVM execution and internal routing. For example,
+select the chain with `ChainID = "100001"` using `--qkc.chain 100001`.
 
 ### Addresses, storage, and RPC
 

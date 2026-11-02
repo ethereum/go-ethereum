@@ -50,8 +50,9 @@ type NetworkConfig struct {
 // RootConfig contains root-chain consensus settings. The root is not an EVM
 // chain and does not inherit a shard's chain ID or PoSW configuration.
 type RootConfig struct {
-	ConsensusType params.ConsensusType
-	PoSW          *params.PoSWConfig
+	ConsensusType   params.ConsensusType
+	PoSW            *params.PoSWConfig
+	CoinbaseChainID uint32 // Intended root reward and staking chain; runtime integration follows separately.
 }
 
 const (
@@ -68,12 +69,12 @@ type ClusterConfig struct {
 }
 
 // NodeConfig contains the effective settings of one process. Master has no
-// ShardID, PrivateHost, PrivatePort or Eth settings. A shard's PrivateHost and
+// ChainID, PrivateHost, PrivatePort or Eth settings. A shard's PrivateHost and
 // PrivatePort define its internal TCP endpoint, used both for listening and for
 // dialing by Master and the other shards. The TOML PublicHost and PublicPort
 // keys configure Node.HTTPHost and Node.HTTPPort without duplicating their state.
 type NodeConfig struct {
-	ShardID         *uint32
+	ChainID         *uint32
 	PrivateHost     string
 	PrivatePort     int
 	CoinbaseAddress common.Address // Local mining reward recipient; not a network rule.
@@ -91,14 +92,14 @@ var tomlSettings = toml.Config{
 	FieldToKey:    func(_ reflect.Type, field string) string { return field },
 }
 
-// DefaultNodeConfig returns per-process geth defaults. A nil shardID selects
-// Master; a non-nil ID selects one shard, including shard zero.
-func DefaultNodeConfig(shardID *uint32) NodeConfig {
+// DefaultNodeConfig returns per-process geth defaults. A nil chainID selects
+// Master; a non-nil ID selects the shard with that EVM chain ID.
+func DefaultNodeConfig(chainID *uint32) NodeConfig {
 	cfg := NodeConfig{Role: RoleMaster, Node: node.DefaultConfig}
 	name := "master"
-	if shardID != nil {
-		id := *shardID
-		cfg.Role, cfg.ShardID = RoleShard, &id
+	if chainID != nil {
+		id := *chainID
+		cfg.Role, cfg.ChainID = RoleShard, &id
 		name = fmt.Sprintf("shard-%d", id)
 		eth := ethconfig.Defaults
 		// TOML text decoding mutates big integers in place. Keep defaults and
@@ -130,7 +131,7 @@ func (c *NodeConfig) UnmarshalTOML(decode func(interface{}) error) error {
 	// replaces nested tables instead of overlaying their individual fields.
 	type executionConfig ethconfig.Config
 	type plain struct {
-		ShardID         *uint32
+		ChainID         *uint32
 		PrivateHost     string
 		PrivatePort     int
 		PublicHost      *string
@@ -143,9 +144,9 @@ func (c *NodeConfig) UnmarshalTOML(decode func(interface{}) error) error {
 	if err := decode(&identity); err != nil {
 		return err
 	}
-	cfg := DefaultNodeConfig(identity.ShardID)
+	cfg := DefaultNodeConfig(identity.ChainID)
 	overlay := plain{
-		ShardID: cfg.ShardID, PrivateHost: cfg.PrivateHost, PrivatePort: cfg.PrivatePort,
+		ChainID: cfg.ChainID, PrivateHost: cfg.PrivateHost, PrivatePort: cfg.PrivatePort,
 		CoinbaseAddress: cfg.CoinbaseAddress, Node: cfg.Node, Eth: (*executionConfig)(cfg.Eth),
 	}
 	if err := decode(&overlay); err != nil {
@@ -159,7 +160,7 @@ func (c *NodeConfig) UnmarshalTOML(decode func(interface{}) error) error {
 	if overlay.PublicPort != nil {
 		overlay.Node.HTTPPort = *overlay.PublicPort
 	}
-	cfg.ShardID, cfg.PrivateHost, cfg.PrivatePort = overlay.ShardID, overlay.PrivateHost, overlay.PrivatePort
+	cfg.ChainID, cfg.PrivateHost, cfg.PrivatePort = overlay.ChainID, overlay.PrivateHost, overlay.PrivatePort
 	cfg.Node, cfg.Eth = overlay.Node, (*ethconfig.Config)(overlay.Eth)
 	cfg.CoinbaseAddress = overlay.CoinbaseAddress
 	*c = cfg
@@ -184,32 +185,32 @@ func LoadCluster(file string) (*ClusterConfig, error) {
 
 // SelectNode selects one process. Only Master's effective configuration includes
 // the shard endpoint map, derived from deployment entries without duplication.
-func (c *ClusterConfig) SelectNode(role string, shardID *uint32) (*NodeConfig, error) {
+func (c *ClusterConfig) SelectNode(role string, chainID *uint32) (*NodeConfig, error) {
 	var selected *NodeConfig
 	switch role {
 	case RoleMaster:
-		if shardID != nil {
-			return nil, errors.New("master cannot select a shard ID")
+		if chainID != nil {
+			return nil, errors.New("master cannot select a chain ID")
 		}
 		selected = &c.Master
 		selected.ShardEndpoints = make(map[uint32]string, len(c.ShardNodes))
 		for _, shard := range c.ShardNodes {
-			if shard.ShardID != nil {
-				selected.ShardEndpoints[*shard.ShardID] = shard.PrivateEndpoint()
+			if shard.ChainID != nil {
+				selected.ShardEndpoints[*shard.ChainID] = shard.PrivateEndpoint()
 			}
 		}
 	case RoleShard:
-		if shardID == nil {
-			return nil, errors.New("shard process requires a shard ID")
+		if chainID == nil {
+			return nil, errors.New("shard process requires a chain ID")
 		}
 		for i := range c.ShardNodes {
-			if c.ShardNodes[i].ShardID != nil && *c.ShardNodes[i].ShardID == *shardID {
+			if c.ShardNodes[i].ChainID != nil && *c.ShardNodes[i].ChainID == *chainID {
 				selected = &c.ShardNodes[i]
 				break
 			}
 		}
 		if selected == nil {
-			return nil, fmt.Errorf("shard %d is not in the deployment", *shardID)
+			return nil, fmt.Errorf("chain ID %d is not in the deployment", *chainID)
 		}
 	default:
 		return nil, errors.New("set --qkc.role to master or shard")
@@ -234,8 +235,8 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 	if err := network.Validate(); err != nil {
 		return err
 	}
-	if c.Master.Role != RoleMaster || c.Master.ShardID != nil {
-		return errors.New("Master must not specify ShardID")
+	if c.Master.Role != RoleMaster || c.Master.ChainID != nil {
+		return errors.New("Master must not specify ChainID")
 	}
 	if err := c.Master.Validate(network); err != nil {
 		return fmt.Errorf("Master: %w", err)
@@ -244,13 +245,13 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 	tcpEndpoints := make(map[uint64][]*net.TCPAddr)
 	for i, cfg := range append([]NodeConfig{c.Master}, c.ShardNodes...) {
 		if i > 0 {
-			if cfg.ShardID == nil {
-				return fmt.Errorf("ShardNodes[%d]: ShardID is required", i-1)
+			if cfg.ChainID == nil {
+				return fmt.Errorf("ShardNodes[%d]: ChainID is required", i-1)
 			}
-			if ids[*cfg.ShardID] {
-				return fmt.Errorf("duplicate deployed shard ID %d", *cfg.ShardID)
+			if ids[*cfg.ChainID] {
+				return fmt.Errorf("duplicate deployed chain ID %d", *cfg.ChainID)
 			}
-			ids[*cfg.ShardID] = true
+			ids[*cfg.ChainID] = true
 			if err := cfg.Validate(network); err != nil {
 				return fmt.Errorf("ShardNodes[%d]: %w", i-1, err)
 			}
@@ -322,10 +323,9 @@ func canonicalHost(host string) string {
 	return strings.ToLower(host)
 }
 
-// LoadNetwork loads and validates a network definition, deriving each shard's
-// ShardIDs list as 0..N-1 from the number of shard entries. ShardIDs must not be
-// supplied in TOML. Root and shard PoSW configurations are required, including
-// when staking is disabled.
+// LoadNetwork loads and validates a network definition. Each shard's routing
+// identity and topology are derived from the EVM chain IDs, sorted numerically.
+// Root and shard PoSW configurations are required, including when staking is disabled.
 func LoadNetwork(file string) (*NetworkConfig, error) {
 	var cfg NetworkConfig
 	if file == "" {
@@ -335,22 +335,37 @@ func LoadNetwork(file string) (*NetworkConfig, error) {
 		return nil, err
 	}
 	ids := make([]uint32, len(cfg.Shards))
-	for i := range ids {
-		ids[i] = uint32(i)
+	for i := range cfg.Shards {
+		id, err := routingChainID(&cfg.Shards[i])
+		if err != nil {
+			return nil, fmt.Errorf("%s: Shards[%d]: %w", file, i, err)
+		}
+		ids[i] = id
 	}
-	for i, shard := range cfg.Shards {
+	slices.Sort(ids)
+	for _, shard := range cfg.Shards {
 		if shard.QuarkChain == nil {
 			continue
 		}
-		if shard.QuarkChain.ShardIDs != nil {
-			return nil, fmt.Errorf("%s: Shards[%d].QuarkChain.ShardIDs is derived; omit it from the network file", file, i)
-		}
+		shard.QuarkChain.ShardID = uint32(shard.ChainID.Uint64())
 		shard.QuarkChain.ShardIDs = slices.Clone(ids)
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
 	}
 	return &cfg, nil
+}
+
+// routingChainID checks the EVM identifier before narrowing it to the wire format.
+func routingChainID(chain *params.ChainConfig) (uint32, error) {
+	if chain.ChainID == nil || chain.ChainID.Sign() <= 0 || chain.ChainID.BitLen() > 32 {
+		return 0, errors.New("ChainID must be a positive uint32 for EVM execution and routing")
+	}
+	id := uint32(chain.ChainID.Uint64())
+	if id == math.MaxUint32 {
+		return 0, fmt.Errorf("chain ID %d is reserved for the root chain", id)
+	}
+	return id, nil
 }
 
 func load(file string, cfg interface{}) error {
@@ -380,52 +395,42 @@ func (c *NetworkConfig) Validate() error {
 		return errors.New("network must define at least one shard")
 	}
 	ids := make(map[uint32]bool, len(c.Shards))
-	chainIDs := make(map[string]bool, len(c.Shards))
 	for i, shard := range c.Shards {
 		if shard.QuarkChain == nil {
 			return fmt.Errorf("Shards[%d]: QuarkChain configuration is required", i)
 		}
-		id := shard.QuarkChain.ShardID
-		if err := shard.QuarkChain.ConsensusType.Check(); err != nil {
-			return fmt.Errorf("shard %d: %w", id, err)
+		id, err := routingChainID(&shard)
+		if err != nil {
+			return fmt.Errorf("Shards[%d]: %w", i, err)
 		}
-		if id == math.MaxUint32 {
-			return fmt.Errorf("shard ID %d is reserved for the root chain", id)
+		if err := shard.QuarkChain.ConsensusType.Check(); err != nil {
+			return fmt.Errorf("chain %d: %w", id, err)
 		}
 		if ids[id] {
-			return fmt.Errorf("duplicate shard ID %d", id)
+			return fmt.Errorf("duplicate ChainID %d", id)
 		}
 		ids[id] = true
-		if shard.ChainID == nil || shard.ChainID.Sign() <= 0 || shard.ChainID.BitLen() > 256 {
-			return fmt.Errorf("shard %d: ChainID must be a positive uint256 EVM chain ID", id)
+		if shard.QuarkChain.ShardID != id {
+			return fmt.Errorf("chain %d: QuarkChain.ShardID must match the EVM ChainID", id)
 		}
-		if chainIDs[shard.ChainID.String()] {
-			return fmt.Errorf("duplicate EVM ChainID %s", shard.ChainID)
-		}
-		chainIDs[shard.ChainID.String()] = true
 		if err := shard.CheckConfigForkOrder(); err != nil {
-			return fmt.Errorf("shard %d: %w", id, err)
+			return fmt.Errorf("chain %d: %w", id, err)
 		}
 	}
-	if !ids[params.RootCoinbaseShardID] {
-		return errors.New("network must include shard 0 for root rewards and staking")
-	}
-	for id := range c.Shards {
-		if !ids[uint32(id)] {
-			return fmt.Errorf("shard IDs must cover 0..%d; missing shard %d", len(c.Shards)-1, id)
-		}
+	if !ids[c.Root.CoinbaseChainID] {
+		return fmt.Errorf("Root.CoinbaseChainID %d must identify a network chain for root rewards and staking", c.Root.CoinbaseChainID)
 	}
 	for _, shard := range c.Shards {
 		qkc := shard.QuarkChain
 		seen := make(map[uint32]bool, len(qkc.ShardIDs))
 		for _, id := range qkc.ShardIDs {
 			if !ids[id] || seen[id] {
-				return fmt.Errorf("shard %d: ShardIDs contains unknown or duplicate shard %d", qkc.ShardID, id)
+				return fmt.Errorf("chain %d: routing chain IDs contain unknown or duplicate chain %d", qkc.ShardID, id)
 			}
 			seen[id] = true
 		}
 		if len(seen) != len(ids) {
-			return fmt.Errorf("shard %d: ShardIDs must contain every network shard", qkc.ShardID)
+			return fmt.Errorf("chain %d: routing chain IDs must contain every network chain", qkc.ShardID)
 		}
 	}
 	return nil
@@ -439,19 +444,19 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 	}
 	switch c.Role {
 	case RoleMaster:
-		if c.Eth != nil || c.ShardID != nil || c.PrivateHost != "" || c.PrivatePort != 0 {
-			return errors.New("master cannot configure Eth, ShardID, PrivateHost or PrivatePort")
+		if c.Eth != nil || c.ChainID != nil || c.PrivateHost != "" || c.PrivatePort != 0 {
+			return errors.New("master cannot configure Eth, ChainID, PrivateHost or PrivatePort")
 		}
 	case RoleShard:
-		if c.ShardID == nil || c.Eth == nil {
-			return errors.New("shard requires ShardID and execution settings")
+		if c.ChainID == nil || c.Eth == nil {
+			return errors.New("shard requires ChainID and execution settings")
 		}
 		found := false
 		for _, shard := range network.Shards {
-			found = found || shard.QuarkChain.ShardID == *c.ShardID
+			found = found || shard.ChainID.Uint64() == uint64(*c.ChainID)
 		}
 		if !found {
-			return fmt.Errorf("shard ID %d is not in the network", *c.ShardID)
+			return fmt.Errorf("chain ID %d is not in the network", *c.ChainID)
 		}
 		ip, err := netip.ParseAddr(c.PrivateHost)
 		if c.PrivateHost == "" || strings.ContainsAny(c.PrivateHost, " \t\r\n/[]") ||

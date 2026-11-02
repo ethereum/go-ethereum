@@ -18,7 +18,7 @@ MaxPeers = 25
 NoDiscovery = true
 
 [[ShardNodes]]
-ShardID = 0
+ChainID = 100001
 # Internal QKC TCP endpoint for Master and other shards.
 PrivateHost = "127.0.0.1"
 PrivatePort = 38000
@@ -29,7 +29,7 @@ CoinbaseAddress = "0x2222222222222222222222222222222222222222"
 
 # Field definitions: node.Config in node/config.go (path relative to repository root).
 [ShardNodes.Node]
-DataDir = "./qkc-data/shard-0"
+DataDir = "./qkc-data/shard-100001"
 
 # Demonstrates how each shard can override geth runtime settings.
 # This section is optional; omitted settings inherit geth defaults.
@@ -39,7 +39,7 @@ DataDir = "./qkc-data/shard-0"
 DatabaseCache = 512
 
 [[ShardNodes]]
-ShardID = 1
+ChainID = 100002
 # Internal QKC TCP endpoint for Master and other shards.
 PrivateHost = "127.0.0.1"
 PrivatePort = 38001
@@ -50,7 +50,7 @@ CoinbaseAddress = "0x3333333333333333333333333333333333333333"
 
 # Field definitions: node.Config in node/config.go (path relative to repository root).
 [ShardNodes.Node]
-DataDir = "./qkc-data/shard-1"
+DataDir = "./qkc-data/shard-100002"
 
 # Demonstrates how each shard can override geth runtime settings.
 # This section is optional; omitted settings inherit geth defaults.

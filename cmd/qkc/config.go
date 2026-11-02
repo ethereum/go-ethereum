@@ -39,14 +39,14 @@ var (
 		Name:  "qkc.role",
 		Usage: "Process role: master or shard",
 	}
-	qkcShardFlag = &cli.Uint64Flag{
-		Name:  "qkc.shard",
-		Usage: "Shard routing ID to select from the deployment (required for shard role)",
+	qkcChainFlag = &cli.Uint64Flag{
+		Name:  "qkc.chain",
+		Usage: "Chain ID to select from the deployment (required for shard role)",
 	}
 )
 
 var qkcConfigFlags = []cli.Flag{
-	configFileFlag, qkcNetworkFileFlag, qkcRoleFlag, qkcShardFlag, utils.NetworkIdFlag,
+	configFileFlag, qkcNetworkFileFlag, qkcRoleFlag, qkcChainFlag, utils.NetworkIdFlag,
 	utils.DataDirFlag, utils.DBEngineFlag, utils.SyncModeFlag, utils.StateSchemeFlag,
 	utils.ListenPortFlag, utils.MaxPeersFlag, utils.NoDiscoverFlag,
 	utils.HTTPEnabledFlag, utils.HTTPListenAddrFlag, utils.HTTPPortFlag, utils.HTTPApiFlag,
@@ -76,16 +76,16 @@ func loadQKCConfig(ctx *cli.Context) (*qkcconfig.NodeConfig, *qkcconfig.NetworkC
 	if cluster.NetworkFile == "" {
 		return nil, nil, fmt.Errorf("set NetworkFile in --config or supply --qkc.network")
 	}
-	var shardID *uint32
-	if ctx.IsSet(qkcShardFlag.Name) {
-		id := ctx.Uint64(qkcShardFlag.Name)
-		if id >= math.MaxUint32 {
-			return nil, nil, fmt.Errorf("--qkc.shard must be a uint32 routing ID other than the reserved root ID")
+	var chainID *uint32
+	if ctx.IsSet(qkcChainFlag.Name) {
+		id := ctx.Uint64(qkcChainFlag.Name)
+		if id == 0 || id >= math.MaxUint32 {
+			return nil, nil, fmt.Errorf("--qkc.chain must be a positive uint32 chain ID other than the reserved root ID")
 		}
 		value := uint32(id)
-		shardID = &value
+		chainID = &value
 	}
-	cfg, err := cluster.SelectNode(ctx.String(qkcRoleFlag.Name), shardID)
+	cfg, err := cluster.SelectNode(ctx.String(qkcRoleFlag.Name), chainID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -192,13 +192,8 @@ func checkQKCConfig(ctx *cli.Context) error {
 		return err
 	}
 	identity := cfg.Role
-	if cfg.ShardID != nil {
-		for _, shard := range network.Shards {
-			if shard.QuarkChain.ShardID == *cfg.ShardID {
-				identity = fmt.Sprintf("shard %d, EVM chain ID %s", *cfg.ShardID, shard.ChainID)
-				break
-			}
-		}
+	if cfg.ChainID != nil {
+		identity = fmt.Sprintf("shard, chain ID %d", *cfg.ChainID)
 	}
 	_, err = fmt.Fprintf(ctx.App.Writer, "QuarkChain configuration is valid (%s, network ID %d)\n", identity, network.NetworkID)
 	return err
