@@ -63,8 +63,8 @@ func XShardDeposits(chain *core.BlockChain, blockHash common.Hash) (map[uint32][
 // of a block into deposits grouped by destination shard, as XShardDeposits.
 func depositsFromLogs(config *params.QuarkChainConfig, blockHash common.Hash, logs []*types.Log) (map[uint32][]*types.DepositTx, error) {
 	deposits := make(map[uint32][]*types.DepositTx)
-	for _, shard := range config.ShardIDs {
-		if shard != config.ShardID {
+	for _, shard := range config.ChainIDs {
+		if shard != config.ChainID {
 			deposits[shard] = []*types.DepositTx{}
 		}
 	}

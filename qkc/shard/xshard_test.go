@@ -66,7 +66,7 @@ func TestXShardDeposits(t *testing.T) {
 		t.Fatal(err)
 	}
 	alloc := core.SystemContractAllocs()
-	maps.Copy(alloc, core.PoSWStakingContractAllocs(config.QuarkChain.ShardID))
+	maps.Copy(alloc, core.PoSWStakingContractAllocs(config.QuarkChain.ChainID))
 	alloc[sender] = types.Account{Balance: big.NewInt(params.Ether)}
 	alloc[impostor] = types.Account{Code: program.New().Push(vm.XShardSentMessageTopic).Push(0).Push(0).Op(vm.LOG1).Bytes()}
 	gspec := &core.Genesis{Config: &config, Alloc: alloc}
@@ -188,7 +188,7 @@ func sentMessageLog(dstShard byte) *types.Log {
 // cannot be converted fails the conversion, as it means a broken outbox.
 func TestXShardDepositsInvalid(t *testing.T) {
 	var (
-		config    = &params.QuarkChainConfig{ShardID: 0, ShardIDs: []uint32{0, 1}}
+		config    = &params.QuarkChainConfig{ChainID: 0, ChainIDs: []uint32{0, 1}}
 		blockHash = common.Hash{0xff}
 	)
 	have, err := depositsFromLogs(config, blockHash, []*types.Log{sentMessageLog(1)})

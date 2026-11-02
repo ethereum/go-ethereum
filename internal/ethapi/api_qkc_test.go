@@ -31,7 +31,7 @@ import (
 // deposit, and that clients decode it back to the deposit.
 func TestRPCDepositTransaction(t *testing.T) {
 	config := *params.MergedTestChainConfig
-	config.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1}}
+	config.QuarkChain = &params.QuarkChainConfig{ChainID: 1, ChainIDs: []uint32{0, 1}}
 	deposit := &types.DepositTx{
 		Version:         types.DepositTxVersion,
 		SourceBlockHash: common.Hash{0xaa},

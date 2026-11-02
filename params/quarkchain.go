@@ -41,15 +41,15 @@ const (
 	// gas reserved for its deposits, to its gas limit over this divisor.
 	XShardGasLimitDivisor uint64 = 2
 
-	// RootCoinbaseShardID is the shard the root chain pays its coinbase to.
-	RootCoinbaseShardID uint32 = 0
+	// RootCoinbaseChainID is the shard the root chain pays its coinbase to.
+	RootCoinbaseChainID uint32 = 0
 )
 
 // QuarkChainConfig is the configuration of a QuarkChain shard chain. Its
 // presence in the chain config enables the QuarkChain specific features.
 type QuarkChainConfig struct {
-	ShardID  uint32   `json:"shardId"`  // ID of this shard
-	ShardIDs []uint32 `json:"shardIds"` // IDs of all shards in the network, this one included
+	ChainID  uint32   `json:"chainId"`  // ID of this shard
+	ChainIDs []uint32 `json:"chainIds"` // IDs of all shards in the network, this one included
 
 	PoSW *PoSWConfig `json:"posw"` // Required consensus configuration for this shard.
 	// MaxBlocksPerRootBlock caps the number of blocks of this shard a root
@@ -63,19 +63,19 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 	if c == nil || other == nil {
 		return c == other
 	}
-	return c.ShardID == other.ShardID &&
-		slices.Equal(c.ShardIDs, other.ShardIDs) &&
+	return c.ChainID == other.ChainID &&
+		slices.Equal(c.ChainIDs, other.ChainIDs) &&
 		c.PoSW.Equal(other.PoSW) &&
 		c.MaxBlocksPerRootBlock == other.MaxBlocksPerRootBlock
 }
 
 // String implements the stringer interface.
 func (c QuarkChainConfig) String() string {
-	return fmt.Sprintf("quarkchain(shard: %d, shards: %v)", c.ShardID, c.ShardIDs)
+	return fmt.Sprintf("quarkchain(shard: %d, shards: %v)", c.ChainID, c.ChainIDs)
 }
 
 // IsXShardDestination reports whether this shard can send a cross-shard
 // message to the given shard.
-func (c *QuarkChainConfig) IsXShardDestination(shardID uint32) bool {
-	return c != nil && shardID != c.ShardID && slices.Contains(c.ShardIDs, shardID)
+func (c *QuarkChainConfig) IsXShardDestination(chainID uint32) bool {
+	return c != nil && chainID != c.ChainID && slices.Contains(c.ChainIDs, chainID)
 }

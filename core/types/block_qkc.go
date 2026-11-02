@@ -54,7 +54,7 @@ import (
 //
 //	offset  size  field
 //	0       4     version
-//	4       4     shardId
+//	4       4     chainId
 //	8       32    prevRootBlock
 //	40      24    cursor (rootBlockHeight, minorBlockIndex, xShardDepositIndex)
 //	64      8     xShardGasUsed
@@ -90,7 +90,7 @@ type XShardCursor struct {
 // Header.MixDigest carries the QuarkChain difficulty rather than a mix hash.
 type QKCExtra struct {
 	Version        uint32
-	ShardID        uint32
+	ChainID        uint32
 	PrevRootBlock  common.Hash // latest root block seen; EmptyHash for shard genesis
 	Cursor         XShardCursor
 	XShardGasUsed  uint64      // gas used by the cross-shard messages applied in the block
@@ -107,7 +107,7 @@ func DecodeQKCExtra(extra []byte) (*QKCExtra, error) {
 	}
 	e := &QKCExtra{
 		Version: binary.BigEndian.Uint32(extra[0:4]),
-		ShardID: binary.BigEndian.Uint32(extra[4:8]),
+		ChainID: binary.BigEndian.Uint32(extra[4:8]),
 		Cursor: XShardCursor{
 			RootBlockHeight:    binary.BigEndian.Uint64(extra[40:48]),
 			MinorBlockIndex:    binary.BigEndian.Uint64(extra[48:56]),
@@ -127,7 +127,7 @@ func DecodeQKCExtra(extra []byte) (*QKCExtra, error) {
 func (e *QKCExtra) Encode() []byte {
 	extra := make([]byte, 0, QKCExtraSize)
 	extra = binary.BigEndian.AppendUint32(extra, e.Version)
-	extra = binary.BigEndian.AppendUint32(extra, e.ShardID)
+	extra = binary.BigEndian.AppendUint32(extra, e.ChainID)
 	extra = append(extra, e.PrevRootBlock[:]...)
 	extra = binary.BigEndian.AppendUint64(extra, e.Cursor.RootBlockHeight)
 	extra = binary.BigEndian.AppendUint64(extra, e.Cursor.MinorBlockIndex)

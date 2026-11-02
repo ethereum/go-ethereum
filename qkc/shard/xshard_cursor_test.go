@@ -60,7 +60,7 @@ func sourceBlock(shard uint32, number int64) *types.Header {
 	return &types.Header{
 		Number:     big.NewInt(number),
 		Difficulty: new(big.Int),
-		Extra:      (&types.QKCExtra{ShardID: shard}).Encode(),
+		Extra:      (&types.QKCExtra{ChainID: shard}).Encode(),
 	}
 }
 
@@ -135,8 +135,8 @@ type depositAt struct {
 func TestXShardInboxDeposits(t *testing.T) {
 	roots, a, b, _, d, toShard0, toShard1 := testRootChain()
 	var (
-		shard0 = NewXShardInbox(&params.QuarkChainConfig{ShardID: 0, ShardIDs: []uint32{0, 1, 2}}, toShard0)
-		shard1 = NewXShardInbox(&params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1, 2}}, toShard1)
+		shard0 = NewXShardInbox(&params.QuarkChainConfig{ChainID: 0, ChainIDs: []uint32{0, 1, 2}}, toShard0)
+		shard1 = NewXShardInbox(&params.QuarkChainConfig{ChainID: 1, ChainIDs: []uint32{0, 1, 2}}, toShard1)
 		eof    = pos(4, 0, 0)
 	)
 	for _, tt := range []struct {
@@ -221,7 +221,7 @@ func TestXShardInboxDeposits(t *testing.T) {
 
 func TestXShardInboxErrors(t *testing.T) {
 	roots, a, _, _, _, _, toShard1 := testRootChain()
-	shard1 := NewXShardInbox(&params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1, 2}}, toShard1)
+	shard1 := NewXShardInbox(&params.QuarkChainConfig{ChainID: 1, ChainIDs: []uint32{0, 1, 2}}, toShard1)
 
 	if _, err := shard1.Deposits(cursorAt(1, 0, 0), common.Hash{0xff}); !errors.Is(err, ErrUnknownCursorRoot) {
 		t.Errorf("unknown previous root block: error %v, want %v", err, ErrUnknownCursorRoot)
@@ -256,7 +256,7 @@ func TestXShardInboxRootReference(t *testing.T) {
 	fork := newRoot(roots[0], 99)
 	forkChild := newRoot(fork, 100)
 	chain.roots[fork.Hash()], chain.roots[forkChild.Hash()] = fork, forkChild
-	inbox := NewXShardInbox(&params.QuarkChainConfig{ShardID: 1}, chain)
+	inbox := NewXShardInbox(&params.QuarkChainConfig{ChainID: 1}, chain)
 	for _, tt := range []struct {
 		name       string
 		parentRoot common.Hash
@@ -298,14 +298,14 @@ func TestXShardInboxMissingRoot(t *testing.T) {
 	t.Run("at start", func(t *testing.T) {
 		roots, _, _, _, _, _, chain := testRootChain()
 		delete(chain.roots, roots[2].Hash())
-		inbox := NewXShardInbox(&params.QuarkChainConfig{ShardID: 1}, chain)
+		inbox := NewXShardInbox(&params.QuarkChainConfig{ChainID: 1}, chain)
 		if _, err := inbox.Deposits(cursorAt(1, 0, 0), roots[3].Hash()); !errors.Is(err, ErrInconsistentClusterState) {
 			t.Errorf("deposits error %v, want %v", err, ErrInconsistentClusterState)
 		}
 	})
 	t.Run("while walking", func(t *testing.T) {
 		roots, _, _, _, _, _, chain := testRootChain()
-		inbox := NewXShardInbox(&params.QuarkChainConfig{ShardID: 1}, chain)
+		inbox := NewXShardInbox(&params.QuarkChainConfig{ChainID: 1}, chain)
 		deposits, err := inbox.Deposits(cursorAt(1, 3, 0), roots[3].Hash())
 		if err != nil {
 			t.Fatal(err)

@@ -118,7 +118,7 @@ type AddMinorBlockHeaderResponse struct {
 // shard, including empty lists for the inbox cursor. Each item is RLP(DepositTx),
 // without the 0x7e transaction prefix, in source log order.
 type AddXshardTxListRequest struct {
-	ChainID        uint32      // Destination QuarkChainConfig.ShardID.
+	ChainID        uint32      // Destination QuarkChainConfig.ChainID.
 	MinorBlockHash common.Hash // Source block hash.
 	DepositTxList  []Data      `ssz-max:"4294967295,4294967295" ssz-size:"?,?"`
 }

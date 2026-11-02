@@ -85,10 +85,10 @@ func newTestEnv(t *testing.T) *testEnv {
 		Config:     env.config,
 		Difficulty: common.Big0,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
-		ExtraData:  (&types.QKCExtra{ShardID: 0}).Encode(),
+		ExtraData:  (&types.QKCExtra{ChainID: 0}).Encode(),
 		Alloc:      core.SystemContractAllocs(),
 	}
-	maps.Copy(gspec.Alloc, core.PoSWStakingContractAllocs(config.QuarkChain.ShardID))
+	maps.Copy(gspec.Alloc, core.PoSWStakingContractAllocs(config.QuarkChain.ChainID))
 	env.genDb, _, _ = core.GenerateChainWithGenesis(gspec, env.engine, 0, nil)
 
 	chain, err := core.NewBlockChain(env.db, gspec, env.engine, nil)
@@ -127,14 +127,14 @@ func newRoot(parent *qkctypes.RootBlock, seed uint64, headers ...*types.Header) 
 
 // makeShardHeaders creates a linked sequence of headers for a shard. Each
 // header references the corresponding root block in prevRoots.
-func makeShardHeaders(shardID uint32, startBlockNumber int64, prevRoots ...*qkctypes.RootBlock) []*types.Header {
+func makeShardHeaders(chainID uint32, startBlockNumber int64, prevRoots ...*qkctypes.RootBlock) []*types.Header {
 	headers := make([]*types.Header, len(prevRoots))
 	for i, prevRoot := range prevRoots {
 		headers[i] = &types.Header{
 			ParentHash: common.Hash{},
 			Number:     big.NewInt(startBlockNumber + int64(i)),
 			Difficulty: common.Big0,
-			Extra:      (&types.QKCExtra{ShardID: shardID, PrevRootBlock: prevRoot.Hash()}).Encode(),
+			Extra:      (&types.QKCExtra{ChainID: chainID, PrevRootBlock: prevRoot.Hash()}).Encode(),
 		}
 		if i > 0 {
 			headers[i].ParentHash = headers[i-1].Hash()
@@ -200,7 +200,7 @@ func (env *testEnv) makeBlocks(parent *types.Block, n int, prevRoot *qkctypes.Ro
 	blocks, _ := core.GenerateChain(env.config, parent, env.engine, env.genDb, n, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{seed})
 		extra := &types.QKCExtra{
-			ShardID:        env.config.QuarkChain.ShardID,
+			ChainID:        env.config.QuarkChain.ChainID,
 			PrevRootBlock:  prevRoot.Hash(),
 			XShardGasLimit: b.Gas() / params.XShardGasLimitDivisor,
 		}
@@ -1118,10 +1118,10 @@ func TestValidateXShardDeposits(t *testing.T) {
 	r0 := qkctypes.NewRootBlock(&qkctypes.RootBlockHeader{}, nil, nil)
 	r1 := newRoot(r0, 1)
 	unknown := newRoot(r0, 2)
-	config := &params.QuarkChainConfig{ShardID: 0, ShardIDs: []uint32{0, 1}}
+	config := &params.QuarkChainConfig{ChainID: 0, ChainIDs: []uint32{0, 1}}
 	tests := []struct {
 		name    string
-		shardID uint32
+		chainID uint32
 		root    *qkctypes.RootBlock
 		stored  bool
 		err     error
@@ -1141,7 +1141,7 @@ func TestValidateXShardDeposits(t *testing.T) {
 			t.Cleanup(func() { db.Close() })
 			qkcrawdb.WriteRootBlock(db, r0)
 			qkcrawdb.WriteRootBlock(db, r1)
-			block := makeShardHeaders(test.shardID, 1, test.root)[0]
+			block := makeShardHeaders(test.chainID, 1, test.root)[0]
 			extra, err := block.QKCExtra()
 			if err != nil {
 				t.Fatal(err)

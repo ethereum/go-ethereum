@@ -114,7 +114,7 @@ func TestChainHeaderMessagesSSZ(t *testing.T) {
 		GasLimit:        1000000,
 		GasUsed:         21000,
 		Time:            12345,
-		Extra:           (&types.QKCExtra{ShardID: 1}).Encode(),
+		Extra:           (&types.QKCExtra{ChainID: 1}).Encode(),
 		MixDigest:       common.HexToHash("0x0304"),
 		BaseFee:         big.NewInt(100),
 		WithdrawalsHash: &withdrawals,

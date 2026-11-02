@@ -35,7 +35,7 @@ import (
 
 func TestQKCBeaconFields(t *testing.T) {
 	config := *params.MergedTestChainConfig
-	config.QuarkChain = &params.QuarkChainConfig{ShardID: 1}
+	config.QuarkChain = &params.QuarkChainConfig{ChainID: 1}
 	config.CancunTime, config.PragueTime, config.OsakaTime = u64(20), u64(20), u64(20)
 	config.AmsterdamTime = u64(30)
 	gspec := &Genesis{
@@ -160,7 +160,7 @@ func testCursor(walked int, ended bool) types.XShardCursor {
 // inbox rules independently when declared and used gas differ.
 func TestValidateXShardDepositsGasAccounting(t *testing.T) {
 	config := *params.MergedTestChainConfig
-	config.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1}}
+	config.QuarkChain = &params.QuarkChainConfig{ChainID: 1, ChainIDs: []uint32{0, 1}}
 	alloc := SystemContractAllocs()
 	maps.Copy(alloc, PoSWStakingContractAllocs(1))
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), &Genesis{Config: &config, Alloc: alloc}, qkcTestEngine{beacon.New(ethash.NewFaker())}, nil)
@@ -277,7 +277,7 @@ func TestValidateXShardDeposits(t *testing.T) {
 				ExtraData: (&types.QKCExtra{}).Encode(),
 				Alloc:     withSystemContracts(types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}}),
 			}
-			maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(config.QuarkChain.ShardID))
+			maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(config.QuarkChain.ChainID))
 			engine := qkcTestEngine{beacon.New(ethash.NewFaker())}
 			extra := types.QKCExtra{
 				PrevRootBlock:  prevRoot,

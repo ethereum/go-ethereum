@@ -21,8 +21,8 @@
 //
 // Usage: add-posw-staking <input-genesis.json> <output-genesis.json>
 // The first argument is this project's QuarkChain genesis JSON file: the geth
-// genesis format extended with config.quarkchain. Its shardId selects the staking
-// contracts to add; an omitted shardId defaults to 0. A plain geth genesis file
+// genesis format extended with config.quarkchain. Its chainId selects the staking
+// contracts to add; an omitted chainId defaults to 0. A plain geth genesis file
 // without config.quarkchain is rejected.
 // The second argument is the output path for the complete updated genesis JSON;
 // an existing output file is overwritten after successful generation.
@@ -80,7 +80,7 @@ func generate(input io.Reader, output io.Writer) error {
 	if genesis.Alloc == nil {
 		genesis.Alloc = make(types.GenesisAlloc)
 	}
-	for address, account := range core.PoSWStakingContractAllocs(genesis.Config.QuarkChain.ShardID) {
+	for address, account := range core.PoSWStakingContractAllocs(genesis.Config.QuarkChain.ChainID) {
 		if _, exists := genesis.Alloc[address]; !exists {
 			genesis.Alloc[address] = account
 		}

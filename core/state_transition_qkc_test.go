@@ -83,7 +83,7 @@ func testDepositExecution(t *testing.T, amsterdam bool) {
 			reverter: {Code: program.New().Push(0).Push(0).Op(vm.REVERT).Bytes()},
 		}),
 	}
-	maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(config.QuarkChain.ShardID))
+	maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(config.QuarkChain.ChainID))
 	deposits := []*types.DepositTx{
 		// A move to an EOA.
 		xShardTestMove(0, common.HexToAddress("0xa1"), eoa, 1000, 7*params.GWei),
@@ -198,7 +198,7 @@ func TestDepositNotMove(t *testing.T) {
 		coinbase = common.HexToAddress("0xc0ffee")
 		to       = common.HexToAddress("0xe0a")
 	)
-	config.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1}}
+	config.QuarkChain = &params.QuarkChainConfig{ChainID: 1, ChainIDs: []uint32{0, 1}}
 	header := &types.Header{Number: big.NewInt(1), Difficulty: new(big.Int), BaseFee: big.NewInt(params.GWei), GasLimit: 30_000_000}
 
 	for _, tt := range []struct {

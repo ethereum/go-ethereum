@@ -143,18 +143,18 @@ func TestBuildXShardDeposits(t *testing.T) {
 			} {
 				t.Run(tt.name, func(t *testing.T) {
 					config := *params.MergedTestChainConfig
-					config.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1}}
+					config.QuarkChain = &params.QuarkChainConfig{ChainID: 1, ChainIDs: []uint32{0, 1}}
 					if amsterdam {
 						config.AmsterdamTime = new(uint64)
 					}
 					alloc := core.SystemContractAllocs()
-					maps.Copy(alloc, core.PoSWStakingContractAllocs(config.QuarkChain.ShardID))
+					maps.Copy(alloc, core.PoSWStakingContractAllocs(config.QuarkChain.ChainID))
 					alloc[testBankAddress] = types.Account{Balance: testBankFunds}
 					// Deposits to a contract must remain moves, even if its code reverts.
 					alloc[testUserAddress] = types.Account{Code: common.FromHex("0x60006000fd"), Balance: new(big.Int)}
 					genesis := &core.Genesis{
 						Config: &config, GasLimit: tt.limit,
-						ExtraData: (&types.QKCExtra{ShardID: 1, Cursor: types.XShardCursor{RootBlockHeight: 1}}).Encode(),
+						ExtraData: (&types.QKCExtra{ChainID: 1, Cursor: types.XShardCursor{RootBlockHeight: 1}}).Encode(),
 						Alloc:     alloc,
 					}
 					engine := qkcTestEngine{beacon.New(ethash.NewFaker())}
@@ -198,7 +198,7 @@ func TestBuildXShardDeposits(t *testing.T) {
 					args := &generateParams{
 						timestamp: 1, forceTime: true, parentHash: chain.Genesis().Hash(),
 						coinbase: common.Address{0xcc},
-						qkc:      &types.QKCExtra{ShardID: 1, PrevRootBlock: common.Hash{0x77}}, noTxs: tt.noTxs,
+						qkc:      &types.QKCExtra{ChainID: 1, PrevRootBlock: common.Hash{0x77}}, noTxs: tt.noTxs,
 					}
 					result := miner.generateWork(context.Background(), args, false)
 					if tt.missingInbox {

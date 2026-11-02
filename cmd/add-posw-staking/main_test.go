@@ -29,15 +29,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func stakingGenesisConfig(shardID uint32) *params.ChainConfig {
+func stakingGenesisConfig(chainID uint32) *params.ChainConfig {
 	config := *params.AllEthashProtocolChanges
-	config.QuarkChain = params.NewTestQuarkChainConfig(shardID)
+	config.QuarkChain = params.NewTestQuarkChainConfig(chainID)
 	return &config
 }
 
 func TestGenerate(t *testing.T) {
-	for _, shardID := range []uint32{0, 1} {
-		config := stakingGenesisConfig(shardID)
+	for _, chainID := range []uint32{0, 1} {
+		config := stakingGenesisConfig(chainID)
 		funded := common.HexToAddress("0xabcd")
 		// Generation preserves configured accounts and fills missing staking accounts.
 		base := &core.Genesis{
@@ -66,14 +66,14 @@ func TestGenerate(t *testing.T) {
 			t.Fatal(err)
 		}
 		account := configured.Alloc[params.ShardStakingContractAddress]
-		if configured.Config.QuarkChain.ShardID != shardID || !reflect.DeepEqual(account, base.Alloc[params.ShardStakingContractAddress]) {
+		if configured.Config.QuarkChain.ChainID != chainID || !reflect.DeepEqual(account, base.Alloc[params.ShardStakingContractAddress]) {
 			t.Fatal("configured staking account changed")
 		}
 		if configured.Alloc[funded].Balance.Uint64() != 42 || !bytes.Equal(configured.Alloc[funded].Code, []byte{0}) {
 			t.Fatal("ordinary allocation lost")
 		}
 		wantLen := 2
-		if shardID == 0 {
+		if chainID == 0 {
 			wantLen++
 		}
 		if len(configured.Alloc) != wantLen {

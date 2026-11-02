@@ -208,7 +208,7 @@ func (c *ShardChain) Init(root *qkctypes.RootBlock) error {
 
 // validateGenesisRoot verifies the body commitment and this shard's sole
 // genesis header. Other shards' genesis hashes and heights are their own
-// responsibility; this shard only decodes their shard IDs to skip them.
+// responsibility; this shard only decodes their chain IDs to skip them.
 func (c *ShardChain) validateGenesisRoot(root *qkctypes.RootBlock) (*types.Header, error) {
 	config := c.chain.Config().QuarkChain
 	if config == nil {
@@ -225,8 +225,8 @@ func (c *ShardChain) validateGenesisRoot(root *qkctypes.RootBlock) (*types.Heade
 	if err != nil {
 		return nil, fmt.Errorf("%w: genesis: %w", ErrShardStateInconsistency, err)
 	}
-	if extra.ShardID != config.ShardID || extra.PrevRootBlock != (common.Hash{}) {
-		return nil, fmt.Errorf("%w: genesis must have the local shard ID and an empty previous root", ErrShardStateInconsistency)
+	if extra.ChainID != config.ChainID || extra.PrevRootBlock != (common.Hash{}) {
+		return nil, fmt.Errorf("%w: genesis must have the local chain ID and an empty previous root", ErrShardStateInconsistency)
 	}
 	found := false
 	for _, header := range root.ShardBlockHeaders() {
@@ -234,16 +234,16 @@ func (c *ShardChain) validateGenesisRoot(root *qkctypes.RootBlock) (*types.Heade
 		if err != nil {
 			return nil, fmt.Errorf("%w: genesis shard header: %w", ErrInvalidRootBlock, err)
 		}
-		if extra.ShardID != config.ShardID {
+		if extra.ChainID != config.ChainID {
 			continue
 		}
 		if found || header.Number.Sign() != 0 || header.Hash() != genesis.Hash() {
-			return nil, fmt.Errorf("%w: expected exactly one matching genesis for shard %d", ErrInvalidRootBlock, config.ShardID)
+			return nil, fmt.Errorf("%w: expected exactly one matching genesis for shard %d", ErrInvalidRootBlock, config.ChainID)
 		}
 		found = true
 	}
 	if !found {
-		return nil, fmt.Errorf("%w: missing genesis for shard %d", ErrInvalidRootBlock, config.ShardID)
+		return nil, fmt.Errorf("%w: missing genesis for shard %d", ErrInvalidRootBlock, config.ChainID)
 	}
 	return genesis, nil
 }
@@ -260,7 +260,7 @@ func (c *ShardChain) InsertShardBlock(block *types.Block) error {
 		return consensus.ErrInvalidNumber
 	}
 
-	// TODO 1. check shard id here 2. check future block in engine.VerifyBlockHeader
+	// TODO 1. check chain id here 2. check future block in engine.VerifyBlockHeader
 
 	if c.chain.HasBlock(block.Hash(), block.NumberU64()) {
 		return nil
@@ -565,7 +565,7 @@ func (c *ShardChain) validateRootBlock(root *qkctypes.RootBlock) (*types.Header,
 		if err != nil {
 			return nil, fmt.Errorf("shard block %x: %w", block.Hash(), err)
 		}
-		if extra.ShardID != config.ShardID {
+		if extra.ChainID != config.ChainID {
 			if err := c.validateXShardDeposits(block, extra, config); err != nil {
 				return nil, err
 			}
@@ -621,15 +621,15 @@ func (c *ShardChain) validateXShardDeposits(block *types.Header, extra *types.QK
 	// shard having been created after the referenced root, as in pyquarkchain.
 	exist := rawdb.HasRootBlock(c.db, extra.PrevRootBlock)
 	if !exist {
-		return fmt.Errorf("%w: %w: shard %d block #%d [%x..] references root %x", ErrClusterStateInconsistency, ErrUnknownRootBlock, extra.ShardID, block.Number, block.Hash().Bytes()[:4], extra.PrevRootBlock)
+		return fmt.Errorf("%w: %w: shard %d block #%d [%x..] references root %x", ErrClusterStateInconsistency, ErrUnknownRootBlock, extra.ChainID, block.Number, block.Hash().Bytes()[:4], extra.PrevRootBlock)
 	}
-	sends := config.IsXShardDestination(extra.ShardID)
+	sends := config.IsXShardDestination(extra.ChainID)
 	stored := rawdb.HasXShardDeposits(c.db, block.Hash())
 	switch {
 	case sends && !stored:
-		return fmt.Errorf("%w: %w: shard %d block #%d [%x..]", ErrClusterStateInconsistency, ErrMissingXShardDeposits, extra.ShardID, block.Number, block.Hash().Bytes()[:4])
+		return fmt.Errorf("%w: %w: shard %d block #%d [%x..]", ErrClusterStateInconsistency, ErrMissingXShardDeposits, extra.ChainID, block.Number, block.Hash().Bytes()[:4])
 	case !sends && stored:
-		return fmt.Errorf("%w: %w: shard %d block #%d [%x..]", ErrClusterStateInconsistency, ErrUnexpectedXShardDeposits, extra.ShardID, block.Number, block.Hash().Bytes()[:4])
+		return fmt.Errorf("%w: %w: shard %d block #%d [%x..]", ErrClusterStateInconsistency, ErrUnexpectedXShardDeposits, extra.ChainID, block.Number, block.Hash().Bytes()[:4])
 	}
 	return nil
 }

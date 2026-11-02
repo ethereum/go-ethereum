@@ -54,7 +54,7 @@ import (
 func TestQKCExtraEncoding(t *testing.T) {
 	want := &QKCExtra{
 		Version:        1,
-		ShardID:        0x00010003,
+		ChainID:        0x00010003,
 		PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0xaa}, 32)),
 		Cursor:         XShardCursor{RootBlockHeight: 1, MinorBlockIndex: 2, XShardDepositIndex: 3},
 		XShardGasUsed:  21000,
@@ -64,7 +64,7 @@ func TestQKCExtraEncoding(t *testing.T) {
 	}
 	wantExtra := common.FromHex("0x" +
 		"00000001" + // version, offset 0
-		"00010003" + // shardId, offset 4
+		"00010003" + // chainId, offset 4
 		strings.Repeat("aa", 32) + // prevRootBlock, offset 8
 		"0000000000000001" + "0000000000000002" + "0000000000000003" + // cursor, offset 40
 		"0000000000005208" + // xShardGasUsed, offset 64
@@ -102,7 +102,7 @@ func TestQKCExtraRoundTrip(t *testing.T) {
 		{},
 		{
 			Version:        1,
-			ShardID:        0x00010003,
+			ChainID:        0x00010003,
 			PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0xaa}, 32)),
 			Cursor:         XShardCursor{RootBlockHeight: 1, MinorBlockIndex: 2, XShardDepositIndex: 3},
 			XShardGasUsed:  21000,
@@ -112,7 +112,7 @@ func TestQKCExtraRoundTrip(t *testing.T) {
 		},
 		{
 			Version:        ^uint32(0),
-			ShardID:        ^uint32(0),
+			ChainID:        ^uint32(0),
 			PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0xff}, 32)),
 			Cursor:         XShardCursor{RootBlockHeight: ^uint64(0), MinorBlockIndex: ^uint64(0), XShardDepositIndex: ^uint64(0)},
 			XShardGasUsed:  ^uint64(0),
@@ -248,7 +248,7 @@ func TestQKCSealHashSensitivity(t *testing.T) {
 	}
 	// The QKC fields outside the seal region participate as well.
 	other := qkcBaseExtra(nonce, mix)
-	other.ShardID = 4
+	other.ChainID = 4
 	otherShard := qkcShardHeader(other, big.NewInt(1000))
 	if qkcSealHash(t, otherShard) == baseSeal {
 		t.Error("seal hash ignores the QuarkChain fields outside the seal")
@@ -411,11 +411,11 @@ func qkcSealHash(t *testing.T, h *Header) common.Hash {
 }
 
 // qkcBaseExtra returns a QKC extra with the given seal, plus a version and a
-// shard id so that the region in front of the seal is non-zero too.
+// chain id so that the region in front of the seal is non-zero too.
 func qkcBaseExtra(nonce BlockNonce, mixHash common.Hash) *QKCExtra {
 	return &QKCExtra{
 		Version: 1,
-		ShardID: 3,
+		ChainID: 3,
 		Nonce:   nonce,
 		MixHash: mixHash,
 	}
@@ -456,7 +456,7 @@ func qkcReferenceHeader() *Header {
 		Time:        1_600_000_000,
 		Extra: (&QKCExtra{
 			Version:        1,
-			ShardID:        0x00010003,
+			ChainID:        0x00010003,
 			PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0x88}, 32)),
 			Cursor:         XShardCursor{RootBlockHeight: 1, MinorBlockIndex: 2, XShardDepositIndex: 3},
 			XShardGasUsed:  21_000,
