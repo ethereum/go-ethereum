@@ -33,8 +33,9 @@ func validPoSWConfig() *PoSWConfig {
 
 func validQuarkChainConfig() *QuarkChainConfig {
 	return &QuarkChainConfig{
-		ChainIDs: []*big.Int{big.NewInt(10001)},
-		PoSW:     validPoSWConfig(), RewardTaxRate: big.NewRat(1, 2),
+		ChainIDs:              []*big.Int{big.NewInt(10001)},
+		PoSW:                  validPoSWConfig(),
+		RewardTaxRate:         big.NewRat(1, 2),
 		MaxBlocksPerRootBlock: 100,
 	}
 }

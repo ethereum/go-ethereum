@@ -264,7 +264,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	}
 	return &newPayloadResult{
 		block:       block,
-		fees:        totalFees(block, work.receipts),
+		fees:        totalFees(miner.chainConfig, block, work.receipts),
 		sidecars:    work.sidecars,
 		stateDB:     work.state,
 		receipts:    work.receipts,
@@ -677,8 +677,9 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 	return nil
 }
 
-// totalFees computes total consumed miner fees in Wei. Block transactions and receipts have to have the same order.
-func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
+// totalFees computes total miner fees in Wei, after shard reward tax.
+// Block transactions and receipts have to have the same order.
+func totalFees(config *params.ChainConfig, block *types.Block, receipts []*types.Receipt) *big.Int {
 	baseFee := block.BaseFee()
 	feesWei := new(big.Int)
 	var gasUsed, product big.Int
@@ -686,6 +687,10 @@ func totalFees(block *types.Block, receipts []*types.Receipt) *big.Int {
 		minerFee, _ := tx.EffectiveGasTip(baseFee)
 		gasUsed.SetUint64(receipts[i].GasUsed)
 		product.Mul(&gasUsed, minerFee)
+		if config.QuarkChain != nil {
+			// Match execution's per-transaction tax and rounding.
+			product.Set(config.QuarkChain.AfterTax(&product))
+		}
 		feesWei.Add(feesWei, &product)
 	}
 	return feesWei

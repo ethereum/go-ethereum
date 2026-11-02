@@ -93,16 +93,25 @@ func TestTotalFeesWithDeposits(t *testing.T) {
 		types.NewTx(&types.DepositTx{GasPrice: uint256.NewInt(2), Gas: 9000}),
 		types.NewTx(&types.DepositTx{GasPrice: new(uint256.Int), Gas: 9000}),
 		types.NewTx(&types.LegacyTx{GasPrice: big.NewInt(15), Gas: 21000}),
-		types.NewTx(&types.DynamicFeeTx{GasFeeCap: big.NewInt(10), GasTipCap: big.NewInt(5), Gas: 21000}),
+		types.NewTx(&types.DynamicFeeTx{GasFeeCap: big.NewInt(10), GasTipCap: big.NewInt(5), Gas: 22000}),
+		types.NewTx(&types.DynamicFeeTx{Nonce: 1, GasFeeCap: big.NewInt(10), GasTipCap: big.NewInt(5), Gas: 22000}),
 	}
 	block := types.NewBlockWithHeader(&types.Header{BaseFee: big.NewInt(7)}).WithBody(types.Body{Transactions: txs})
 	receipts := types.Receipts{
-		{GasUsed: 9000}, {GasUsed: 9000}, {GasUsed: 9000}, {GasUsed: 21000}, {GasUsed: 21000},
+		{GasUsed: 9000}, {GasUsed: 9000}, {GasUsed: 9000}, {GasUsed: 21000}, {GasUsed: 21001}, {GasUsed: 21001},
 	}
 	// Deposits pay 10, 2 and 0 per gas; ordinary transactions pay tips of 8 and 3.
-	want := big.NewInt(9000*(10+2) + 21000*(8+3))
-	if fees := totalFees(block, receipts); fees.Cmp(want) != 0 {
+	want := big.NewInt(9000*(10+2) + 21000*8 + 2*63003)
+	config := *params.MergedTestChainConfig
+	if fees := totalFees(&config, block, receipts); fees.Cmp(want) != 0 {
 		t.Fatalf("total fees %v, want %v", fees, want)
+	}
+	// Tax each transaction at 50%. The two odd fees each retain 31501;
+	// taxing their combined amount would overstate the miner's income by one.
+	config = *params.NewTestQuarkChainConfig(10001)
+	want = big.NewInt(9000*(5+1) + 21000*4 + 2*31501)
+	if fees := totalFees(&config, block, receipts); fees.Cmp(want) != 0 {
+		t.Fatalf("after-tax total fees %v, want %v", fees, want)
 	}
 }
 

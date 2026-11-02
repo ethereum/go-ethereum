@@ -19,6 +19,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -33,6 +34,43 @@ import (
 const getLockedStakesSelector = "0xfd8c4646"
 
 var _ consensus.StakingReader = (*BlockChain)(nil)
+
+// GetCoinbaseAmount derives the miner's after-tax reward and fees from an imported shard
+// block and its receipts. Hash-based reads also support side chains and retries;
+// no state is needed, so pruning the parent state does not affect reporting.
+// Ordinary transfers, contract transfers and deposit values are excluded, even
+// when their recipient is the block's coinbase.
+func (bc *BlockChain) GetCoinbaseAmount(shardBlockHash common.Hash) (*uint256.Int, error) {
+	if bc.chainConfig.QuarkChain == nil {
+		return nil, errors.New("coinbase amount is only available on a shard chain")
+	}
+	block := bc.GetBlockByHash(shardBlockHash)
+	if block == nil {
+		return nil, fmt.Errorf("shard block %s not found", shardBlockHash.Hex())
+	}
+	receipts := bc.GetReceiptsByHash(shardBlockHash)
+	if receipts == nil || len(receipts) != len(block.Transactions()) {
+		return nil, fmt.Errorf("missing or incomplete receipts for shard block %s", shardBlockHash.Hex())
+	}
+	amount := bc.chainConfig.QuarkChain.PoSW.BlockRewardAt(block.Number())
+	amount = bc.chainConfig.QuarkChain.AfterTax(amount)
+	for i, tx := range block.Transactions() {
+		tip, err := tx.EffectiveGasTip(block.BaseFee())
+		if err != nil {
+			return nil, fmt.Errorf("shard block %s transaction %d fee: %w", shardBlockHash.Hex(), i, err)
+		}
+		// EffectiveGasTip includes the full gas price for deposits, whose fees
+		// are not subject to base-fee burning. GasUsed is already net of refunds.
+		fee := new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), tip)
+		// Match execution's per-transaction rounding; taxing the sum would differ.
+		amount.Add(amount, bc.chainConfig.QuarkChain.AfterTax(fee))
+	}
+	result, overflow := uint256.FromBig(amount)
+	if overflow {
+		return nil, fmt.Errorf("coinbase amount for shard block %s exceeds uint256", shardBlockHash.Hex())
+	}
+	return result, nil
+}
 
 // GetShardLockedStakes executes the shard staking getter at header's state.
 // Shard consensus supplies the candidate's parent header. Legacy

@@ -241,7 +241,8 @@ func TestBackendBroadcastXShardTxList(t *testing.T) {
 
 // TestBackendAddShardBlockRetry fails either propagation stage after local import.
 // Retrying the stored block must resend all lists before reporting to master;
-// a broadcast failure must prevent reporting, and coinbase amount is currently zero.
+// a broadcast failure must prevent reporting. Reports carry the nonzero reward
+// derived from the stored empty block, including on a known-block retry.
 func TestBackendAddShardBlockRetry(t *testing.T) {
 	for _, failReport := range []bool{false, true} {
 		name := "broadcast failure"
@@ -252,6 +253,7 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 			env := newTestEnv(t)
 			env.config.QuarkChain.ChainIDs = []*big.Int{big.NewInt(10001), big.NewInt(10002), big.NewInt(10003)}
 			env.chain.Config().QuarkChain.ChainIDs = []*big.Int{big.NewInt(10001), big.NewInt(10002), big.NewInt(10003)}
+			env.config.QuarkChain.PoSW.CoinbaseAmount = big.NewInt(100)
 			block := env.makeBlocks(env.genesis, 1, env.rootGenesis, 1)[0]
 			failure := errors.New("delivery failed")
 			fail := true
@@ -276,7 +278,7 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 					if !delivered["10002"] || !delivered["10003"] {
 						t.Fatal("master notified before all shards received their lists")
 					}
-					if header.Hash() != block.Hash() || !amount.IsZero() {
+					if header.Hash() != block.Hash() || !amount.Eq(uint256.NewInt(50)) {
 						t.Fatalf("reported block %x, coinbase amount %v", header.Hash(), amount)
 					}
 					if fail && failReport {

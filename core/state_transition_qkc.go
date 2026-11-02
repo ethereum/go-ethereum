@@ -37,7 +37,7 @@ var ErrDepositNotMove = errors.New("deposit is not a move")
 //
 //  1. uses its gas, XShardSendGas, out of the block gas,
 //  2. mints the value to the recipient,
-//  3. mints the gas cost to the coinbase in full, as there is no base fee to burn.
+//  3. mints the gas cost after reward tax to the coinbase, with no base fee to burn.
 //
 // The consensus layer forces deposits into blocks, and only a deposit no valid
 // source shard could have sent is a consensus error.
@@ -73,6 +73,9 @@ func (st *stateTransition) executeDeposit(rules params.Rules) (*ExecutionResult,
 	}
 	st.state.AddBalance(*msg.To, msg.Value, tracing.BalanceIncreaseXShardDeposit)
 	tracer.EmitExit(0, nil, gas, tracing.Gas{}, nil, false)
+	// Tax the full deposit fee, independently of any other transaction's rounding.
+	// AfterTax only reduces fee, so the result still fits uint256.
+	fee.SetFromBig(st.evm.ChainConfig().QuarkChain.AfterTax(fee.ToBig()))
 	st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 
 	return &ExecutionResult{
