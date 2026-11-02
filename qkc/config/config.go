@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -119,15 +120,25 @@ func DefaultNodeConfig(shardID *uint32) NodeConfig {
 // process's defaults. Both passes use the same strict schema; zero and false
 // values remain explicit overrides, including in array-of-table entries.
 func (c *NodeConfig) UnmarshalTOML(decode func(interface{}) error) error {
-	type plain NodeConfig
+	// Decode execution fields directly: ethconfig.Config's generated decoder
+	// replaces nested tables instead of overlaying their individual fields.
+	type executionConfig ethconfig.Config
+	type plain struct {
+		ShardID *uint32
+		Address string
+		Node    node.Config
+		Eth     *executionConfig
+	}
 	var identity plain
 	if err := decode(&identity); err != nil {
 		return err
 	}
 	cfg := DefaultNodeConfig(identity.ShardID)
-	if err := decode((*plain)(&cfg)); err != nil {
+	overlay := plain{cfg.ShardID, cfg.Address, cfg.Node, (*executionConfig)(cfg.Eth)}
+	if err := decode(&overlay); err != nil {
 		return err
 	}
+	cfg.ShardID, cfg.Address, cfg.Node, cfg.Eth = overlay.ShardID, overlay.Address, overlay.Node, (*ethconfig.Config)(overlay.Eth)
 	*c = cfg
 	return nil
 }
@@ -185,8 +196,8 @@ func (c *ClusterConfig) SelectNode(role string, shardID *uint32) (*NodeConfig, e
 }
 
 // Validate checks the complete deployment after overrides. Every network shard
-// has one process, with distinct internal endpoints, RPC listeners and configured
-// data directories.
+// has one process, with distinct TCP listeners, IPC endpoints and configured data
+// directories.
 func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 	if err := network.Validate(); err != nil {
 		return err
@@ -197,8 +208,8 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 	if err := c.Master.Validate(network); err != nil {
 		return fmt.Errorf("Master: %w", err)
 	}
-	ids, addresses, dirs := make(map[uint32]bool), make(map[string]bool), make(map[string]bool)
-	rpcEndpoints := make(map[int][]string)
+	ids, dirs, ipcEndpoints := make(map[uint32]bool), make(map[string]bool), make(map[string]bool)
+	tcpEndpoints := make(map[uint64][]string)
 	for i, cfg := range append([]NodeConfig{c.Master}, c.ShardNodes...) {
 		if i > 0 {
 			if cfg.ShardID == nil {
@@ -211,40 +222,31 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 			if err := cfg.Validate(network); err != nil {
 				return fmt.Errorf("ShardNodes[%d]: %w", i-1, err)
 			}
-			// NodeConfig.Validate has already checked the address and port.
-			host, port, _ := net.SplitHostPort(cfg.Address)
-			value, _ := strconv.ParseUint(port, 10, 16)
-			address := net.JoinHostPort(canonicalHost(host), strconv.FormatUint(value, 10))
-			if addresses[address] {
-				return fmt.Errorf("duplicate internal address %q", cfg.Address)
-			}
-			addresses[address] = true
 		}
-		endpoints := []struct {
-			host string
-			port int
-		}{
-			{cfg.Node.HTTPHost, cfg.Node.HTTPPort},
-			{cfg.Node.WSHost, cfg.Node.WSPort},
-		}
-		if cfg.Node.WSHost != "" && cfg.Node.HTTPPort == cfg.Node.WSPort {
+		endpoints := []string{cfg.Address, cfg.Node.P2P.ListenAddr, cfg.Node.WSEndpoint()}
+		if cfg.Node.WSHost == "" || cfg.Node.HTTPPort != cfg.Node.WSPort {
 			// Geth shares the listener and uses WSHost when HTTP and WS ports match.
-			endpoints = endpoints[1:]
+			endpoints = append(endpoints, cfg.Node.HTTPEndpoint())
 		}
-		for _, endpoint := range endpoints {
-			if endpoint.host == "" || endpoint.port == 0 {
-				continue // Disabled endpoints and dynamically assigned ports cannot conflict here.
+		for _, address := range endpoints {
+			if address == "" {
+				continue // Disabled listener.
 			}
-			host := canonicalHost(endpoint.host)
+			// NodeConfig.Validate has already checked the address and port.
+			host, port, _ := net.SplitHostPort(address)
+			value, _ := strconv.ParseUint(port, 10, 16)
+			if value == 0 {
+				continue // Dynamically assigned ports cannot conflict here.
+			}
+			host = canonicalHost(host)
 			ip, _ := netip.ParseAddr(host)
-			for _, other := range rpcEndpoints[endpoint.port] {
+			for _, other := range tcpEndpoints[value] {
 				otherIP, _ := netip.ParseAddr(other)
-				if host == other || ip.IsUnspecified() || otherIP.IsUnspecified() {
-					port := strconv.Itoa(endpoint.port)
-					return fmt.Errorf("RPC endpoints conflict between processes: %s and %s", net.JoinHostPort(host, port), net.JoinHostPort(other, port))
+				if host == other || host == "" || other == "" || ip.IsUnspecified() || otherIP.IsUnspecified() {
+					return fmt.Errorf("TCP listeners conflict: %s and %s", address, net.JoinHostPort(other, strconv.FormatUint(value, 10)))
 				}
 			}
-			rpcEndpoints[endpoint.port] = append(rpcEndpoints[endpoint.port], host)
+			tcpEndpoints[value] = append(tcpEndpoints[value], host)
 		}
 		if cfg.Node.DataDir != "" {
 			dir, err := filepath.Abs(cfg.Node.DataDir)
@@ -255,6 +257,19 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 				return fmt.Errorf("process data directory is shared: %s", cfg.Node.DataDir)
 			}
 			dirs[dir] = true
+		}
+		if endpoint := cfg.Node.IPCEndpoint(); endpoint != "" {
+			path, err := filepath.Abs(endpoint)
+			if err != nil {
+				return err
+			}
+			if runtime.GOOS == "windows" {
+				path = strings.ToLower(path) // Windows named pipes are case-insensitive.
+			}
+			if ipcEndpoints[path] {
+				return fmt.Errorf("process IPC endpoint is shared: %s", endpoint)
+			}
+			ipcEndpoints[path] = true
 		}
 	}
 	if len(ids) != len(network.Shards) {

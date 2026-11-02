@@ -131,6 +131,10 @@ func TestQKCEndpointOverrides(t *testing.T) {
 }
 
 func TestQKCConfigInvalidFlags(t *testing.T) {
+	cluster, err := qkcconfig.LoadCluster(qkcExampleCluster)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, test := range []struct {
 		args []string
 		want string
@@ -142,7 +146,11 @@ func TestQKCConfigInvalidFlags(t *testing.T) {
 		{[]string{"--ipcdisable", "--ipcpath", "qkc.ipc"}, "mutually exclusive"},
 		{[]string{"--maxpeers", "-1"}, "external P2P must be disabled"},
 		{[]string{"--http.port", "65536"}, "HTTPPort must be between"},
-		{[]string{"--http.port", "18546"}, "RPC endpoints conflict"},
+		{[]string{"--http.port", "18546"}, "TCP listeners conflict"},
+		{[]string{"--http.port", "38000"}, "TCP listeners conflict"},
+		{[]string{"--http.port", "30303"}, "TCP listeners conflict"},
+		{[]string{"--ws", "--ws.addr", "127.0.0.1", "--ws.port", "38000"}, "TCP listeners conflict"},
+		{[]string{"--ipcpath", cluster.Master.Node.IPCEndpoint()}, "IPC endpoint is shared"},
 		{[]string{"--port", "30304"}, "external P2P must be disabled"},
 		{[]string{"--db.engine", "unknown"}, "invalid Node.DBEngine"},
 		{[]string{"--syncmode", "unknown"}, "unknown sync mode"},

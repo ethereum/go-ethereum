@@ -22,6 +22,8 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -371,6 +373,72 @@ Address = "127.0.0.1:38001"
 	}
 }
 
+func TestClusterNestedDefaults(t *testing.T) {
+	// Use a true default to distinguish an explicit false from an omitted field.
+	savedNoLocals := ethconfig.Defaults.TxPool.NoLocals
+	ethconfig.Defaults.TxPool.NoLocals = true
+	t.Cleanup(func() { ethconfig.Defaults.TxPool.NoLocals = savedNoLocals })
+	for _, test := range []struct {
+		name   string
+		input  string
+		change func(*ethconfig.Config)
+	}{
+		{"miner gas price", "[ShardNodes.Eth.Miner]\nGasPrice = \"123\"", func(c *ethconfig.Config) {
+			c.Miner.GasPrice = big.NewInt(123)
+		}},
+		{"miner zeros", "[ShardNodes.Eth.Miner]\nGasCeil = 0\nRecommit = 0\nGasPrice = \"0\"", func(c *ethconfig.Config) {
+			c.Miner.GasCeil, c.Miner.Recommit, c.Miner.GasPrice = 0, 0, new(big.Int)
+		}},
+		{"GPO price", "[ShardNodes.Eth.GPO]\nMaxPrice = \"456\"", func(c *ethconfig.Config) {
+			c.GPO.MaxPrice = big.NewInt(456)
+		}},
+		{"GPO zeros", "[ShardNodes.Eth.GPO]\nBlocks = 0\nMaxPrice = \"0\"", func(c *ethconfig.Config) {
+			c.GPO.Blocks, c.GPO.MaxPrice = 0, new(big.Int)
+		}},
+		{"txpool price bump", "[ShardNodes.Eth.TxPool]\nPriceBump = 25", func(c *ethconfig.Config) {
+			c.TxPool.PriceBump = 25
+		}},
+		{"txpool zero and false", "[ShardNodes.Eth.TxPool]\nPriceLimit = 0\nNoLocals = false", func(c *ethconfig.Config) {
+			c.TxPool.PriceLimit, c.TxPool.NoLocals = 0, false
+		}},
+		{"blobpool capacity", "[ShardNodes.Eth.BlobPool]\nDatacap = 123", func(c *ethconfig.Config) {
+			c.BlobPool.Datacap = 123
+		}},
+		{"blobpool zero", "[ShardNodes.Eth.BlobPool]\nDatacap = 0", func(c *ethconfig.Config) {
+			c.BlobPool.Datacap = 0
+		}},
+		{"empty tables", "[ShardNodes.Eth.Miner]\n[ShardNodes.Eth.GPO]\n[ShardNodes.Eth.TxPool]\n[ShardNodes.Eth.BlobPool]", func(*ethconfig.Config) {}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			input := "[[ShardNodes]]\nShardID = 0\n" + test.input + "\n[[ShardNodes]]\nShardID = 1\n"
+			cfg, err := LoadCluster(writeConfig(t, []byte(input)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := ethconfig.Defaults
+			test.change(&want)
+			got := cfg.ShardNodes[0].Eth
+			for _, prices := range [][2]*big.Int{
+				{got.Miner.GasPrice, want.Miner.GasPrice},
+				{got.GPO.MaxPrice, want.GPO.MaxPrice},
+				{got.GPO.IgnorePrice, want.GPO.IgnorePrice},
+			} {
+				if prices[0] == nil || prices[0].Cmp(prices[1]) != 0 {
+					t.Fatalf("gas price = %v, want %v", prices[0], prices[1])
+				}
+			}
+			// Compare big integers numerically, independently of their representation.
+			want.Miner.GasPrice, want.GPO.MaxPrice, want.GPO.IgnorePrice = got.Miner.GasPrice, got.GPO.MaxPrice, got.GPO.IgnorePrice
+			if !reflect.DeepEqual(got, &want) {
+				t.Fatalf("nested override lost defaults or explicit values:\nhave %+v\nwant %+v", got, &want)
+			}
+			if !reflect.DeepEqual(cfg.ShardNodes[1].Eth, &ethconfig.Defaults) {
+				t.Fatal("nested overrides affected another shard")
+			}
+		})
+	}
+}
+
 func TestProcessSelection(t *testing.T) {
 	zero, unknown, chainID := uint32(0), uint32(7), uint32(100001)
 	for _, test := range []struct {
@@ -401,17 +469,17 @@ func TestClusterValidation(t *testing.T) {
 		{"missing id", func(c *ClusterConfig) { c.ShardNodes[0].ShardID = nil }, "ShardID is required"},
 		{"duplicate shard", func(c *ClusterConfig) { *c.ShardNodes[1].ShardID = 0 }, "duplicate deployed shard"},
 		{"unknown shard", func(c *ClusterConfig) { *c.ShardNodes[1].ShardID = 100002 }, "not in the network"},
-		{"duplicate address", func(c *ClusterConfig) { c.ShardNodes[1].Address = c.ShardNodes[0].Address }, "duplicate internal address"},
+		{"duplicate address", func(c *ClusterConfig) { c.ShardNodes[1].Address = c.ShardNodes[0].Address }, "TCP listeners conflict"},
 		{"equivalent IPv6 addresses", func(c *ClusterConfig) {
 			c.ShardNodes[0].Address = "[::1]:38000"
 			c.ShardNodes[1].Address = "[0:0:0:0:0:0:0:1]:38000"
-		}, "duplicate internal address"},
+		}, "TCP listeners conflict"},
 		{"IPv4 mapped address", func(c *ClusterConfig) {
 			c.ShardNodes[1].Address = "[::ffff:127.0.0.1]:38000"
-		}, "duplicate internal address"},
+		}, "TCP listeners conflict"},
 		{"equivalent port numbers", func(c *ClusterConfig) {
 			c.ShardNodes[1].Address = "127.0.0.1:038000"
-		}, "duplicate internal address"},
+		}, "TCP listeners conflict"},
 		{"shared datadir", func(c *ClusterConfig) { c.ShardNodes[1].Node.DataDir = c.Master.Node.DataDir }, "data directory is shared"},
 		{"master shard id", func(c *ClusterConfig) { c.Master.ShardID = new(uint32) }, "Master must not specify ShardID"},
 		{"master execution", func(c *ClusterConfig) { c.Master.Eth = &ethconfig.Config{} }, "master cannot configure Eth"},
@@ -432,7 +500,7 @@ func TestClusterValidation(t *testing.T) {
 	}
 }
 
-func TestClusterRPCEndpoints(t *testing.T) {
+func TestClusterTCPEndpoints(t *testing.T) {
 	for _, test := range []struct {
 		name     string
 		change   func(*ClusterConfig)
@@ -469,6 +537,36 @@ func TestClusterRPCEndpoints(t *testing.T) {
 			c.ShardNodes[1].Node.HTTPHost = "::"
 			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[1].Node.HTTPPort
 		}, true},
+		{"HTTP and own internal listener", func(c *ClusterConfig) {
+			c.ShardNodes[0].Node.HTTPPort = 38000
+		}, true},
+		{"HTTP and later internal listener", func(c *ClusterConfig) {
+			c.Master.Node.HTTPHost, c.Master.Node.HTTPPort = "127.0.0.1", 38001
+		}, true},
+		{"WS and earlier internal listener", func(c *ClusterConfig) {
+			c.ShardNodes[1].Node.WSHost, c.ShardNodes[1].Node.WSPort = "127.0.0.1", 38000
+		}, true},
+		{"P2P and shard HTTP", func(c *ClusterConfig) {
+			c.ShardNodes[0].Node.HTTPPort = 30303
+		}, true},
+		{"P2P and master HTTP", func(c *ClusterConfig) {
+			c.Master.Node.HTTPHost, c.Master.Node.HTTPPort = "127.0.0.1", 30303
+		}, true},
+		{"P2P and internal listener", func(c *ClusterConfig) {
+			c.Master.Node.P2P.ListenAddr = "127.0.0.1:38000"
+		}, true},
+		{"P2P and wildcard WS", func(c *ClusterConfig) {
+			c.Master.Node.P2P.ListenAddr = "127.0.0.1:30303"
+			c.ShardNodes[0].Node.WSHost, c.ShardNodes[0].Node.WSPort = "0.0.0.0", 30303
+		}, true},
+		{"internal listener and mapped IPv4 HTTP", func(c *ClusterConfig) {
+			c.ShardNodes[0].Node.HTTPHost, c.ShardNodes[0].Node.HTTPPort = "::ffff:127.0.0.1", 38000
+		}, true},
+		{"shared WS listener and internal listener", func(c *ClusterConfig) {
+			c.ShardNodes[0].Node.HTTPHost = "127.0.0.2"
+			c.ShardNodes[0].Node.WSHost = "127.0.0.1"
+			c.ShardNodes[0].Node.HTTPPort, c.ShardNodes[0].Node.WSPort = 38000, 38000
+		}, true},
 		{"dynamic ports", func(c *ClusterConfig) {
 			c.ShardNodes[0].Node.HTTPPort, c.ShardNodes[1].Node.HTTPPort = 0, 0
 		}, false},
@@ -489,14 +587,86 @@ func TestClusterRPCEndpoints(t *testing.T) {
 			c.ShardNodes[0].Node.WSHost = "127.0.0.2"
 			c.ShardNodes[0].Node.WSPort = c.ShardNodes[0].Node.HTTPPort
 		}, false},
+		{"shared WS listener avoids internal listener", func(c *ClusterConfig) {
+			c.ShardNodes[0].Node.WSHost = "127.0.0.2"
+			c.ShardNodes[0].Node.HTTPPort, c.ShardNodes[0].Node.WSPort = 38000, 38000
+		}, false},
+		{"internal and HTTP on different hosts", func(c *ClusterConfig) {
+			c.ShardNodes[0].Node.HTTPHost, c.ShardNodes[0].Node.HTTPPort = "127.0.0.2", 38000
+		}, false},
+		{"P2P and HTTP on different hosts", func(c *ClusterConfig) {
+			c.Master.Node.P2P.ListenAddr = "127.0.0.2:30303"
+			c.ShardNodes[0].Node.HTTPPort = 30303
+		}, false},
+		{"disabled P2P listener", func(c *ClusterConfig) {
+			c.Master.Node.P2P.ListenAddr = ""
+			c.ShardNodes[0].Node.HTTPPort = 30303
+		}, false},
+		{"dynamic P2P port", func(c *ClusterConfig) {
+			c.Master.Node.P2P.ListenAddr = ":0"
+		}, false},
+		{"UDP discovery and internal TCP", func(c *ClusterConfig) {
+			c.Master.Node.P2P.DiscAddr = ":38000"
+		}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := exampleCluster(t)
 			test.change(cfg)
 			err := cfg.Validate(exampleNetwork(t))
 			if test.conflict {
-				if err == nil || !strings.Contains(err.Error(), "RPC endpoints conflict") {
-					t.Fatalf("want RPC endpoint conflict, got %v", err)
+				if err == nil || !strings.Contains(err.Error(), "TCP listeners conflict") {
+					t.Fatalf("want TCP listener conflict, got %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestClusterIPCEndpoints(t *testing.T) {
+	absolute, err := filepath.Abs("ipc/shared.ipc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name     string
+		change   func(*ClusterConfig)
+		conflict bool
+	}{
+		{"shared explicit path", func(c *ClusterConfig) {
+			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "ipc/shared.ipc", "ipc/shared.ipc"
+		}, true},
+		{"normalized paths", func(c *ClusterConfig) {
+			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "ipc/shared.ipc", "ipc/./shared.ipc"
+		}, true},
+		{"resolved bare filename", func(c *ClusterConfig) {
+			c.ShardNodes[0].Node.IPCPath = c.Master.Node.IPCEndpoint()
+		}, true},
+		{"same name with empty datadirs", func(c *ClusterConfig) {
+			c.Master.Node.DataDir, c.ShardNodes[0].Node.DataDir = "", ""
+			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "shared.ipc", "shared.ipc"
+		}, true},
+		{"same name with distinct datadirs", func(c *ClusterConfig) {
+			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "shared.ipc", "shared.ipc"
+		}, runtime.GOOS == "windows"},
+		{"absolute and relative paths", func(c *ClusterConfig) {
+			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = absolute, "ipc/shared.ipc"
+		}, runtime.GOOS != "windows"},
+		{"named pipe case", func(c *ClusterConfig) {
+			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "shared.ipc", "SHARED.ipc"
+		}, runtime.GOOS == "windows"},
+		{"disabled IPC", func(c *ClusterConfig) {
+			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "", ""
+		}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := exampleCluster(t)
+			test.change(cfg)
+			err := cfg.Validate(exampleNetwork(t))
+			if test.conflict {
+				if err == nil || !strings.Contains(err.Error(), "IPC endpoint is shared") {
+					t.Fatalf("want IPC endpoint conflict, got %v", err)
 				}
 			} else if err != nil {
 				t.Fatal(err)
