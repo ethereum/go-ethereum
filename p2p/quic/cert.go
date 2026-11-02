@@ -76,7 +76,7 @@ func NewCertRotator(log log.Logger) (*CertRotator, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &CertRotator{current: current, next: next}
+	r := &CertRotator{current: current, next: next, log: log}
 	return r, nil
 }
 
