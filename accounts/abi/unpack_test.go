@@ -1128,6 +1128,41 @@ func TestPackAndUnpackIncompatibleNumber(t *testing.T) {
 			unpackErr:   nil,
 			expectValue: int64(math.MaxInt64),
 		},
+		{
+			decodeType: "uint24",
+			inputValue: big.NewInt(1 << 24),
+			unpackErr:  errBadUint,
+		},
+		{
+			decodeType:  "uint24",
+			inputValue:  big.NewInt(1<<24 - 1),
+			unpackErr:   nil,
+			expectValue: big.NewInt(1<<24 - 1),
+		},
+		{
+			decodeType: "int24",
+			inputValue: big.NewInt(1 << 23),
+			unpackErr:  errBadInt,
+		},
+		{
+			decodeType:  "int24",
+			inputValue:  big.NewInt(1<<23 - 1),
+			unpackErr:   nil,
+			expectValue: big.NewInt(1<<23 - 1),
+		},
+		{
+			// two's complement of -2^23-1
+			decodeType: "int24",
+			inputValue: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1<<23+1)),
+			unpackErr:  errBadInt,
+		},
+		{
+			// two's complement of -2^23
+			decodeType:  "int24",
+			inputValue:  new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1<<23)),
+			unpackErr:   nil,
+			expectValue: big.NewInt(-1 << 23),
+		},
 	}
 	for i, testCase := range cases {
 		packed, err := encodeABI.Pack(testCase.inputValue)
