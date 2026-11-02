@@ -242,6 +242,8 @@ func (c *BaseConn) SendRPCWithPeerID(
 		return nil, err
 	}
 	if c.writeFailed {
+		// A previous write failed and may have sent a partial frame. Reject
+		// further writes while the connection is being closed.
 		c.writeMu.Unlock()
 		return nil, ErrConnectionClosed
 	}
@@ -503,6 +505,8 @@ func (c *BaseConn) handleResponse(frame *wire.ClusterFrame, ser *OpSerializer) {
 	c.mu.Unlock()
 
 	if call == nil {
+		// An allocated ID with no pending call is a late or duplicate response;
+		// ignore it. An ID that was never allocated is a protocol error.
 		if !allocated {
 			c.shutdown(fmt.Errorf("unexpected rpc response %d", frame.RPCID))
 		}
@@ -538,6 +542,7 @@ func (c *BaseConn) handleRequest(frame *wire.ClusterFrame, handler TypedHandler,
 		}
 	}
 
+	// TODO: Bound concurrent handler dispatches to prevent unbounded goroutines.
 	go c.dispatch(frame, handler, ser)
 }
 
@@ -609,16 +614,16 @@ func (c *BaseConn) shutdown(cause error) {
 		// Writes already accepted by the transport may still complete.
 		closeErr = c.transport.Close()
 	})
-	// Log after releasing both mu and sync.Once: a logger may call State or
-	// Close, and slow logging must not delay waking RPCs or closing the I/O.
-	if !didClose {
-		return
-	}
-	if cause != nil {
-		c.log.Error("connection closed with error", "err", cause)
-	}
-	if closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
-		c.log.Warn("transport close failed", "err", closeErr)
+	// Finish shutdown before logging so a slow logger cannot delay RPCs or
+	// transport closure. Logging outside mu and sync.Once also lets a logger
+	// safely call State or Close.
+	if didClose {
+		if cause != nil {
+			c.log.Error("connection closed with error", "err", cause)
+		}
+		if closeErr != nil && !errors.Is(closeErr, net.ErrClosed) {
+			c.log.Warn("transport close failed", "err", closeErr)
+		}
 	}
 }
 
