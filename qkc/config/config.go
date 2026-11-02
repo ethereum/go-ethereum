@@ -241,7 +241,7 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 		return fmt.Errorf("Master: %w", err)
 	}
 	ids, dirs, ipcEndpoints := make(map[uint32]bool), make(map[string]bool), make(map[string]bool)
-	tcpEndpoints := make(map[uint64][]string)
+	tcpEndpoints := make(map[uint64][]*net.TCPAddr)
 	for i, cfg := range append([]NodeConfig{c.Master}, c.ShardNodes...) {
 		if i > 0 {
 			if cfg.ShardID == nil {
@@ -270,15 +270,19 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 			if value == 0 {
 				continue // Dynamically assigned ports cannot conflict here.
 			}
-			host = canonicalHost(host)
-			ip, _ := netip.ParseAddr(host)
+			// Resolve aliases using the same address selection as net.Listen.
+			endpoint, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(canonicalHost(host), port))
+			if err != nil {
+				return fmt.Errorf("resolve TCP listener %q: %w", address, err)
+			}
+			ip := endpoint.AddrPort().Addr().Unmap()
 			for _, other := range tcpEndpoints[value] {
-				otherIP, _ := netip.ParseAddr(other)
-				if host == other || host == "" || other == "" || ip.IsUnspecified() || otherIP.IsUnspecified() {
-					return fmt.Errorf("TCP listeners conflict: %s and %s", address, net.JoinHostPort(other, strconv.FormatUint(value, 10)))
+				otherIP := other.AddrPort().Addr().Unmap()
+				if ip == otherIP || !ip.IsValid() || !otherIP.IsValid() || ip.IsUnspecified() || otherIP.IsUnspecified() {
+					return fmt.Errorf("TCP listeners conflict: %s and %s", address, other)
 				}
 			}
-			tcpEndpoints[value] = append(tcpEndpoints[value], host)
+			tcpEndpoints[value] = append(tcpEndpoints[value], endpoint)
 		}
 		if cfg.Node.DataDir != "" {
 			dir, err := filepath.Abs(cfg.Node.DataDir)

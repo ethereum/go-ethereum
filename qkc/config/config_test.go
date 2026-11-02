@@ -669,6 +669,25 @@ func TestClusterTCPEndpoints(t *testing.T) {
 		{"WS and earlier internal listener", func(c *ClusterConfig) {
 			c.ShardNodes[1].Node.WSHost, c.ShardNodes[1].Node.WSPort = "127.0.0.1", 38000
 		}, true},
+		{"default WS host and internal listener", func(c *ClusterConfig) {
+			c.ShardNodes[0].Node.WSHost = node.DefaultWSHost
+			c.ShardNodes[0].Node.WSPort = c.ShardNodes[0].PrivatePort
+		}, true},
+		{"internal hostname and HTTP IP", func(c *ClusterConfig) {
+			c.ShardNodes[0].PrivateHost = "localhost"
+			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[0].PrivatePort
+		}, true},
+		{"HTTP hostname and later internal IP", func(c *ClusterConfig) {
+			c.Master.Node.HTTPHost, c.Master.Node.HTTPPort = "LOCALHOST", 38000
+		}, true},
+		{"P2P hostname and HTTP IP", func(c *ClusterConfig) {
+			c.Master.Node.P2P.ListenAddr = "localhost:18545"
+		}, true},
+		{"default WS host and mapped IPv4", func(c *ClusterConfig) {
+			c.ShardNodes[0].PrivateHost = "::ffff:127.0.0.1"
+			c.ShardNodes[0].Node.WSHost = node.DefaultWSHost
+			c.ShardNodes[0].Node.WSPort = c.ShardNodes[0].PrivatePort
+		}, true},
 		{"P2P and shard HTTP", func(c *ClusterConfig) {
 			c.ShardNodes[0].Node.HTTPPort = 30303
 		}, true},
@@ -716,6 +735,15 @@ func TestClusterTCPEndpoints(t *testing.T) {
 		}, false},
 		{"internal and HTTP on different hosts", func(c *ClusterConfig) {
 			c.ShardNodes[0].Node.HTTPHost, c.ShardNodes[0].Node.HTTPPort = "127.0.0.2", 38000
+		}, false},
+		{"default WS host and distinct loopback IP", func(c *ClusterConfig) {
+			c.ShardNodes[0].PrivateHost = "127.0.0.2"
+			c.ShardNodes[0].Node.WSHost = node.DefaultWSHost
+			c.ShardNodes[0].Node.WSPort = c.ShardNodes[0].PrivatePort
+		}, false},
+		{"shared WS listener ignores HTTP hostname", func(c *ClusterConfig) {
+			c.ShardNodes[0].Node.HTTPHost, c.ShardNodes[0].Node.HTTPPort = "localhost", 38000
+			c.ShardNodes[0].Node.WSHost, c.ShardNodes[0].Node.WSPort = "127.0.0.2", 38000
 		}, false},
 		{"P2P and HTTP on different hosts", func(c *ClusterConfig) {
 			c.Master.Node.P2P.ListenAddr = "127.0.0.2:30303"

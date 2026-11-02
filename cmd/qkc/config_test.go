@@ -162,6 +162,7 @@ func TestQKCConfigInvalidFlags(t *testing.T) {
 		{[]string{"--http.port", "18546"}, "TCP listeners conflict"},
 		{[]string{"--http.port", "38000"}, "TCP listeners conflict"},
 		{[]string{"--http.port", "30303"}, "TCP listeners conflict"},
+		{[]string{"--ws", "--ws.port", "38000"}, "TCP listeners conflict"},
 		{[]string{"--ws", "--ws.addr", "127.0.0.1", "--ws.port", "38000"}, "TCP listeners conflict"},
 		{[]string{"--ipcpath", cluster.Master.Node.IPCEndpoint()}, "IPC endpoint is shared"},
 		{[]string{"--port", "30304"}, "external P2P must be disabled"},
