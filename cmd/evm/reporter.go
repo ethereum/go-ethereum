@@ -17,8 +17,10 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -106,6 +108,33 @@ const exitIncomplete = 2
 
 // failures returns an error counting the results that did not pass, if any,
 // so the run exits 1.
+// runStdin runs the files named on stdin, one per line, until an empty line or
+// the end of input. A file that cannot be run is skipped, so the files after it
+// still run, and the run then exits with exitIncomplete.
+func runStdin(ctx *cli.Context, run func(*cli.Context, string) ([]testResult, error)) error {
+	var errs []error
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		fname := scanner.Text()
+		if len(fname) == 0 {
+			break
+		}
+		results, err := run(ctx, fname)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		// During fuzzing, we report the result after every block
+		if !ctx.Bool(FuzzFlag.Name) {
+			report(ctx, results)
+		}
+	}
+	if len(errs) > 0 {
+		return cli.Exit(errors.Join(errs...), exitIncomplete)
+	}
+	return nil
+}
+
 func failures(results []testResult) error {
 	var failed int
 	for _, r := range results {

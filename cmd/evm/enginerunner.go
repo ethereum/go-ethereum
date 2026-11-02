@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -72,21 +71,7 @@ func engineTestCmd(ctx *cli.Context) error {
 		return failures(results)
 	}
 	// Otherwise, read filenames from stdin and execute back-to-back.
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		fname := scanner.Text()
-		if len(fname) == 0 {
-			return nil
-		}
-		results, err := runEngineTest(ctx, fname)
-		if err != nil {
-			return err
-		}
-		if !ctx.Bool(FuzzFlag.Name) {
-			report(ctx, results)
-		}
-	}
-	return nil
+	return runStdin(ctx, runEngineTest)
 }
 
 func runEngineTest(ctx *cli.Context, fname string) ([]testResult, error) {
