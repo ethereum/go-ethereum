@@ -2,6 +2,10 @@
 # NetworkFile is relative to this file. Other paths follow geth: relative to cwd.
 NetworkFile = "network.toml"
 
+# Example reward recipient; replace it with your own mining address.
+[Master]
+CoinbaseAddress = "0x1111111111111111111111111111111111111111"
+
 # Field definitions: node.Config in node/config.go (path relative to repository root).
 [Master.Node]
 DataDir = "./qkc-data/master"
@@ -15,13 +19,17 @@ NoDiscovery = true
 
 [[ShardNodes]]
 ShardID = 0
-Address = "127.0.0.1:38000"
+# Internal QKC TCP endpoint for Master and other shards.
+PrivateHost = "127.0.0.1"
+PrivatePort = 38000
+# Client-facing HTTP JSON-RPC endpoint.
+PublicHost = "127.0.0.1"
+PublicPort = 18545
+CoinbaseAddress = "0x2222222222222222222222222222222222222222"
 
 # Field definitions: node.Config in node/config.go (path relative to repository root).
 [ShardNodes.Node]
 DataDir = "./qkc-data/shard-0"
-HTTPHost = "127.0.0.1"
-HTTPPort = 18545
 
 # Demonstrates how each shard can override geth runtime settings.
 # This section is optional; omitted settings inherit geth defaults.
@@ -32,13 +40,17 @@ DatabaseCache = 512
 
 [[ShardNodes]]
 ShardID = 1
-Address = "127.0.0.1:38001"
+# Internal QKC TCP endpoint for Master and other shards.
+PrivateHost = "127.0.0.1"
+PrivatePort = 38001
+# Client-facing HTTP JSON-RPC endpoint.
+PublicHost = "127.0.0.1"
+PublicPort = 18546
+CoinbaseAddress = "0x3333333333333333333333333333333333333333"
 
 # Field definitions: node.Config in node/config.go (path relative to repository root).
 [ShardNodes.Node]
 DataDir = "./qkc-data/shard-1"
-HTTPHost = "127.0.0.1"
-HTTPPort = 18546
 
 # Demonstrates how each shard can override geth runtime settings.
 # This section is optional; omitted settings inherit geth defaults.

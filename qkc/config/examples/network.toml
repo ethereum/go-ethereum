@@ -3,6 +3,9 @@
 # This example has two shards, so each internal ShardIDs list is generated as [0, 1].
 NetworkID = 2
 
+[Root]
+ConsensusType = "POW_ETHASH"
+
 [Root.PoSW]
 AdjustmentCutoff = 7
 AdjustmentFactor = 512
@@ -31,6 +34,9 @@ LondonBlock = "0"
 
 [Shards.QuarkChain]
 ShardID = 0
+ConsensusType = "POW_ETHASH"
+# Maximum blocks of this shard confirmed per root block; 0 means no cap.
+MaxBlocksPerRootBlock = 18
 
 # This shard uses ordinary PoW without the root chain's staking discount.
 [Shards.QuarkChain.PoSW]
@@ -58,6 +64,8 @@ LondonBlock = "0"
 
 [Shards.QuarkChain]
 ShardID = 1
+ConsensusType = "POW_SIMULATE"
+MaxBlocksPerRootBlock = 18
 
 [Shards.QuarkChain.PoSW]
 AdjustmentCutoff = 7

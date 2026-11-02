@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -49,7 +50,8 @@ type NetworkConfig struct {
 // RootConfig contains root-chain consensus settings. The root is not an EVM
 // chain and does not inherit a shard's chain ID or PoSW configuration.
 type RootConfig struct {
-	PoSW *params.PoSWConfig
+	ConsensusType params.ConsensusType
+	PoSW          *params.PoSWConfig
 }
 
 const (
@@ -66,13 +68,17 @@ type ClusterConfig struct {
 }
 
 // NodeConfig contains the effective settings of one process. Master has no
-// ShardID, Address or Eth settings. A shard's Address is its internal TCP endpoint,
-// used both for listening and for dialing by Master and the other shards.
+// ShardID, PrivateHost, PrivatePort or Eth settings. A shard's PrivateHost and
+// PrivatePort define its internal TCP endpoint, used both for listening and for
+// dialing by Master and the other shards. The TOML PublicHost and PublicPort
+// keys configure Node.HTTPHost and Node.HTTPPort without duplicating their state.
 type NodeConfig struct {
-	ShardID *uint32
-	Address string
-	Node    node.Config
-	Eth     *ethconfig.Config
+	ShardID         *uint32
+	PrivateHost     string
+	PrivatePort     int
+	CoinbaseAddress common.Address // Local mining reward recipient; not a network rule.
+	Node            node.Config
+	Eth             *ethconfig.Config
 
 	Role           string            `toml:"-"`
 	NetworkFile    string            `toml:"-"`
@@ -124,21 +130,38 @@ func (c *NodeConfig) UnmarshalTOML(decode func(interface{}) error) error {
 	// replaces nested tables instead of overlaying their individual fields.
 	type executionConfig ethconfig.Config
 	type plain struct {
-		ShardID *uint32
-		Address string
-		Node    node.Config
-		Eth     *executionConfig
+		ShardID         *uint32
+		PrivateHost     string
+		PrivatePort     int
+		PublicHost      *string
+		PublicPort      *int
+		CoinbaseAddress common.Address
+		Node            node.Config
+		Eth             *executionConfig
 	}
 	var identity plain
 	if err := decode(&identity); err != nil {
 		return err
 	}
 	cfg := DefaultNodeConfig(identity.ShardID)
-	overlay := plain{cfg.ShardID, cfg.Address, cfg.Node, (*executionConfig)(cfg.Eth)}
+	overlay := plain{
+		ShardID: cfg.ShardID, PrivateHost: cfg.PrivateHost, PrivatePort: cfg.PrivatePort,
+		CoinbaseAddress: cfg.CoinbaseAddress, Node: cfg.Node, Eth: (*executionConfig)(cfg.Eth),
+	}
 	if err := decode(&overlay); err != nil {
 		return err
 	}
-	cfg.ShardID, cfg.Address, cfg.Node, cfg.Eth = overlay.ShardID, overlay.Address, overlay.Node, (*ethconfig.Config)(overlay.Eth)
+	// Public keys take precedence over the underlying geth HTTP settings. Pointers
+	// preserve explicit empty hosts and zero ports as overrides.
+	if overlay.PublicHost != nil {
+		overlay.Node.HTTPHost = *overlay.PublicHost
+	}
+	if overlay.PublicPort != nil {
+		overlay.Node.HTTPPort = *overlay.PublicPort
+	}
+	cfg.ShardID, cfg.PrivateHost, cfg.PrivatePort = overlay.ShardID, overlay.PrivateHost, overlay.PrivatePort
+	cfg.Node, cfg.Eth = overlay.Node, (*ethconfig.Config)(overlay.Eth)
+	cfg.CoinbaseAddress = overlay.CoinbaseAddress
 	*c = cfg
 	return nil
 }
@@ -172,7 +195,7 @@ func (c *ClusterConfig) SelectNode(role string, shardID *uint32) (*NodeConfig, e
 		selected.ShardEndpoints = make(map[uint32]string, len(c.ShardNodes))
 		for _, shard := range c.ShardNodes {
 			if shard.ShardID != nil {
-				selected.ShardEndpoints[*shard.ShardID] = shard.Address
+				selected.ShardEndpoints[*shard.ShardID] = shard.PrivateEndpoint()
 			}
 		}
 	case RoleShard:
@@ -193,6 +216,15 @@ func (c *ClusterConfig) SelectNode(role string, shardID *uint32) (*NodeConfig, e
 	}
 	selected.NetworkFile = c.NetworkFile
 	return selected, nil
+}
+
+// PrivateEndpoint returns the shard's internal TCP address. An empty host means
+// no cluster listener, as for Master. IPv6 hosts are joined with brackets.
+func (c *NodeConfig) PrivateEndpoint() string {
+	if c.PrivateHost == "" {
+		return ""
+	}
+	return net.JoinHostPort(c.PrivateHost, strconv.Itoa(c.PrivatePort))
 }
 
 // Validate checks the complete deployment after overrides. Every network shard
@@ -223,7 +255,7 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 				return fmt.Errorf("ShardNodes[%d]: %w", i-1, err)
 			}
 		}
-		endpoints := []string{cfg.Address, cfg.Node.P2P.ListenAddr, cfg.Node.WSEndpoint()}
+		endpoints := []string{cfg.PrivateEndpoint(), cfg.Node.P2P.ListenAddr, cfg.Node.WSEndpoint()}
 		if cfg.Node.WSHost == "" || cfg.Node.HTTPPort != cfg.Node.WSPort {
 			// Geth shares the listener and uses WSHost when HTTP and WS ports match.
 			endpoints = append(endpoints, cfg.Node.HTTPEndpoint())
@@ -329,10 +361,13 @@ func load(file string, cfg interface{}) error {
 	return nil
 }
 
-// Validate checks network IDs, shard topology, fork order and each chain's PoSW.
+// Validate checks network IDs, shard topology, algorithms, fork order and each chain's PoSW.
 func (c *NetworkConfig) Validate() error {
 	if c.NetworkID == 0 {
 		return errors.New("NetworkID must be positive; it is not inferred from an EVM chain ID")
+	}
+	if err := c.Root.ConsensusType.Check(); err != nil {
+		return fmt.Errorf("Root: %w", err)
 	}
 	if err := c.Root.PoSW.Check(); err != nil {
 		return fmt.Errorf("Root: %w", err)
@@ -347,6 +382,9 @@ func (c *NetworkConfig) Validate() error {
 			return fmt.Errorf("Shards[%d]: QuarkChain configuration is required", i)
 		}
 		id := shard.QuarkChain.ShardID
+		if err := shard.QuarkChain.ConsensusType.Check(); err != nil {
+			return fmt.Errorf("shard %d: %w", id, err)
+		}
 		if id == math.MaxUint32 {
 			return fmt.Errorf("shard ID %d is reserved for the root chain", id)
 		}
@@ -397,8 +435,8 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 	}
 	switch c.Role {
 	case RoleMaster:
-		if c.Eth != nil || c.ShardID != nil || c.Address != "" {
-			return errors.New("master cannot configure Eth, ShardID or an internal Address")
+		if c.Eth != nil || c.ShardID != nil || c.PrivateHost != "" || c.PrivatePort != 0 {
+			return errors.New("master cannot configure Eth, ShardID, PrivateHost or PrivatePort")
 		}
 	case RoleShard:
 		if c.ShardID == nil || c.Eth == nil {
@@ -411,18 +449,18 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 		if !found {
 			return fmt.Errorf("shard ID %d is not in the network", *c.ShardID)
 		}
-		host, port, err := net.SplitHostPort(c.Address)
-		if err != nil {
-			return fmt.Errorf("invalid internal Address %q: %w", c.Address, err)
+		ip, err := netip.ParseAddr(c.PrivateHost)
+		if c.PrivateHost == "" || strings.ContainsAny(c.PrivateHost, " \t\r\n/[]") ||
+			(strings.Contains(c.PrivateHost, ":") && err != nil) || (err == nil && ip.Unmap().IsUnspecified()) {
+			return fmt.Errorf("PrivateHost must be a concrete host without brackets or a port: %q", c.PrivateHost)
 		}
-		value, err := strconv.ParseUint(port, 10, 16)
-		if host == "" || net.ParseIP(host).IsUnspecified() || strings.ContainsAny(host, " \t\r\n/") || err != nil || value == 0 {
-			return fmt.Errorf("internal Address must have a concrete host and port between 1 and 65535: %q", c.Address)
+		if c.PrivatePort < 1 || c.PrivatePort > 65535 {
+			return errors.New("PrivatePort must be between 1 and 65535")
 		}
 		p := c.Node.P2P
 		if p.ListenAddr != "" || p.DiscAddr != "" || p.MaxPeers != 0 || !p.NoDiscovery || !p.NoDial ||
 			p.DiscoveryV4 || p.DiscoveryV5 || len(p.BootstrapNodes)+len(p.BootstrapNodesV5)+len(p.StaticNodes)+len(p.TrustedNodes) != 0 {
-			return errors.New("shard external P2P must be disabled; configure internal Address instead")
+			return errors.New("shard external P2P must be disabled; configure PrivateHost and PrivatePort instead")
 		}
 	default:
 		return fmt.Errorf("invalid process role %q", c.Role)
@@ -460,7 +498,7 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 			return fmt.Errorf("%s must not be negative", name)
 		}
 	}
-	for name, port := range map[string]int{"Node.HTTPPort": c.Node.HTTPPort, "Node.WSPort": c.Node.WSPort, "Node.AuthPort": c.Node.AuthPort} {
+	for name, port := range map[string]int{"PublicPort": c.Node.HTTPPort, "Node.WSPort": c.Node.WSPort, "Node.AuthPort": c.Node.AuthPort} {
 		if port < 0 || port > math.MaxUint16 {
 			return fmt.Errorf("%s must be between 0 and 65535", name)
 		}

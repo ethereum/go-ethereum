@@ -109,8 +109,9 @@ have different responsibilities:
 - **Master** connects to the external P2P network. Configure its process settings
   under `[Master.Node]` and external devp2p under `[Master.Node.P2P]`.
 - **Each shard** has a `[[ShardNodes]]` entry. Set `ShardID` to its routing ID and
-  `Address` to its internal TCP endpoint. Put process settings under
-  `[ShardNodes.Node]` and execution settings under `[ShardNodes.Eth]`.
+  `PrivateHost` and `PrivatePort` to its internal TCP endpoint. Set `PublicHost`
+  and `PublicPort` for client-facing HTTP JSON-RPC. Put other process settings
+  under `[ShardNodes.Node]` and execution settings under `[ShardNodes.Eth]`.
 
 For field definitions, see [node.Config](../../node/config.go) for the `Node`
 sections and [ethconfig.Config](../../eth/ethconfig/config.go) for shard `Eth`
@@ -129,9 +130,25 @@ with `--qkc.shard 0`.
 
 ### Addresses, storage, and RPC
 
-Each shard's `Address` is used both to listen for internal connections and by
-other processes to reach it. Use a distinct `host:port` endpoint, such as
-`127.0.0.1:38000`, with a concrete host and a port from 1 to 65535.
+Each shard's `PrivateHost` and `PrivatePort` define its internal QKC TCP endpoint,
+used both for listening and for dialing by Master and other shards. For example,
+set `PrivateHost = "127.0.0.1"` and `PrivatePort = 38000`. The host must be concrete
+and the port must be from 1 to 65535. For IPv6, use an unbracketed host such as
+`PrivateHost = "::1"`. Master derives its shard endpoint map from these fields.
+
+`PublicHost` and `PublicPort` configure client-facing HTTP JSON-RPC. Set them
+under `[Master]` or in a `[[ShardNodes]]` entry. They map directly to geth's
+`Node.HTTPHost` and `Node.HTTPPort`, taking
+precedence if both forms are configured. An empty public host disables HTTP;
+port zero requests a dynamically assigned port. Explicit CLI flags apply last.
+
+| Interface | Host | Port | Purpose |
+| --- | --- | --- | --- |
+| QKC cluster TCP | `PrivateHost` | `PrivatePort` | Master and shard communication. |
+| HTTP JSON-RPC | `PublicHost` | `PublicPort` | Client requests. |
+| WebSocket JSON-RPC | `Node.WSHost` | `Node.WSPort` | Client requests and subscriptions. |
+
+Disabling HTTP or WebSocket leaves the internal cluster endpoint configured.
 
 Give each process its own data directory; configured directories must be distinct.
 HTTP, WebSocket, and IPC settings are also independent for each process.
@@ -209,6 +226,8 @@ Both files follow geth's conventions:
 
 - Field names are case-sensitive Go field names. Unknown fields and duplicate
   keys are errors.
+- `PublicHost` and `PublicPort` are deployment TOML keys for `Node.HTTPHost` and
+  `Node.HTTPPort`; the effective configuration keeps geth's field names.
 - EVM chain IDs and fork block numbers use quoted big-integer values, such as
   `ChainID = "100001"` and `LondonBlock = "0"`.
 - `MinimumDifficulty`, `CoinbaseAmount`, and `StakePerBlock` use quoted decimal

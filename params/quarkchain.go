@@ -45,13 +45,32 @@ const (
 	RootCoinbaseShardID uint32 = 0
 )
 
+// ConsensusType identifies the PoW algorithm selected for a QKC root or shard chain.
+type ConsensusType string
+
+const (
+	ConsensusEthash   ConsensusType = "POW_ETHASH"
+	ConsensusSimulate ConsensusType = "POW_SIMULATE"
+)
+
+// Check rejects unknown algorithms and NONE, since every configured chain is active.
+func (c ConsensusType) Check() error {
+	switch c {
+	case ConsensusEthash, ConsensusSimulate:
+		return nil
+	default:
+		return fmt.Errorf("invalid ConsensusType %q: want POW_ETHASH, POW_SIMULATE", c)
+	}
+}
+
 // QuarkChainConfig is the configuration of a QuarkChain shard chain. Its
 // presence in the chain config enables the QuarkChain specific features.
 type QuarkChainConfig struct {
 	ShardID  uint32   `json:"shardId"`  // ID of this shard
 	ShardIDs []uint32 `json:"shardIds"` // IDs of all shards in the network, this one included
 
-	PoSW *PoSWConfig `json:"posw"` // Required consensus configuration for this shard.
+	ConsensusType ConsensusType `json:"consensusType,omitempty"`
+	PoSW          *PoSWConfig   `json:"posw"` // Required consensus configuration for this shard.
 	// MaxBlocksPerRootBlock caps the number of blocks of this shard a root
 	// block can confirm, as max_blocks_per_shard_in_one_root_block in
 	// pyquarkchain. Zero means no cap.
@@ -65,6 +84,7 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 	}
 	return c.ShardID == other.ShardID &&
 		slices.Equal(c.ShardIDs, other.ShardIDs) &&
+		c.ConsensusType == other.ConsensusType &&
 		c.PoSW.Equal(other.PoSW) &&
 		c.MaxBlocksPerRootBlock == other.MaxBlocksPerRootBlock
 }

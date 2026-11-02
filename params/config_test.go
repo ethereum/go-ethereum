@@ -129,6 +129,7 @@ func TestQuarkChainConfigEqual(t *testing.T) {
 		{"unchanged", func(c *QuarkChainConfig) {}, true},
 		{"shardId", func(c *QuarkChainConfig) { c.ShardID = 1 }, false},
 		{"shardIds", func(c *QuarkChainConfig) { c.ShardIDs[1] = 2 }, false},
+		{"consensusType", func(c *QuarkChainConfig) { c.ConsensusType = ConsensusSimulate }, false},
 		{"posw", func(c *QuarkChainConfig) { c.PoSW.CoinbaseAmount.SetInt64(100) }, false},
 		{"missing posw", func(c *QuarkChainConfig) { c.PoSW = nil }, false},
 		{"maxBlocksPerRootBlock", func(c *QuarkChainConfig) { c.MaxBlocksPerRootBlock = 12 }, false},

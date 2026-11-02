@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	qkcconfig "github.com/ethereum/go-ethereum/qkc/config"
 	"github.com/urfave/cli/v2"
@@ -56,6 +57,12 @@ func TestQKCConfigPrecedence(t *testing.T) {
 	if cfg.Node.P2P.MaxPeers != 0 || cfg.Eth.DatabaseCache != 512 || cfg.Node.HTTPHost != "127.0.0.1" {
 		t.Fatal("unset CLI flags replaced configured values")
 	}
+	if cfg.PrivateHost != "127.0.0.1" || cfg.PrivatePort != 38000 {
+		t.Fatal("cluster host and port were not preserved")
+	}
+	if cfg.CoinbaseAddress != common.HexToAddress("0x2222222222222222222222222222222222222222") {
+		t.Fatal("configured shard mining address was not preserved")
+	}
 	if cfg.Eth.TrieCleanCache != ethconfig.Defaults.TrieCleanCache || cfg.Eth.SyncMode != ethconfig.Defaults.SyncMode || cfg.Eth.RPCGasCap != ethconfig.Defaults.RPCGasCap || cfg.Eth.NetworkId != 2 {
 		t.Fatal("defaults or network ID resolved incorrectly")
 	}
@@ -64,13 +71,16 @@ func TestQKCConfigPrecedence(t *testing.T) {
 	}
 
 	cfg, err = readQKCFlags("--config", qkcExampleCluster, "--qkc.role", "shard", "--qkc.shard", "0",
-		"--http=false", "--ws", "--ws.addr", "127.0.0.2", "--ws.port", "0",
+		"--http=false", "--http.port", "28545", "--ws", "--ws.addr", "127.0.0.2", "--ws.port", "0",
 		"--datadir", "./cli-data", "--syncmode", "full", "--rpc.gascap", "0", "--rpc.evmtimeout", "2s", "--rpc.txfeecap", "0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Node.HTTPHost != "" || cfg.Node.WSHost != "127.0.0.2" || cfg.Node.WSPort != 0 {
+	if cfg.Node.HTTPHost != "" || cfg.Node.HTTPPort != 28545 || cfg.Node.WSHost != "127.0.0.2" || cfg.Node.WSPort != 0 {
 		t.Fatal("explicit zero or false CLI values did not override local TOML")
+	}
+	if cfg.PrivateHost != "127.0.0.1" || cfg.PrivatePort != 38000 {
+		t.Fatal("RPC overrides affected the internal cluster endpoint")
 	}
 	if cfg.Node.DataDir != "cli-data" || cfg.Eth.SyncMode != ethconfig.FullSync || cfg.Eth.RPCGasCap != 0 || cfg.Eth.RPCTxFeeCap != 0 || cfg.Eth.RPCEVMTimeout != 2*time.Second {
 		t.Fatalf("explicit CLI values were not applied: datadir=%q sync=%v gascap=%d feecap=%v timeout=%v", cfg.Node.DataDir, cfg.Eth.SyncMode, cfg.Eth.RPCGasCap, cfg.Eth.RPCTxFeeCap, cfg.Eth.RPCEVMTimeout)
@@ -82,6 +92,9 @@ func TestQKCConfigPrecedence(t *testing.T) {
 	}
 	if master.Eth != nil || master.Node.P2P.MaxPeers != 0 || master.Node.P2P.NoDiscovery || len(master.ShardEndpoints) != 2 || master.ShardEndpoints[0] != "127.0.0.1:38000" {
 		t.Fatal("master selection, overrides or derived endpoints are incorrect")
+	}
+	if master.CoinbaseAddress != common.HexToAddress("0x1111111111111111111111111111111111111111") {
+		t.Fatal("CLI overrides replaced the master mining address")
 	}
 }
 
@@ -145,7 +158,7 @@ func TestQKCConfigInvalidFlags(t *testing.T) {
 		{[]string{"--cache", "100"}, "flag provided but not defined: -cache"},
 		{[]string{"--ipcdisable", "--ipcpath", "qkc.ipc"}, "mutually exclusive"},
 		{[]string{"--maxpeers", "-1"}, "external P2P must be disabled"},
-		{[]string{"--http.port", "65536"}, "HTTPPort must be between"},
+		{[]string{"--http.port", "65536"}, "PublicPort must be between"},
 		{[]string{"--http.port", "18546"}, "TCP listeners conflict"},
 		{[]string{"--http.port", "38000"}, "TCP listeners conflict"},
 		{[]string{"--http.port", "30303"}, "TCP listeners conflict"},

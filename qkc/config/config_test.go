@@ -18,6 +18,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"os"
@@ -28,9 +29,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
 )
 
@@ -57,6 +60,9 @@ func TestNetworkExample(t *testing.T) {
 	if cfg.NetworkID != 2 || len(cfg.Shards) != 2 {
 		t.Fatalf("unexpected network: %+v", cfg)
 	}
+	if cfg.Root.ConsensusType != params.ConsensusEthash || cfg.Shards[0].QuarkChain.ConsensusType != params.ConsensusEthash || cfg.Shards[1].QuarkChain.ConsensusType != params.ConsensusSimulate {
+		t.Fatal("root and shard consensus algorithms were not preserved")
+	}
 	if !cfg.Root.PoSW.StakingEnabled || cfg.Shards[0].QuarkChain.PoSW.StakingEnabled || !cfg.Shards[1].QuarkChain.PoSW.StakingEnabled {
 		t.Fatal("root and shard PoSW configurations are not independent")
 	}
@@ -69,6 +75,9 @@ func TestNetworkExample(t *testing.T) {
 	for _, shard := range cfg.Shards {
 		if !slices.Equal(shard.QuarkChain.ShardIDs, []uint32{0, 1}) {
 			t.Fatalf("unexpected shard topology: %v", shard.QuarkChain.ShardIDs)
+		}
+		if shard.QuarkChain.MaxBlocksPerRootBlock != 18 {
+			t.Fatal("configured shard confirmation limit was not preserved")
 		}
 	}
 	// Equal numeric values do not conflate the network and EVM identifiers.
@@ -85,6 +94,14 @@ func TestNetworkValidation(t *testing.T) {
 		want   string
 	}{
 		{"zero network", func(c *NetworkConfig) { c.NetworkID = 0 }, "NetworkID must be positive"},
+		{"missing root consensus", func(c *NetworkConfig) { c.Root.ConsensusType = "" }, "Root: invalid ConsensusType"},
+		{"invalid root consensus", func(c *NetworkConfig) { c.Root.ConsensusType = "NONE" }, "Root: invalid ConsensusType"},
+		{"unsupported root doublesha256", func(c *NetworkConfig) { c.Root.ConsensusType = "POW_DOUBLESHA256" }, "Root: invalid ConsensusType"},
+		{"unsupported root qkchash", func(c *NetworkConfig) { c.Root.ConsensusType = "POW_QKCHASH" }, "Root: invalid ConsensusType"},
+		{"missing shard consensus", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ConsensusType = "" }, "shard 0: invalid ConsensusType"},
+		{"invalid shard consensus", func(c *NetworkConfig) { c.Shards[1].QuarkChain.ConsensusType = "ethash" }, "shard 1: invalid ConsensusType"},
+		{"unsupported shard doublesha256", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ConsensusType = "POW_DOUBLESHA256" }, "shard 0: invalid ConsensusType"},
+		{"unsupported shard qkchash", func(c *NetworkConfig) { c.Shards[1].QuarkChain.ConsensusType = "POW_QKCHASH" }, "shard 1: invalid ConsensusType"},
 		{"no shards", func(c *NetworkConfig) { c.Shards = nil }, "at least one shard"},
 		{"no quarkchain", func(c *NetworkConfig) { c.Shards[0].QuarkChain = nil }, "QuarkChain configuration is required"},
 		{"duplicate shard", func(c *NetworkConfig) { c.Shards[1].QuarkChain.ShardID = 0 }, "duplicate shard ID"},
@@ -115,6 +132,57 @@ func TestNetworkValidation(t *testing.T) {
 				t.Fatalf("have %v, want error containing %q", err, test.want)
 			}
 		})
+	}
+}
+
+func TestNetworkConsensusTypes(t *testing.T) {
+	for _, algorithm := range []params.ConsensusType{params.ConsensusEthash, params.ConsensusSimulate} {
+		t.Run(string(algorithm), func(t *testing.T) {
+			cfg := exampleNetwork(t)
+			cfg.Root.ConsensusType = algorithm
+			cfg.Shards[0].QuarkChain.ConsensusType = algorithm
+			if err := cfg.Validate(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestNetworkConfirmationLimit(t *testing.T) {
+	input, err := os.ReadFile("examples/network.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, limit := range []uint64{0, 1, 18, math.MaxUint64} {
+		t.Run(fmt.Sprint(limit), func(t *testing.T) {
+			content := strings.Replace(string(input), "MaxBlocksPerRootBlock = 18", fmt.Sprintf("MaxBlocksPerRootBlock = %d", limit), 1)
+			cfg, err := LoadNetwork(writeConfig(t, []byte(content)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := cfg.Shards[0].QuarkChain.MaxBlocksPerRootBlock; got != limit {
+				t.Fatalf("confirmation limit = %d, want %d", got, limit)
+			}
+			if cfg.Shards[1].QuarkChain.MaxBlocksPerRootBlock != 18 {
+				t.Fatal("confirmation limit override affected another shard")
+			}
+		})
+	}
+	content := strings.ReplaceAll(string(input), "MaxBlocksPerRootBlock = 18", "")
+	cfg, err := LoadNetwork(writeConfig(t, []byte(content)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, shard := range cfg.Shards {
+		if shard.QuarkChain.MaxBlocksPerRootBlock != 0 {
+			t.Fatal("omitted confirmation limit should leave the shard uncapped")
+		}
+	}
+	for _, value := range []string{"-1", "18446744073709551616"} {
+		content := strings.Replace(string(input), "MaxBlocksPerRootBlock = 18", "MaxBlocksPerRootBlock = "+value, 1)
+		if _, err := LoadNetwork(writeConfig(t, []byte(content))); err == nil || !strings.Contains(err.Error(), "MaxBlocksPerRootBlock") {
+			t.Fatalf("invalid confirmation limit %s accepted: %v", value, err)
+		}
 	}
 }
 
@@ -158,18 +226,22 @@ EpochInterval = 3153600
 DecayFactor = "0.88"
 `
 	cfg, err := LoadNetwork(writeConfig(t, []byte(`NetworkID = 9
+[Root]
+ConsensusType = "POW_ETHASH"
 [Root.PoSW]
 `+pow+`
 [[Shards]]
 ChainID = "10"
 [Shards.QuarkChain]
 ShardID = 1
+ConsensusType = "POW_ETHASH"
 [Shards.QuarkChain.PoSW]
 `+pow+`
 [[Shards]]
 ChainID = "11"
 [Shards.QuarkChain]
 ShardID = 0
+ConsensusType = "POW_ETHASH"
 [Shards.QuarkChain.PoSW]
 `+pow)))
 	if err != nil {
@@ -200,6 +272,12 @@ func TestInvalidTOML(t *testing.T) {
 		{"local network field", true, "[Node]\nDataDir = \"data\""},
 		{"network local field", false, "[Root]\nPoSW = {}"},
 		{"local typo", false, "[Master.Node]\nHttpPort = 1234"},
+		{"legacy internal address", false, "[[ShardNodes]]\nShardID = 0\nAddress = \"127.0.0.1:38000\""},
+		{"legacy cluster host", false, "[[ShardNodes]]\nShardID = 0\nClusterHost = \"127.0.0.1\""},
+		{"invalid public port type", false, "[Master]\nPublicPort = \"invalid\""},
+		{"short master coinbase", false, "[Master]\nCoinbaseAddress = \"0x12\""},
+		{"legacy shard coinbase", false, "[[ShardNodes]]\nShardID = 0\nCoinbaseAddress = \"0x111111111111111111111111111111111111111100000001\""},
+		{"invalid shard coinbase", false, "[[ShardNodes]]\nShardID = 0\nCoinbaseAddress = \"0xgg11111111111111111111111111111111111111\""},
 		{"nested typo", false, "[[ShardNodes]]\nShardID = 0\n[ShardNodes.Eth.Miner]\nUnknown = 1"},
 		{"invalid sync mode", false, "[[ShardNodes]]\nShardID = 0\n[ShardNodes.Eth]\nSyncMode = \"invalid\""},
 		{"derived role", false, "[Master]\nRole = \"master\""},
@@ -262,6 +340,13 @@ func TestClusterExample(t *testing.T) {
 	if master != &cfg.Master || master.Eth != nil || master.Node.P2P.MaxPeers != 25 || len(master.ShardEndpoints) != 2 {
 		t.Fatalf("unexpected master configuration: %+v", master)
 	}
+	if master.CoinbaseAddress != common.HexToAddress("0x1111111111111111111111111111111111111111") {
+		t.Fatal("master mining address was not preserved")
+	}
+	addresses := []common.Address{
+		common.HexToAddress("0x2222222222222222222222222222222222222222"),
+		common.HexToAddress("0x3333333333333333333333333333333333333333"),
+	}
 	for i, entry := range cfg.ShardNodes {
 		selected, err := cfg.SelectNode(RoleShard, entry.ShardID)
 		if err != nil {
@@ -270,7 +355,10 @@ func TestClusterExample(t *testing.T) {
 		if selected != &cfg.ShardNodes[i] || selected.NetworkFile != cfg.NetworkFile || selected.ShardEndpoints != nil {
 			t.Fatal("process selection did not return the shard's own configuration")
 		}
-		if master.ShardEndpoints[*entry.ShardID] != entry.Address {
+		if selected.CoinbaseAddress != addresses[i] {
+			t.Fatal("selected shard has the wrong mining address")
+		}
+		if master.ShardEndpoints[*entry.ShardID] != fmt.Sprintf("127.0.0.1:%d", 38000+i) {
 			t.Fatal("master endpoints were not derived from deployment entries")
 		}
 		if entry.Eth.NetworkId != uint64(network.NetworkID) || entry.Node.HTTPPort != 18545+i {
@@ -323,13 +411,44 @@ func TestNodeDefaults(t *testing.T) {
 	}
 }
 
+func TestClusterPublicEndpoint(t *testing.T) {
+	for _, test := range []struct {
+		name, input, host string
+		port              int
+		master            bool
+	}{
+		{"master", "[Master]\nPublicHost = \"127.0.0.1\"\nPublicPort = 18544", "127.0.0.1", 18544, true},
+		{"shard", "[[ShardNodes]]\nShardID = 0\nPublicHost = \"127.0.0.1\"\nPublicPort = 18545", "127.0.0.1", 18545, false},
+		{"inherited public port", "[[ShardNodes]]\nShardID = 0\nPublicHost = \"127.0.0.1\"", "127.0.0.1", node.DefaultHTTPPort, false},
+		{"public port leaves HTTP disabled", "[[ShardNodes]]\nShardID = 0\nPublicPort = 18545", "", 18545, false},
+		{"native fallback", "[[ShardNodes]]\nShardID = 0\n[ShardNodes.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "127.0.0.2", 18547, false},
+		{"public override", "[[ShardNodes]]\nShardID = 0\nPublicHost = \"127.0.0.1\"\nPublicPort = 18545\n[ShardNodes.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "127.0.0.1", 18545, false},
+		{"explicit empty and zero", "[[ShardNodes]]\nShardID = 0\nPublicHost = \"\"\nPublicPort = 0\n[ShardNodes.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "", 0, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg, err := LoadCluster(writeConfig(t, []byte(test.input)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			selected := &cfg.Master
+			if !test.master {
+				selected = &cfg.ShardNodes[0]
+			}
+			if selected.Node.HTTPHost != test.host || selected.Node.HTTPPort != test.port {
+				t.Fatalf("effective HTTP endpoint = %q:%d, want %q:%d", selected.Node.HTTPHost, selected.Node.HTTPPort, test.host, test.port)
+			}
+		})
+	}
+}
+
 func TestClusterDefaultOverrides(t *testing.T) {
 	cfg, err := LoadCluster(writeConfig(t, []byte(`[Master.Node.P2P]
 MaxPeers = 0
 DiscoveryV4 = false
 [[ShardNodes]]
 ShardID = 0
-Address = "127.0.0.1:38000"
+PrivateHost = "127.0.0.1"
+PrivatePort = 38000
 [ShardNodes.Eth]
 DatabaseCache = 0
 [ShardNodes.Eth.Miner]
@@ -339,7 +458,8 @@ MaxPrice = "456"
 IgnorePrice = "7"
 [[ShardNodes]]
 ShardID = 1
-Address = "127.0.0.1:38001"
+PrivateHost = "127.0.0.1"
+PrivatePort = 38001
 `)))
 	if err != nil {
 		t.Fatal(err)
@@ -364,7 +484,7 @@ Address = "127.0.0.1:38001"
 		t.Fatal("mutable geth defaults are shared with a shard")
 	}
 	// Omitting the entire Master table still supplies its defaults.
-	cfg, err = LoadCluster(writeConfig(t, []byte("[[ShardNodes]]\nShardID = 0\nAddress = \"localhost:38000\"\n")))
+	cfg, err = LoadCluster(writeConfig(t, []byte("[[ShardNodes]]\nShardID = 0\nPrivateHost = \"localhost\"\nPrivatePort = 38000\n")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,21 +589,24 @@ func TestClusterValidation(t *testing.T) {
 		{"missing id", func(c *ClusterConfig) { c.ShardNodes[0].ShardID = nil }, "ShardID is required"},
 		{"duplicate shard", func(c *ClusterConfig) { *c.ShardNodes[1].ShardID = 0 }, "duplicate deployed shard"},
 		{"unknown shard", func(c *ClusterConfig) { *c.ShardNodes[1].ShardID = 100002 }, "not in the network"},
-		{"duplicate address", func(c *ClusterConfig) { c.ShardNodes[1].Address = c.ShardNodes[0].Address }, "TCP listeners conflict"},
+		{"duplicate cluster endpoint", func(c *ClusterConfig) {
+			c.ShardNodes[1].PrivateHost = c.ShardNodes[0].PrivateHost
+			c.ShardNodes[1].PrivatePort = c.ShardNodes[0].PrivatePort
+		}, "TCP listeners conflict"},
 		{"equivalent IPv6 addresses", func(c *ClusterConfig) {
-			c.ShardNodes[0].Address = "[::1]:38000"
-			c.ShardNodes[1].Address = "[0:0:0:0:0:0:0:1]:38000"
+			c.ShardNodes[0].PrivateHost = "::1"
+			c.ShardNodes[1].PrivateHost = "0:0:0:0:0:0:0:1"
+			c.ShardNodes[1].PrivatePort = c.ShardNodes[0].PrivatePort
 		}, "TCP listeners conflict"},
 		{"IPv4 mapped address", func(c *ClusterConfig) {
-			c.ShardNodes[1].Address = "[::ffff:127.0.0.1]:38000"
-		}, "TCP listeners conflict"},
-		{"equivalent port numbers", func(c *ClusterConfig) {
-			c.ShardNodes[1].Address = "127.0.0.1:038000"
+			c.ShardNodes[1].PrivateHost = "::ffff:127.0.0.1"
+			c.ShardNodes[1].PrivatePort = c.ShardNodes[0].PrivatePort
 		}, "TCP listeners conflict"},
 		{"shared datadir", func(c *ClusterConfig) { c.ShardNodes[1].Node.DataDir = c.Master.Node.DataDir }, "data directory is shared"},
 		{"master shard id", func(c *ClusterConfig) { c.Master.ShardID = new(uint32) }, "Master must not specify ShardID"},
 		{"master execution", func(c *ClusterConfig) { c.Master.Eth = &ethconfig.Config{} }, "master cannot configure Eth"},
-		{"master address", func(c *ClusterConfig) { c.Master.Address = "localhost:38002" }, "master cannot configure Eth"},
+		{"master cluster host", func(c *ClusterConfig) { c.Master.PrivateHost = "localhost" }, "master cannot configure Eth"},
+		{"master cluster port", func(c *ClusterConfig) { c.Master.PrivatePort = 38002 }, "master cannot configure Eth"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := exampleCluster(t)
@@ -689,7 +812,7 @@ func TestNodeValidation(t *testing.T) {
 		{"state scheme", false, func(c *NodeConfig) { c.Eth.StateScheme = "unknown" }, "Eth.StateScheme"},
 		{"negative peers", true, func(c *NodeConfig) { c.Node.P2P.MaxPeers = -1 }, "MaxPeers"},
 		{"negative cache", false, func(c *NodeConfig) { c.Eth.DatabaseCache = -1 }, "DatabaseCache"},
-		{"http port", false, func(c *NodeConfig) { c.Node.HTTPPort = 65536 }, "HTTPPort"},
+		{"public port", false, func(c *NodeConfig) { c.Node.HTTPPort = 65536 }, "PublicPort"},
 		{"ws port", false, func(c *NodeConfig) { c.Node.WSPort = -1 }, "WSPort"},
 		{"auth port", true, func(c *NodeConfig) { c.Node.AuthPort = -1 }, "AuthPort"},
 		{"listen address", true, func(c *NodeConfig) { c.Node.P2P.ListenAddr = "invalid" }, "ListenAddr"},
@@ -697,12 +820,14 @@ func TestNodeValidation(t *testing.T) {
 		{"shard external peers", false, func(c *NodeConfig) { c.Node.P2P.MaxPeers = 1 }, "external P2P must be disabled"},
 		{"shard external listen", false, func(c *NodeConfig) { c.Node.P2P.ListenAddr = ":30304" }, "external P2P must be disabled"},
 		{"shard external discovery", false, func(c *NodeConfig) { c.Node.P2P.NoDiscovery = false }, "external P2P must be disabled"},
-		{"missing address", false, func(c *NodeConfig) { c.Address = "" }, "invalid internal Address"},
-		{"wildcard host", false, func(c *NodeConfig) { c.Address = "0.0.0.0:38000" }, "concrete host"},
-		{"wildcard ipv6", false, func(c *NodeConfig) { c.Address = "[0:0:0:0:0:0:0:0]:38000" }, "concrete host"},
-		{"missing host", false, func(c *NodeConfig) { c.Address = ":38000" }, "concrete host"},
-		{"zero internal port", false, func(c *NodeConfig) { c.Address = "localhost:0" }, "concrete host"},
-		{"overflow internal port", false, func(c *NodeConfig) { c.Address = "localhost:65536" }, "concrete host"},
+		{"missing cluster host", false, func(c *NodeConfig) { c.PrivateHost = "" }, "PrivateHost must be a concrete host"},
+		{"wildcard host", false, func(c *NodeConfig) { c.PrivateHost = "0.0.0.0" }, "concrete host"},
+		{"wildcard ipv6", false, func(c *NodeConfig) { c.PrivateHost = "0:0:0:0:0:0:0:0" }, "concrete host"},
+		{"host includes port", false, func(c *NodeConfig) { c.PrivateHost = "localhost:38000" }, "without brackets or a port"},
+		{"bracketed ipv6", false, func(c *NodeConfig) { c.PrivateHost = "[::1]" }, "without brackets or a port"},
+		{"zero cluster port", false, func(c *NodeConfig) { c.PrivatePort = 0 }, "PrivatePort must be between"},
+		{"negative cluster port", false, func(c *NodeConfig) { c.PrivatePort = -1 }, "PrivatePort must be between"},
+		{"overflow cluster port", false, func(c *NodeConfig) { c.PrivatePort = 65536 }, "PrivatePort must be between"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cluster := exampleCluster(t)
@@ -722,8 +847,12 @@ func TestNodeValidation(t *testing.T) {
 		t.Fatalf("port zero must be valid: %v", err)
 	}
 	cluster := exampleCluster(t)
-	cluster.ShardNodes[0].Address = "[::1]:38000"
+	cluster.ShardNodes[0].PrivateHost = "::1"
 	if err := cluster.Validate(exampleNetwork(t)); err != nil {
 		t.Fatalf("IPv6 internal endpoints must be valid: %v", err)
+	}
+	master, err := cluster.SelectNode(RoleMaster, nil)
+	if err != nil || master.ShardEndpoints[0] != "[::1]:38000" {
+		t.Fatalf("IPv6 cluster host was not joined correctly: %v", err)
 	}
 }

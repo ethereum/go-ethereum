@@ -56,6 +56,7 @@ func TestSetupGenesisQuarkChainConfig(t *testing.T) {
 				{"coinbaseAmount", func(c *params.ChainConfig) { c.QuarkChain.PoSW.CoinbaseAmount.SetInt64(200) }, false, true},
 				{"shardId", func(c *params.ChainConfig) { c.QuarkChain.ShardID = 1 }, false, true},
 				{"shardIds", func(c *params.ChainConfig) { c.QuarkChain.ShardIDs = []uint32{0, 1} }, false, true},
+				{"consensusType", func(c *params.ChainConfig) { c.QuarkChain.ConsensusType = params.ConsensusSimulate }, false, true},
 				{"maxBlocksPerRootBlock", func(c *params.ChainConfig) { c.QuarkChain.MaxBlocksPerRootBlock = 12 }, false, true},
 				{"remove config", func(c *params.ChainConfig) { c.QuarkChain = nil }, false, true},
 				{"add config", func(c *params.ChainConfig) { c.QuarkChain = params.NewTestQuarkChainConfig(0) }, true, true},
