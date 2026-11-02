@@ -1278,6 +1278,33 @@ func TestRunnersExitStatus(t *testing.T) {
 	}
 }
 
+// TestRunnersStdinSkipsBadPath checks that in stdin mode a file that cannot be
+// read is skipped, the file after it still runs, and the run exits with
+// exitIncomplete.
+func TestRunnersStdinSkipsBadPath(t *testing.T) {
+	t.Parallel()
+	for _, runner := range []string{"blocktest", "enginetest"} {
+		missing := filepath.Join(t.TempDir(), "missing.json")
+		tt := cmdtest.NewTestCmd(t, nil)
+		tt.Run("evm-test", runner)
+		tt.InputLine(missing)
+		tt.InputLine(fmt.Sprintf("./testdata/%s_bal.json", runner))
+		tt.InputLine("")
+		stdout := tt.Output()
+		tt.WaitExit()
+		var results []testResult
+		if err := json.Unmarshal(stdout, &results); err != nil || len(results) != 1 || !results[0].Pass {
+			t.Errorf("%s: the file after the missing one did not run and pass: %v\n%s", runner, err, stdout)
+		}
+		if status := tt.ExitStatus(); status != exitIncomplete {
+			t.Errorf("%s: exit status %d, want %d", runner, status, exitIncomplete)
+		}
+		if stderr := tt.StderrText(); !strings.Contains(stderr, missing) {
+			t.Errorf("%s: stderr does not name the missing file:\n%s", runner, stderr)
+		}
+	}
+}
+
 // TestEvmVersion checks that evm --version prints one line and exits 0.
 func TestEvmVersion(t *testing.T) {
 	t.Parallel()
