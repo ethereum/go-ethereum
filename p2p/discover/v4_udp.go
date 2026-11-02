@@ -556,6 +556,7 @@ func (t *UDPv4) readLoop(unhandled chan<- ReadPacket) {
 			return
 		}
 		if err := t.handlePacket(from, buf[:nbytes]); err != nil && unhandled == nil {
+			v4BadPacketMeter.Mark(1)
 			t.log.Debug("Bad discv4 packet", "addr", from, "err", err)
 		} else if err != nil && unhandled != nil {
 			p := ReadPacket{bytes.Clone(buf[:nbytes]), from}
@@ -578,6 +579,7 @@ func (t *UDPv4) handlePacket(from netip.AddrPort, buf []byte) error {
 		return err
 	}
 	packet := t.wrapPacket(rawpacket)
+	markInbound(packet.Name())
 	fromID := fromKey.ID()
 	if packet.preverify != nil {
 		err = packet.preverify(packet, from, fromID, fromKey)
@@ -709,8 +711,12 @@ func (t *UDPv4) handlePing(h *packetHandlerV4, from netip.AddrPort, fromID enode
 
 	// Update node database and endpoint predictor.
 	t.db.UpdateLastPingReceived(n.ID(), from.Addr(), time.Now())
-	toaddr := netip.AddrPortFrom(netutil.IPToAddr(req.To.IP), req.To.UDP)
-	t.localNode.UDPEndpointStatement(from, toaddr)
+
+	// Only bonded nodes are allowed to make statements about our endpoint.
+	if t.checkBond(fromID, from) {
+		toaddr := netip.AddrPortFrom(netutil.IPToAddr(req.To.IP), req.To.UDP)
+		t.localNode.UDPEndpointStatement(from, toaddr)
+	}
 }
 
 // PONG/v4

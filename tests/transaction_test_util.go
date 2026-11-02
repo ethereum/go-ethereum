@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 // TransactionTest checks RLP decoding and sender derivation of transactions.
@@ -81,18 +82,22 @@ func (tt *TransactionTest) Run() error {
 			return
 		}
 		// Intrinsic cost
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, params.CostPerStateByte)
+		value, overflow := uint256.FromBig(tx.Value())
+		if overflow {
+			return sender, hash, 0, errors.New("value exceeds 256 bits")
+		}
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), sender, tx.To(), value, rules)
 		if err != nil {
 			return
 		}
-		requiredGas = cost.RegularGas
+		requiredGas = cost
 		if requiredGas > tx.Gas() {
 			return sender, hash, 0, fmt.Errorf("insufficient gas ( %d < %d )", tx.Gas(), requiredGas)
 		}
 
 		if rules.IsPrague {
 			var floorDataGas uint64
-			floorDataGas, err = core.FloorDataGas(rules, tx.Data(), tx.AccessList())
+			floorDataGas, err = core.FloorDataGas(rules, sender, tx.To(), value, tx.Data(), tx.AccessList())
 			if err != nil {
 				return
 			}
@@ -120,6 +125,8 @@ func (tt *TransactionTest) Run() error {
 		{"Shanghai", true},
 		{"Cancun", true},
 		{"Prague", true},
+		{"Osaka", true},
+		{"Amsterdam", true},
 	} {
 		expected := tt.Result[testcase.name]
 		if expected == nil {

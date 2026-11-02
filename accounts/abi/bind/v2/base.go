@@ -320,7 +320,7 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 		}
 	}
 	// create the transaction
-	nonce, err := c.getNonce(opts)
+	nonce, err := c.GetNonce(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -338,8 +338,8 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 }
 
 func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error) {
-	if opts.GasFeeCap != nil || opts.GasTipCap != nil || opts.AccessList != nil {
-		return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas or accessList specified but london is not active yet")
+	if opts.GasFeeCap != nil || opts.GasTipCap != nil {
+		return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
 	}
 	// Normalize value
 	value := opts.Value
@@ -365,9 +365,21 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 		}
 	}
 	// create the transaction
-	nonce, err := c.getNonce(opts)
+	nonce, err := c.GetNonce(opts)
 	if err != nil {
 		return nil, err
+	}
+	// A gas price together with an access list is an EIP-2930 transaction.
+	if opts.AccessList != nil {
+		return types.NewTx(&types.AccessListTx{
+			To:         contract,
+			Nonce:      nonce,
+			GasPrice:   gasPrice,
+			Gas:        gasLimit,
+			Value:      value,
+			Data:       input,
+			AccessList: opts.AccessList,
+		}), nil
 	}
 	baseTx := &types.LegacyTx{
 		To:       contract,
@@ -402,7 +414,7 @@ func (c *BoundContract) estimateGasLimit(opts *TransactOpts, contract *common.Ad
 	return c.transactor.EstimateGas(ensureContext(opts.Context), msg)
 }
 
-func (c *BoundContract) getNonce(opts *TransactOpts) (uint64, error) {
+func (c *BoundContract) GetNonce(opts *TransactOpts) (uint64, error) {
 	if opts.Nonce == nil {
 		return c.transactor.PendingNonceAt(ensureContext(opts.Context), opts.From)
 	} else {

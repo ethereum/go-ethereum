@@ -42,6 +42,11 @@ type NameConflict struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *NameConflict) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewNameConflict creates a new instance of NameConflict.
 func NewNameConflict() *NameConflict {
 	parsed, err := NameConflictMetaData.ParseABI()

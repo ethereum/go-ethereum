@@ -178,6 +178,13 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	if head.TxHash != types.EmptyTxsHash && len(body.Transactions) == 0 {
 		return nil, errors.New("server returned empty transaction list but block header indicates transactions")
 	}
+	emptyWithdrawals := head.WithdrawalsHash == nil || *head.WithdrawalsHash == types.EmptyWithdrawalsHash
+	if emptyWithdrawals && len(body.Withdrawals) > 0 {
+		return nil, errors.New("server returned non-empty withdrawal list but block header indicates no withdrawals")
+	}
+	if !emptyWithdrawals && len(body.Withdrawals) == 0 {
+		return nil, errors.New("server returned empty withdrawal list but block header indicates withdrawals")
+	}
 	// Load uncles because they are not included in the block response.
 	var uncles []*types.Header
 	if len(body.UncleHashes) > 0 {
@@ -317,9 +324,15 @@ func (ec *Client) TransactionSender(ctx context.Context, tx *types.Transaction, 
 
 // TransactionCount returns the total number of transactions in the given block.
 func (ec *Client) TransactionCount(ctx context.Context, blockHash common.Hash) (uint, error) {
-	var num hexutil.Uint
+	var num *hexutil.Uint
 	err := ec.c.CallContext(ctx, &num, "eth_getBlockTransactionCountByHash", blockHash)
-	return uint(num), err
+	if err != nil {
+		return 0, err
+	}
+	if num == nil {
+		return 0, ethereum.NotFound
+	}
+	return uint(*num), err
 }
 
 // TransactionInBlock returns a single transaction at index in the given block.

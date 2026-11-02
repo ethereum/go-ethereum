@@ -58,6 +58,7 @@ func TestSetFeeDefaults(t *testing.T) {
 		fortytwo = (*hexutil.Big)(big.NewInt(42))
 		maxFee   = (*hexutil.Big)(new(big.Int).Add(new(big.Int).Mul(b.current.BaseFee, big.NewInt(2)), fortytwo.ToInt()))
 		al       = &types.AccessList{types.AccessTuple{Address: common.Address{0xaa}, StorageKeys: []common.Hash{{0x01}}}}
+		authList = []types.SetCodeAuthorization{{Address: common.Address{0xbb}}}
 	)
 
 	tests := []test{
@@ -208,6 +209,13 @@ func TestSetFeeDefaults(t *testing.T) {
 			nil,
 			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
+		{
+			"set gas price and authorization list",
+			"london",
+			&TransactionArgs{GasPrice: fortytwo, AuthorizationList: authList},
+			nil,
+			errors.New("both gasPrice and authorizationList specified"),
+		},
 		// EIP-4844
 		{
 			"set gas price and maxFee for blob transaction",
@@ -253,6 +261,157 @@ func TestSetFeeDefaults(t *testing.T) {
 		if !reflect.DeepEqual(got, test.want) {
 			t.Fatalf("test %d (%s): did not fill defaults as expected: (got: %v, want: %v)", i, test.name, got, test.want)
 		}
+	}
+}
+
+// TestCallDefaults tests that CallDefaults rejects transaction types that
+// cannot be represented without a recipient, instead of letting ToTransaction
+// dereference the nil "to" field later on.
+func TestCallDefaults(t *testing.T) {
+	t.Parallel()
+
+	var (
+		addr    = common.Address{0x42}
+		baseFee = big.NewInt(params.InitialBaseFee)
+		chainID = big.NewInt(1)
+	)
+	tests := []struct {
+		name string
+		args TransactionArgs
+		err  error
+	}{
+		{
+			name: "authorization list without to",
+			args: TransactionArgs{AuthorizationList: []types.SetCodeAuthorization{{Address: addr}}},
+			err:  core.ErrSetCodeTxCreate,
+		},
+		{
+			name: "empty authorization list without to",
+			args: TransactionArgs{AuthorizationList: []types.SetCodeAuthorization{}},
+			err:  core.ErrSetCodeTxCreate,
+		},
+		{
+			name: "blob hashes without to",
+			args: TransactionArgs{BlobHashes: []common.Hash{{0x01}}},
+			err:  core.ErrBlobTxCreate,
+		},
+		{
+			name: "plain contract creation",
+			args: TransactionArgs{},
+		},
+		{
+			name: "authorization list with to",
+			args: TransactionArgs{To: &addr, AuthorizationList: []types.SetCodeAuthorization{{Address: addr}}},
+		},
+		{
+			name: "blob hashes with to",
+			args: TransactionArgs{To: &addr, BlobHashes: []common.Hash{{0x01}}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.args.CallDefaults(0, baseFee, chainID)
+			if tt.err == nil {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				// Sanitized args must be representable as a transaction, as
+				// eth_simulateV1 and debug_traceCall convert them after this.
+				tt.args.ToTransaction(types.DynamicFeeTxType)
+			} else if !errors.Is(err, tt.err) {
+				t.Fatalf("error mismatch, want %q, have %v", tt.err, err)
+			}
+		})
+	}
+}
+
+// TestCallDefaultsPreLondon tests that CallDefaults rejects EIP-1559 fee
+// fields when the block has no base fee, instead of silently dropping them.
+func TestCallDefaultsPreLondon(t *testing.T) {
+	t.Parallel()
+
+	zero := new(hexutil.Big)
+	tests := []struct {
+		name string
+		args TransactionArgs
+		fail bool
+	}{
+		{name: "no fee fields"},
+		{name: "gasPrice", args: TransactionArgs{GasPrice: zero}},
+		{name: "maxFeePerGas", args: TransactionArgs{MaxFeePerGas: zero}, fail: true},
+		{name: "maxPriorityFeePerGas", args: TransactionArgs{MaxPriorityFeePerGas: zero}, fail: true},
+		{name: "both fee fields", args: TransactionArgs{MaxFeePerGas: zero, MaxPriorityFeePerGas: zero}, fail: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.args.CallDefaults(0, nil, big.NewInt(1))
+			if (err != nil) != tt.fail {
+				t.Fatalf("error mismatch, want fail=%v, have %v", tt.fail, err)
+			}
+		})
+	}
+}
+
+// TestSetDefaultsEmptyAuthList tests that setDefaults rejects an authorization
+// list on a contract creation even when the list is empty, as ToTransaction
+// cannot represent it.
+func TestSetDefaultsEmptyAuthList(t *testing.T) {
+	t.Parallel()
+
+	var (
+		b    = newBackendMock()
+		gas  = hexutil.Uint64(100000)
+		data = hexutil.Bytes{0x01}
+	)
+	args := &TransactionArgs{
+		MaxFeePerGas:         (*hexutil.Big)(big.NewInt(42)),
+		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(42)),
+		Gas:                  &gas,
+		Data:                 &data,
+		AuthorizationList:    []types.SetCodeAuthorization{},
+	}
+	want := `authorizationList provided for contract creation, but "to" field is missing`
+	if err := args.setDefaults(context.Background(), b, sidecarConfig{}); err == nil || err.Error() != want {
+		t.Fatalf("error mismatch, want %q, have %v", want, err)
+	}
+}
+
+func TestToTransactionGasPriceAccessList(t *testing.T) {
+	gas, nonce := hexutil.Uint64(50000), hexutil.Uint64(0)
+	al := types.AccessList{{Address: common.Address{0xaa}}}
+	args := &TransactionArgs{
+		Gas:        &gas,
+		Nonce:      &nonce,
+		Value:      new(hexutil.Big),
+		GasPrice:   (*hexutil.Big)(big.NewInt(1)),
+		ChainID:    (*hexutil.Big)(big.NewInt(1)),
+		AccessList: &al,
+	}
+	tx := args.ToTransaction(types.DynamicFeeTxType)
+	if tx.Type() != types.AccessListTxType || len(tx.AccessList()) != 1 {
+		t.Fatalf("want access list tx, have type %d with access list %v", tx.Type(), tx.AccessList())
+	}
+}
+
+// TestSetDefaultsInvalidAuthYParity tests that setDefaults rejects an
+// authorization whose yParity is not 0 or 1.
+func TestSetDefaultsInvalidAuthYParity(t *testing.T) {
+	t.Parallel()
+
+	var (
+		b    = newBackendMock()
+		gas  = hexutil.Uint64(100000)
+		addr = common.Address{0x42}
+	)
+	args := &TransactionArgs{
+		To:                   &addr,
+		MaxFeePerGas:         (*hexutil.Big)(big.NewInt(42)),
+		MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(42)),
+		Gas:                  &gas,
+		AuthorizationList:    []types.SetCodeAuthorization{{Address: addr, V: 2}},
+	}
+	if err := args.setDefaults(context.Background(), b, sidecarConfig{}); !errors.Is(err, types.ErrInvalidYParity) {
+		t.Fatalf("error mismatch, want %v, have %v", types.ErrInvalidYParity, err)
 	}
 }
 

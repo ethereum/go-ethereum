@@ -37,17 +37,26 @@ var DryRunFlag = flag.Bool("n", false, "dry run, don't execute commands")
 // MustRun executes the given command and exits the host process for
 // any error.
 func MustRun(cmd *exec.Cmd) {
+	if err := Run(cmd); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// Run executes the command, echoing it first and streaming its output, and
+// returns any failure rather than terminating the process. Use it where a
+// failure should be collected and reported alongside the work that did
+// succeed; use MustRun where there is nothing sensible to continue with.
+func Run(cmd *exec.Cmd) error {
 	if cmd.Dir != "" && cmd.Dir != "." {
 		fmt.Printf("(in %s) ", cmd.Dir)
 	}
 	fmt.Println(">>>", printArgs(cmd.Args))
-	if !*DryRunFlag {
-		cmd.Stderr = os.Stderr
-		cmd.Stdout = os.Stdout
-		if err := cmd.Run(); err != nil {
-			log.Fatal(err)
-		}
+	if *DryRunFlag {
+		return nil
 	}
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	return cmd.Run()
 }
 
 func printArgs(args []string) string {
@@ -115,6 +124,16 @@ func RunGit(args ...string) string {
 		log.Fatal(strings.Join(cmd.Args, " "), ": ", err, "\n", stderr.String())
 	}
 	return strings.TrimSpace(stdout.String())
+}
+
+// gitOutput runs a git subcommand and returns its output, or "" if git can't be
+// run or the command fails.
+func gitOutput(args ...string) string {
+	out, err := exec.Command("git", args...).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // readGitFile returns content of file in .git directory.

@@ -138,8 +138,13 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend, config 
 		if len(args.data()) == 0 {
 			return errors.New(`contract creation without any data provided`)
 		}
-		if len(args.AuthorizationList) > 0 {
+		if args.AuthorizationList != nil {
 			return errors.New(`authorizationList provided for contract creation, but "to" field is missing`)
+		}
+	}
+	for i, auth := range args.AuthorizationList {
+		if auth.V > 1 {
+			return fmt.Errorf("authorization %d: %w", i, types.ErrInvalidYParity)
 		}
 	}
 
@@ -194,6 +199,12 @@ func (args *TransactionArgs) setFeeDefaults(ctx context.Context, b Backend, head
 	// If both gasPrice and at least one of the EIP-1559 fee parameters are specified, error.
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	// An EIP-7702 set-code transaction cannot be a legacy transaction, so gasPrice
+	// is incompatible with an authorization list. Reject the combination instead of
+	// silently dropping the authorization list in ToTransaction.
+	if args.GasPrice != nil && args.AuthorizationList != nil {
+		return errors.New("both gasPrice and authorizationList specified")
 	}
 	// If the tx has completely specified a fee mechanism, no default is needed.
 	// This allows users who are not yet synced past London to get defaults for
@@ -390,12 +401,32 @@ func (args *TransactionArgs) setBlobTxSidecar(ctx context.Context, config sideca
 	return nil
 }
 
+// checkBlobFeeCap rejects a blob fee cap without blob hashes. It is not part of
+// CallDefaults, because eth_simulateV1 and the tracers accept a lone cap from Cancun.
+func (args *TransactionArgs) checkBlobFeeCap() error {
+	if args.BlobFeeCap != nil && len(args.BlobHashes) == 0 {
+		return errors.New("maxFeePerBlobGas specified without blobVersionedHashes")
+	}
+	return nil
+}
+
 // CallDefaults sanitizes the transaction arguments, often filling in zero values,
 // for the purpose of eth_call class of RPC methods.
 func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int, chainID *big.Int) error {
 	// Reject invalid combinations of pre- and post-1559 fee styles
 	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
 		return errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	}
+	// Reject blob and setcode transaction types without a recipient. They
+	// cannot be represented as a transaction, so reject them up front with the
+	// same errors that message execution would return for them.
+	if args.To == nil {
+		if args.BlobHashes != nil {
+			return core.ErrBlobTxCreate
+		}
+		if args.AuthorizationList != nil {
+			return core.ErrSetCodeTxCreate
+		}
 	}
 	if args.ChainID == nil {
 		args.ChainID = (*hexutil.Big)(chainID)
@@ -424,6 +455,9 @@ func (args *TransactionArgs) CallDefaults(globalGasCap uint64, baseFee *big.Int,
 	}
 	if baseFee == nil {
 		// If there's no basefee, then it must be a non-1559 execution
+		if args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil {
+			return errors.New("maxFeePerGas and maxPriorityFeePerGas are not valid before London is active")
+		}
 		if args.GasPrice == nil {
 			args.GasPrice = new(hexutil.Big)
 		}
@@ -482,7 +516,7 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 	}
 	value, _ := args.Value.ToUint256()
 	blobFeeCap, _ := args.BlobFeeCap.ToUint256()
-	return &core.Message{
+	msg := &core.Message{
 		From:                  args.from(),
 		To:                    args.To,
 		Value:                 value,
@@ -496,9 +530,11 @@ func (args *TransactionArgs) ToMessage(baseFee *big.Int, skipNonceCheck bool) *c
 		BlobGasFeeCap:         blobFeeCap,
 		BlobHashes:            args.BlobHashes,
 		SetCodeAuthorizations: args.AuthorizationList,
-		SkipNonceChecks:       skipNonceCheck,
-		SkipTransactionChecks: true,
 	}
+	if skipNonceCheck {
+		msg.SkipNonceCheck()
+	}
+	return msg.SkipEOACheck().SkipGasLimitCapCheck()
 }
 
 // ToTransaction converts the arguments to a transaction.
@@ -515,9 +551,13 @@ func (args *TransactionArgs) ToTransaction(defaultType int) *types.Transaction {
 	case args.AccessList != nil || defaultType == types.AccessListTxType:
 		usedType = types.AccessListTxType
 	}
-	// Make it possible to default to newer tx, but use legacy if gasprice is provided
+	// Make it possible to default to newer tx, but use legacy if gasprice is provided.
+	// A gasprice together with an access list is an EIP-2930 transaction.
 	if args.GasPrice != nil {
 		usedType = types.LegacyTxType
+		if args.AccessList != nil {
+			usedType = types.AccessListTxType
+		}
 	}
 	var data types.TxData
 	switch usedType {

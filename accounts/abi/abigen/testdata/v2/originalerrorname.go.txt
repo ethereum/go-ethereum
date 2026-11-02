@@ -1,0 +1,89 @@
+// Code generated via abigen V2 - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
+
+package bindtests
+
+import (
+	"bytes"
+	"errors"
+	"math/big"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind/v2"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+)
+
+// Reference imports to suppress errors if they are not otherwise used.
+var (
+	_ = bytes.Equal
+	_ = errors.New
+	_ = big.NewInt
+	_ = common.Big1
+	_ = types.BloomLookup
+	_ = abi.ConvertType
+)
+
+// OriginalErrorNameMetaData contains all meta data concerning the OriginalErrorName contract.
+var OriginalErrorNameMetaData = bind.MetaData{
+	ABI: "[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"value\",\"type\":\"uint256\"}],\"name\":\"bad_thing\",\"type\":\"error\"}]",
+	ID:  "10d0b381ae5e3d5e2dbe4a99c8b74b6079",
+}
+
+// OriginalErrorName is an auto generated Go binding around an Ethereum contract.
+type OriginalErrorName struct {
+	abi abi.ABI
+}
+
+// GetABI returns the ABI associated with this contract binding.
+func (c *OriginalErrorName) GetABI() abi.ABI {
+	return c.abi
+}
+
+// NewOriginalErrorName creates a new instance of OriginalErrorName.
+func NewOriginalErrorName() *OriginalErrorName {
+	parsed, err := OriginalErrorNameMetaData.ParseABI()
+	if err != nil {
+		panic(errors.New("invalid ABI: " + err.Error()))
+	}
+	return &OriginalErrorName{abi: *parsed}
+}
+
+// Instance creates a wrapper for a deployed contract instance at the given address.
+// Use this to create the instance object passed to abigen v2 library functions Call, Transact, etc.
+func (c *OriginalErrorName) Instance(backend bind.ContractBackend, addr common.Address) *bind.BoundContract {
+	return bind.NewBoundContract(addr, c.abi, backend, backend, backend)
+}
+
+// UnpackError attempts to decode the provided error data using user-defined
+// error definitions.
+func (originalErrorName *OriginalErrorName) UnpackError(raw []byte) (any, error) {
+	if bytes.Equal(raw[:4], originalErrorName.abi.Errors["bad_thing"].ID.Bytes()[:4]) {
+		return originalErrorName.UnpackBadThingError(raw[4:])
+	}
+	return nil, errors.New("Unknown error")
+}
+
+// OriginalErrorNameBadThing represents a bad_thing error raised by the OriginalErrorName contract.
+type OriginalErrorNameBadThing struct {
+	Value *big.Int
+}
+
+// ErrorID returns the hash of canonical representation of the error's signature.
+//
+// Solidity: error bad_thing(uint256 value)
+func OriginalErrorNameBadThingErrorID() common.Hash {
+	return common.HexToHash("0xacf0b56dc53bb71bfbf0c93f999046bc91a5bc53ee15f0b2f6e353a20b73ad60")
+}
+
+// UnpackBadThingError is the Go binding used to decode the provided
+// error data into the corresponding Go error struct.
+//
+// Solidity: error bad_thing(uint256 value)
+func (originalErrorName *OriginalErrorName) UnpackBadThingError(raw []byte) (*OriginalErrorNameBadThing, error) {
+	out := new(OriginalErrorNameBadThing)
+	if err := originalErrorName.abi.UnpackIntoInterface(out, "bad_thing", raw); err != nil {
+		return nil, err
+	}
+	return out, nil
+}

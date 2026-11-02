@@ -36,6 +36,11 @@ type Token struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *Token) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewToken creates a new instance of Token.
 func NewToken() *Token {
 	parsed, err := TokenMetaData.ParseABI()

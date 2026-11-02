@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
+	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
 
@@ -132,22 +133,28 @@ func Transaction(ctx *cli.Context) error {
 			r.Address = sender
 		}
 		// Check intrinsic gas
+		value, overflow := uint256.FromBig(tx.Value())
+		if overflow {
+			// A 256-bit overflow is reported by the field validation below; use a
+			// non-zero placeholder so intrinsic gas is still computed and reported.
+			value = uint256.NewInt(1)
+		}
 		rules := chainConfig.Rules(common.Big0, true, 0)
-		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), tx.To() == nil, rules, params.CostPerStateByte)
+		cost, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), r.Address, tx.To(), value, rules)
 		if err != nil {
 			r.Error = err
 			results = append(results, r)
 			continue
 		}
-		r.IntrinsicGas = cost.RegularGas
-		if tx.Gas() < cost.RegularGas {
-			r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), cost.RegularGas)
+		r.IntrinsicGas = cost
+		if tx.Gas() < cost {
+			r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), cost)
 			results = append(results, r)
 			continue
 		}
 		// For Prague txs, validate the floor data gas.
 		if rules.IsPrague {
-			floorDataGas, err := core.FloorDataGas(rules, tx.Data(), tx.AccessList())
+			floorDataGas, err := core.FloorDataGas(rules, r.Address, tx.To(), value, tx.Data(), tx.AccessList())
 			if err != nil {
 				r.Error = err
 				results = append(results, r)

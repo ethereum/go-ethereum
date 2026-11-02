@@ -750,9 +750,11 @@ func (t *UDPv5) handlePacket(rawpacket []byte, fromAddr netip.AddrPort) error {
 			t.unhandled <- up
 			return nil
 		}
+		v5BadPacketMeter.Mark(1)
 		t.log.Debug("Bad discv5 packet", "id", fromID, "addr", addr, "err", err)
 		return err
 	}
+	markInbound(packet.Name())
 	if fromNode != nil {
 		// Handshake succeeded, add to table.
 		t.tab.addInboundNode(fromNode)

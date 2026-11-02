@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/log"
@@ -188,12 +187,17 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 	}
 	log.Debug("Searching beacon ancestor", "local", number, "beaconhead", beaconHead.Number, "beacontail", beaconTail.Number)
 
-	var linked bool
+	// Require the canonical mapping, not just presence by hash, so orphans and
+	// side chains are re-delivered instead of left in place.
+	var (
+		linked bool
+		num    = beaconTail.Number.Uint64() - 1
+	)
 	switch d.getMode() {
 	case ethconfig.FullSync:
-		linked = d.blockchain.HasBlock(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
+		linked = d.blockchain.GetCanonicalHash(num) == beaconTail.ParentHash && d.blockchain.HasBlock(beaconTail.ParentHash, num)
 	case ethconfig.SnapSync:
-		linked = d.blockchain.HasFastBlock(beaconTail.ParentHash, beaconTail.Number.Uint64()-1)
+		linked = d.blockchain.GetCanonicalHash(num) == beaconTail.ParentHash && d.blockchain.HasFastBlock(beaconTail.ParentHash, num)
 	default:
 		panic("unknown sync mode")
 	}
@@ -226,12 +230,14 @@ func (d *Downloader) findBeaconAncestor() (uint64, error) {
 		}
 		n := h.Number.Uint64()
 
+		// Require the canonical mapping, not just presence by hash, so orphans
+		// and side chains are re-synced instead of treated as already owned.
 		var known bool
 		switch d.getMode() {
 		case ethconfig.FullSync:
-			known = d.blockchain.HasBlock(h.Hash(), n)
+			known = d.blockchain.GetCanonicalHash(n) == h.Hash() && d.blockchain.HasBlock(h.Hash(), n)
 		case ethconfig.SnapSync:
-			known = d.blockchain.HasFastBlock(h.Hash(), n)
+			known = d.blockchain.GetCanonicalHash(n) == h.Hash() && d.blockchain.HasFastBlock(h.Hash(), n)
 		default:
 			panic("unknown sync mode")
 		}
@@ -291,50 +297,11 @@ func (d *Downloader) fetchHeaders(from uint64) error {
 
 	for {
 		// Some beacon headers might have appeared since the last cycle, make
-		// sure we're always syncing to all available ones
+		// sure we're always syncing to all available ones.
 		head, _, _, err = d.skeleton.Bounds()
 		if err != nil {
 			return err
 		}
-		// If the pivot became stale (older than 2*64-8 (bit of wiggle room)),
-		// move it ahead to HEAD-64.
-		//
-		// The state syncer is consulted first before the pivot movement.
-		d.pivotLock.Lock()
-		if d.pivotHeader != nil && d.snapSyncer.FrozenPivot() == nil {
-			if head.Number.Uint64() > d.pivotHeader.Number.Uint64()+2*uint64(fsMinFullBlocks)-8 {
-				// Retrieve the next pivot header, either from skeleton chain
-				// or the filled chain
-				number := head.Number.Uint64() - uint64(fsMinFullBlocks)
-				if d.exactPivot {
-					number = head.Number.Uint64()
-				}
-
-				log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
-				if d.pivotHeader = d.skeleton.Header(number); d.pivotHeader == nil {
-					if number < tail.Number.Uint64() {
-						dist := tail.Number.Uint64() - number
-						if len(localHeaders) >= int(dist) {
-							d.pivotHeader = localHeaders[dist-1]
-							log.Warn("Retrieved pivot header from local", "number", d.pivotHeader.Number, "hash", d.pivotHeader.Hash(), "latest", head.Number, "oldest", tail.Number)
-						}
-					}
-				}
-				// Print an error log and return directly in case the pivot header
-				// is still not found. It means the skeleton chain is not linked
-				// correctly with local chain.
-				if d.pivotHeader == nil {
-					log.Error("Pivot header is not found", "number", number)
-					d.pivotLock.Unlock()
-					return errNoPivotHeader
-				}
-				// Write out the pivot into the database so a rollback beyond
-				// it will reenable snap sync and update the state root that
-				// the state syncer will be downloading
-				rawdb.WriteLastPivotNumber(d.stateDB, d.pivotHeader.Number.Uint64())
-			}
-		}
-		d.pivotLock.Unlock()
 
 		// Retrieve a batch of headers and feed it to the header processor
 		var (

@@ -22,6 +22,7 @@ func (p PayloadAttributes) MarshalJSON() ([]byte, error) {
 		Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 		BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
 		SlotNumber            *hexutil.Uint64     `json:"slotNumber"`
+		TargetGasLimit        *hexutil.Uint64     `json:"targetGasLimit"`
 	}
 	var enc PayloadAttributes
 	enc.Timestamp = hexutil.Uint64(p.Timestamp)
@@ -30,6 +31,7 @@ func (p PayloadAttributes) MarshalJSON() ([]byte, error) {
 	enc.Withdrawals = p.Withdrawals
 	enc.BeaconRoot = p.BeaconRoot
 	enc.SlotNumber = (*hexutil.Uint64)(p.SlotNumber)
+	enc.TargetGasLimit = (*hexutil.Uint64)(p.TargetGasLimit)
 	return json.Marshal(&enc)
 }
 
@@ -42,6 +44,7 @@ func (p *PayloadAttributes) UnmarshalJSON(input []byte) error {
 		Withdrawals           []*types.Withdrawal `json:"withdrawals"`
 		BeaconRoot            *common.Hash        `json:"parentBeaconBlockRoot"`
 		SlotNumber            *hexutil.Uint64     `json:"slotNumber"`
+		TargetGasLimit        *hexutil.Uint64     `json:"targetGasLimit"`
 	}
 	var dec PayloadAttributes
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -67,6 +70,9 @@ func (p *PayloadAttributes) UnmarshalJSON(input []byte) error {
 	}
 	if dec.SlotNumber != nil {
 		p.SlotNumber = (*uint64)(dec.SlotNumber)
+	}
+	if dec.TargetGasLimit != nil {
+		p.TargetGasLimit = (*uint64)(dec.TargetGasLimit)
 	}
 	return nil
 }

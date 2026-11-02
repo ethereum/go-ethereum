@@ -160,17 +160,29 @@ func buildCapabilities(headNum uint64, headHash common.Hash, cutoff uint64, ret 
 		return res
 	}
 
-	// Bodies and receipts share the same retention model in
-	// geth: they are either kept in full ("all") or pruned to a fixed
-	// boundary ("postmerge"). In neither case is there a sliding deletion
-	// window, so deleteStrategy is omitted and oldestBlock equals the history
-	// pruning cutoff.
+	// Bodies and receipt data are retained together under the history
+	// pruning policy: either kept in full ("all") or pruned to a fixed
+	// boundary ("postmerge"). There is no sliding deletion window for
+	// blocks, so deleteStrategy is omitted and oldestBlock equals the
+	// history pruning cutoff.
 	blocks := CapabilityResource{
 		OldestBlock: capabilityOldestBlock(cutoff),
 	}
-	receipts := blocks
 
 	tx := resource(false, ret.TxIndexHistory, cutoff)
+
+	// Hash-keyed receipt lookups (eth_getTransactionReceipt) resolve the
+	// transaction through the tx lookup index before loading the receipt,
+	// so they fail below the tx index tail even though receipt data is
+	// retained down to the cutoff. eth_capabilities lists receipts as
+	// affecting that method, so bound receipts by the tx index tail to
+	// keep routers from sending lookups the node answers with null.
+	receipts := blocks
+	if tx.OldestBlock != nil && *tx.OldestBlock > *receipts.OldestBlock {
+		oldest := *tx.OldestBlock
+		receipts.OldestBlock = &oldest
+	}
+
 	logs := resource(ret.LogIndexDisabled, ret.LogIndexHistory, cutoff)
 
 	// State availability is determined primarily by gcmode:

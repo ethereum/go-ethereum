@@ -36,6 +36,11 @@ type Getter struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *Getter) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewGetter creates a new instance of Getter.
 func NewGetter() *Getter {
 	parsed, err := GetterMetaData.ParseABI()

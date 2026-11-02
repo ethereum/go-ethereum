@@ -1,0 +1,29 @@
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directories:
+      - "/"
+      - "/cmd/keeper"
+    schedule:
+      interval: weekly
+    # 0 turns off version-update PRs. Security PRs aren't subject to the limit.
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: "go.mod"
+    groups:
+      otel:
+        applies-to: security-updates
+        patterns:
+          - "go.opentelemetry.io/*"
+      golang-x:
+        applies-to: security-updates
+        patterns:
+          - "golang.org/x/*"
+      google:
+        applies-to: security-updates
+        patterns:
+          - "google.golang.org/*"
+      pion:
+        applies-to: security-updates
+        patterns:
+          - "github.com/pion/*"

@@ -75,6 +75,10 @@ func (mt *mockTransactor) SendTransaction(ctx context.Context, tx *types.Transac
 	return nil
 }
 
+func (mt *mockTransactor) TransactionByHash(ctx context.Context, hash common.Hash) (*types.Transaction, bool, error) {
+	return nil, false, nil
+}
+
 type mockCaller struct {
 	codeAtBlockNumber       *big.Int
 	callContractBlockNumber *big.Int
@@ -372,6 +376,14 @@ func TestTransactGasFee(t *testing.T) {
 	assert.Nil(err)
 	assert.Equal(big.NewInt(6), tx.GasPrice())
 	assert.True(mt.suggestGasPriceCalled)
+
+	// GasPrice together with an access list
+	opts = &bind.TransactOpts{Signer: mockSign, GasPrice: big.NewInt(7), AccessList: types.AccessList{{Address: common.Address{0xaa}}}}
+	tx, err = bc.Transact(opts, "")
+	assert.Nil(err)
+	assert.Equal(uint8(types.AccessListTxType), tx.Type())
+	assert.Equal(big.NewInt(7), tx.GasPrice())
+	assert.Equal(opts.AccessList, tx.AccessList())
 }
 
 func unpackAndCheck(t *testing.T, bc *bind.BoundContract, expected map[string]interface{}, mockLog types.Log) {

@@ -117,15 +117,16 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 		log.Debug("Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
 		hi = gasCap
 	}
-	// If the transaction is a plain value transfer, short circuit estimation and
-	// directly try 21000. Returning 21000 without any execution is dangerous as
-	// some tx field combos might bump the price up even for plain transfers (e.g.
-	// unused access list items). Ever so slightly wasteful, but safer overall.
+	// If the transaction is a plain value transfer, short circuit estimation by
+	// executing it once with a 21000 gas limit and returning the gas it used:
+	// exact, since a plain transfer runs no code and gets no refunds, and since
+	// EIP-2780 it can cost less than 21000. The trial execution guards against
+	// tx field combos that bump the price up (e.g. unused access list items).
 	if len(call.Data) == 0 {
 		if call.To != nil && opts.State.GetCodeSize(*call.To) == 0 {
-			failed, _, err := execute(ctx, call, opts, params.TxGas)
+			failed, result, err := execute(ctx, call, opts, params.TxGas)
 			if !failed && err == nil {
-				return params.TxGas, nil, nil
+				return result.UsedGas, nil, nil
 			}
 		}
 	}

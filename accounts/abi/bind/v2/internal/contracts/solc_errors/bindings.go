@@ -36,6 +36,11 @@ type C struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *C) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewC creates a new instance of C.
 func NewC() *C {
 	parsed, err := CMetaData.ParseABI()
@@ -171,6 +176,11 @@ var C2MetaData = bind.MetaData{
 // C2 is an auto generated Go binding around an Ethereum contract.
 type C2 struct {
 	abi abi.ABI
+}
+
+// GetABI returns the ABI associated with this contract binding.
+func (c *C2) GetABI() abi.ABI {
+	return c.abi
 }
 
 // NewC2 creates a new instance of C2.

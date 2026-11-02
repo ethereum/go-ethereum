@@ -36,6 +36,11 @@ type Crowdsale struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *Crowdsale) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewCrowdsale creates a new instance of Crowdsale.
 func NewCrowdsale() *Crowdsale {
 	parsed, err := CrowdsaleMetaData.ParseABI()

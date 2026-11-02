@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/forkid"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/types/bal"
+	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -33,6 +33,7 @@ const (
 	ETH69 = 69
 	ETH70 = 70
 	ETH71 = 71
+	ETH72 = 72
 )
 
 // ProtocolName is the official short name of the `eth` protocol used during
@@ -41,11 +42,11 @@ const ProtocolName = "eth"
 
 // ProtocolVersions are the supported versions of the `eth` protocol (first
 // is primary).
-var ProtocolVersions = []uint{ETH71, ETH70, ETH69}
+var ProtocolVersions = []uint{ETH72, ETH71, ETH70, ETH69}
 
 // protocolLengths are the number of implemented message corresponding to
 // different protocol versions.
-var protocolLengths = map[uint]uint64{ETH71: 20, ETH69: 18, ETH70: 18}
+var protocolLengths = map[uint]uint64{ETH69: 18, ETH70: 18, ETH71: 20, ETH72: 22}
 
 // maxMessageSize is the maximum cap on the size of a protocol message.
 const maxMessageSize = 10 * 1024 * 1024
@@ -70,6 +71,8 @@ const (
 	BlockRangeUpdateMsg           = 0x11
 	GetBlockAccessListsMsg        = 0x12
 	BlockAccessListsMsg           = 0x13
+	GetCellsMsg                   = 0x14
+	CellsMsg                      = 0x15
 )
 
 var (
@@ -249,11 +252,21 @@ type ReceiptsPacket70 struct {
 // ReceiptsRLPResponse is used for receipts, when we already have it encoded
 type ReceiptsRLPResponse []rlp.RawValue
 
-// NewPooledTransactionHashesPacket represents a transaction announcement packet on eth/68 and newer.
-type NewPooledTransactionHashesPacket struct {
+// NewPooledTransactionHashesPacket71 represents a transaction announcement packet on protocol version
+// less than or equal to 71.
+type NewPooledTransactionHashesPacket71 struct {
 	Types  []byte
 	Sizes  []uint32
 	Hashes []common.Hash
+}
+
+// NewPooledTransactionHashesPacket72 represents a transaction announcement packet on ETH/72
+// with an additional custody bitmap field for cell-based blob data availability.
+type NewPooledTransactionHashesPacket72 struct {
+	Types  []byte
+	Sizes  []uint32
+	Hashes []common.Hash
+	Mask   types.CustodyBitmap
 }
 
 // GetPooledTransactionsRequest represents a transaction query.
@@ -292,6 +305,34 @@ type BlockRangeUpdatePacket struct {
 	LatestBlockHash common.Hash
 }
 
+// GetCellsRequest represents a request for cells of blob transactions.
+type GetCellsRequest struct {
+	Hashes []common.Hash
+	Mask   types.CustodyBitmap
+}
+
+// GetCellsRequestPacket represents a cell request with request ID wrapping.
+type GetCellsRequestPacket struct {
+	RequestId uint64
+	Hashes    []common.Hash
+	Mask      types.CustodyBitmap
+}
+
+// CellsResponse represents a response containing cells for blob transactions.
+type CellsResponse struct {
+	Hashes []common.Hash
+	Cells  rlp.RawList[rlp.RawList[kzg4844.Cell]]
+	Mask   types.CustodyBitmap
+}
+
+// CellsPacket represents a cells response with request ID wrapping.
+type CellsPacket struct {
+	RequestId uint64
+	Hashes    []common.Hash
+	Cells     rlp.RawList[rlp.RawList[kzg4844.Cell]]
+	Mask      types.CustodyBitmap
+}
+
 type GetBlockAccessListsRequest []common.Hash
 
 type GetBlockAccessListsPacket struct {
@@ -299,15 +340,14 @@ type GetBlockAccessListsPacket struct {
 	GetBlockAccessListsRequest
 }
 
-type RawBlockAccessList struct {
-	rlp.RawList[bal.AccountAccess]
-}
-
-type BlockAccessListResponse []RawBlockAccessList
+// BlockAccessListResponse holds one raw entry per requested hash. Entries are
+// kept as raw values because, per EIP-8159, the RLP empty string signals an
+// unavailable BAL (an empty list is itself a valid BAL).
+type BlockAccessListResponse []rlp.RawValue
 
 type BlockAccessListPacket struct {
 	RequestId uint64
-	List      rlp.RawList[RawBlockAccessList]
+	List      rlp.RawList[rlp.RawValue]
 }
 
 func (*StatusPacket) Name() string { return "Status" }
@@ -328,8 +368,11 @@ func (*GetBlockBodiesRequest) Kind() byte   { return GetBlockBodiesMsg }
 func (*BlockBodiesResponse) Name() string { return "BlockBodies" }
 func (*BlockBodiesResponse) Kind() byte   { return BlockBodiesMsg }
 
-func (*NewPooledTransactionHashesPacket) Name() string { return "NewPooledTransactionHashes" }
-func (*NewPooledTransactionHashesPacket) Kind() byte   { return NewPooledTransactionHashesMsg }
+func (*NewPooledTransactionHashesPacket71) Name() string { return "NewPooledTransactionHashes" }
+func (*NewPooledTransactionHashesPacket71) Kind() byte   { return NewPooledTransactionHashesMsg }
+
+func (*NewPooledTransactionHashesPacket72) Name() string { return "NewPooledTransactionHashes" }
+func (*NewPooledTransactionHashesPacket72) Kind() byte   { return NewPooledTransactionHashesMsg }
 
 func (*GetPooledTransactionsRequest) Name() string { return "GetPooledTransactions" }
 func (*GetPooledTransactionsRequest) Kind() byte   { return GetPooledTransactionsMsg }
@@ -354,3 +397,9 @@ func (*GetBlockAccessListsRequest) Kind() byte   { return GetBlockAccessListsMsg
 
 func (*BlockAccessListResponse) Name() string { return "BlockAccessLists" }
 func (*BlockAccessListResponse) Kind() byte   { return BlockAccessListsMsg }
+
+func (*GetCellsRequest) Name() string { return "GetCells" }
+func (*GetCellsRequest) Kind() byte   { return GetCellsMsg }
+
+func (*CellsResponse) Name() string { return "Cells" }
+func (*CellsResponse) Kind() byte   { return CellsMsg }

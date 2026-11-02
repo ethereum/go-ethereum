@@ -19,7 +19,7 @@ func (s SetCodeAuthorization) MarshalJSON() ([]byte, error) {
 		ChainID hexutil.U256   `json:"chainId" gencodec:"required"`
 		Address common.Address `json:"address" gencodec:"required"`
 		Nonce   hexutil.Uint64 `json:"nonce" gencodec:"required"`
-		V       hexutil.Uint64 `json:"yParity" gencodec:"required"`
+		V       yParityJSON    `json:"yParity" gencodec:"required"`
 		R       hexutil.U256   `json:"r" gencodec:"required"`
 		S       hexutil.U256   `json:"s" gencodec:"required"`
 	}
@@ -27,7 +27,7 @@ func (s SetCodeAuthorization) MarshalJSON() ([]byte, error) {
 	enc.ChainID = hexutil.U256(s.ChainID)
 	enc.Address = s.Address
 	enc.Nonce = hexutil.Uint64(s.Nonce)
-	enc.V = hexutil.Uint64(s.V)
+	enc.V = yParityJSON(s.V)
 	enc.R = hexutil.U256(s.R)
 	enc.S = hexutil.U256(s.S)
 	return json.Marshal(&enc)
@@ -39,7 +39,7 @@ func (s *SetCodeAuthorization) UnmarshalJSON(input []byte) error {
 		ChainID *hexutil.U256   `json:"chainId" gencodec:"required"`
 		Address *common.Address `json:"address" gencodec:"required"`
 		Nonce   *hexutil.Uint64 `json:"nonce" gencodec:"required"`
-		V       *hexutil.Uint64 `json:"yParity" gencodec:"required"`
+		V       *yParityJSON    `json:"yParity" gencodec:"required"`
 		R       *hexutil.U256   `json:"r" gencodec:"required"`
 		S       *hexutil.U256   `json:"s" gencodec:"required"`
 	}

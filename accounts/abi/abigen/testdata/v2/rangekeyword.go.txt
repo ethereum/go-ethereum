@@ -36,6 +36,11 @@ type RangeKeyword struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *RangeKeyword) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewRangeKeyword creates a new instance of RangeKeyword.
 func NewRangeKeyword() *RangeKeyword {
 	parsed, err := RangeKeywordMetaData.ParseABI()

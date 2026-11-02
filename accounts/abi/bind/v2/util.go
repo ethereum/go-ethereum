@@ -75,3 +75,28 @@ func WaitDeployed(ctx context.Context, b DeployBackend, hash common.Hash) (commo
 	}
 	return receipt.ContractAddress, err
 }
+
+func WaitAccepted(ctx context.Context, d ContractBackend, txHash common.Hash) error {
+	queryTicker := time.NewTicker(time.Second)
+	defer queryTicker.Stop()
+	logger := log.New("hash", txHash)
+	for {
+		_, _, err := d.TransactionByHash(ctx, txHash)
+		if err == nil {
+			return nil
+		}
+
+		if errors.Is(err, ethereum.NotFound) { // TODO: check this is emitted
+			logger.Trace("Transaction not yet accepted")
+		} else {
+			logger.Trace("Transaction submission failed", "err", err)
+		}
+
+		// Wait for the next round.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-queryTicker.C:
+		}
+	}
+}

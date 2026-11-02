@@ -85,3 +85,7 @@ func ckzgComputeCells(blobs []Blob) ([]Cell, error) {
 func ckzgRecoverBlobs(cells []Cell, cellIndices []uint64) ([]Blob, error) {
 	panic("unsupported platform")
 }
+
+func ckzgRecoverCells(cells []Cell, cellIndices []uint64) ([]Cell, error) {
+	panic("unsupported platform")
+}

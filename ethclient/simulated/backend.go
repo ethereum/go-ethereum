@@ -18,6 +18,7 @@ package simulated
 
 import (
 	"errors"
+	"maps"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -78,11 +79,17 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 	nodeConf.DataDir = ""
 	nodeConf.P2P = p2p.Config{NoDiscovery: true}
 
+	// The dev chain starts out on every fork, so the system contracts those forks
+	// call into have to be present from genesis. The caller's alloc wins on
+	// conflict, and is copied rather than mutated in place.
+	genesisAlloc := core.SystemContractAllocs()
+	maps.Copy(genesisAlloc, alloc)
+
 	ethConf := ethconfig.Defaults
 	ethConf.Genesis = &core.Genesis{
 		Config:   params.AllDevChainProtocolChanges,
 		GasLimit: ethconfig.Defaults.Miner.GasCeil,
-		Alloc:    alloc,
+		Alloc:    genesisAlloc,
 	}
 	ethConf.SyncMode = ethconfig.FullSync
 	ethConf.TxPool.NoLocals = true

@@ -36,6 +36,11 @@ type IdentifierCollision struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *IdentifierCollision) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewIdentifierCollision creates a new instance of IdentifierCollision.
 func NewIdentifierCollision() *IdentifierCollision {
 	parsed, err := IdentifierCollisionMetaData.ParseABI()

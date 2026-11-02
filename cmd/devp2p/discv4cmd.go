@@ -17,10 +17,10 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
-	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -29,11 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/devp2p/internal/v4test"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/urfave/cli/v2"
 )
 
@@ -126,7 +124,7 @@ var (
 	}
 	extAddrFlag = &cli.StringFlag{
 		Name:  "extaddr",
-		Usage: "UDP endpoint announced in ENR. You can provide a bare IP address or IP:port as the value of this flag.",
+		Usage: "UDP endpoint announced in ENR. You can provide a bare IP address or IP:port as the value of this flag. Provide a comma-separated pair to announce both an IPv4 and an IPv6 endpoint.",
 	}
 	crawlTimeoutFlag = &cli.DurationFlag{
 		Name:  "timeout",
@@ -176,19 +174,7 @@ func discv4Listen(ctx *cli.Context) error {
 
 	fmt.Println(disc.Self())
 
-	httpAddr := ctx.String(httpAddrFlag.Name)
-	if httpAddr == "" {
-		// Non-HTTP mode.
-		select {}
-	}
-
-	api := &discv4API{disc}
-	log.Info("Starting RPC API server", "addr", httpAddr)
-	srv := rpc.NewServer()
-	srv.RegisterName("discv4", api)
-	http.DefaultServeMux.Handle("/", srv)
-	httpsrv := http.Server{Addr: httpAddr, Handler: http.DefaultServeMux}
-	return httpsrv.ListenAndServe()
+	return runRPCServer(ctx.String(httpAddrFlag.Name), map[string]any{"discv4": &discv4API{disc}})
 }
 
 func discv4RequestRecord(ctx *cli.Context) error {
@@ -344,36 +330,60 @@ func parseExtAddr(spec string) (ip net.IP, port int, ok bool) {
 
 func listen(ctx *cli.Context, ln *enode.LocalNode) *net.UDPConn {
 	addr := ctx.String(listenAddrFlag.Name)
+	extAddr := ctx.String(extAddrFlag.Name)
+	var (
+		socket net.PacketConn
+		err    error
+	)
 	if addr == "" {
-		addr = "0.0.0.0:0"
+		// Dual-stack socket, falling back to IPv4-only where IPv6 is unavailable.
+		if socket, err = net.ListenPacket("udp", "[::]:0"); err != nil {
+			socket, err = net.ListenPacket("udp", "0.0.0.0:0")
+		}
+	} else {
+		socket, err = net.ListenPacket("udp", addr)
 	}
-	socket, err := net.ListenPacket("udp4", addr)
 	if err != nil {
 		exit(err)
 	}
 
-	// Configure UDP endpoint in ENR from listener address.
+	// Configure the ENR endpoint from the listener address, but only without an
+	// explicit -extaddr: otherwise we'd announce a fallback IP for an address
+	// family the user didn't specify (e.g. loopback IPv4 on an IPv6-only node).
 	usocket := socket.(*net.UDPConn)
 	uaddr := socket.LocalAddr().(*net.UDPAddr)
-	if uaddr.IP.IsUnspecified() {
-		ln.SetFallbackIP(net.IP{127, 0, 0, 1})
-	} else {
-		ln.SetFallbackIP(uaddr.IP)
+	if extAddr == "" {
+		if uaddr.IP.IsUnspecified() {
+			ln.SetFallbackIP(net.IP{127, 0, 0, 1})
+		} else {
+			ln.SetFallbackIP(uaddr.IP)
+		}
 	}
 	ln.SetFallbackUDP(uaddr.Port)
 
-	// If an ENR endpoint is set explicitly on the command-line, override
-	// the information from the listening address. Note this is careful not
-	// to set the UDP port if the external address doesn't have it.
-	extAddr := ctx.String(extAddrFlag.Name)
+	// Override with explicit -extaddr address(es). A static IP is set per family,
+	// and all specs share one UDP port because the node has a single socket.
 	if extAddr != "" {
-		ip, port, ok := parseExtAddr(extAddr)
-		if !ok {
-			exit(fmt.Errorf("-%s: invalid external address %q", extAddrFlag.Name, extAddr))
+		var extPort int
+		for spec := range strings.SplitSeq(extAddr, ",") {
+			spec = strings.TrimSpace(spec)
+			if spec == "" {
+				continue
+			}
+			ip, port, ok := parseExtAddr(spec)
+			if !ok {
+				exit(fmt.Errorf("-%s: invalid external address %q", extAddrFlag.Name, spec))
+			}
+			ln.SetStaticIP(ip)
+			if port != 0 {
+				if extPort != 0 && port != extPort {
+					exit(fmt.Errorf("-%s: all addresses must announce the same UDP port, got %d and %d", extAddrFlag.Name, extPort, port))
+				}
+				extPort = port
+			}
 		}
-		ln.SetStaticIP(ip)
-		if port != 0 {
-			ln.SetFallbackUDP(port)
+		if extPort != 0 {
+			ln.SetFallbackUDP(extPort)
 		}
 	}
 
@@ -404,12 +414,15 @@ type discv4API struct {
 	host *discover.UDPv4
 }
 
-func (api *discv4API) LookupRandom(n int) (ns []*enode.Node) {
+func (api *discv4API) LookupRandom(ctx context.Context, n int) []*enode.Node {
+	n = min(n, maxLookupResults)
 	it := api.host.RandomNodes()
-	for len(ns) < n && it.Next() {
-		ns = append(ns, it.Node())
-	}
-	return ns
+	defer it.Close()
+	go func() {
+		<-ctx.Done()
+		it.Close()
+	}()
+	return enode.ReadNodes(it, n)
 }
 
 func (api *discv4API) Buckets() [][]discover.BucketNode {

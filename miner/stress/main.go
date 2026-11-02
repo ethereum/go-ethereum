@@ -138,7 +138,10 @@ func makeGenesis(faucets []*ecdsa.PrivateKey) *core.Genesis {
 
 	blockZero := uint64(0)
 	config.AmsterdamTime = &blockZero
-	config.BlobScheduleConfig.Amsterdam = &params.BlobConfig{
+	// Amsterdam inherits its blob schedule from the most recent BPO; activate BPO1
+	// at the same time with the target/max we want exercised by the stress harness.
+	config.BPO1Time = &blockZero
+	config.BlobScheduleConfig.BPO1 = &params.BlobConfig{
 		Target:         14,
 		Max:            21,
 		UpdateFraction: 13739630,

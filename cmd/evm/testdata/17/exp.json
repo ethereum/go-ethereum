@@ -12,11 +12,9 @@
       "intrinsicGas": "0x5208"
     },
     {
-      "error": "invalid transaction v, r, s values",
-      "hash": "0xf06691c2a803ab7f3c81d06a0c0a896f80f311105c599fc59a9fdbc669356d35"
+      "error": "transaction chain id or signature value exceeds 256 bits"
     },
     {
-      "error": "invalid transaction v, r, s values",
-      "hash": "0x84703b697ad5b0db25e4f1f98fb6b1adce85b9edb2232eeba9cedd8c6601694b"
+      "error": "transaction chain id or signature value exceeds 256 bits"
     }
 ]

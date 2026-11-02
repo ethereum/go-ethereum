@@ -434,7 +434,6 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
 		},
 	},
 	"PragueToOsakaAtTime15k": {
@@ -461,7 +460,6 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
 		},
 	},
 	"BPO1": {
@@ -489,8 +487,7 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			BPO1:   bpo1BlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
 		},
 	},
 	"OsakaToBPO1AtTime15k": {
@@ -518,8 +515,7 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			BPO1:   bpo1BlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
 		},
 	},
 	"BPO2": {
@@ -548,9 +544,8 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			BPO1:   bpo1BlobConfig,
-			BPO2:   bpo2BlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
 		},
 	},
 	"BPO1ToBPO2AtTime15k": {
@@ -579,9 +574,8 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			BPO1:   bpo1BlobConfig,
-			BPO2:   bpo2BlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
 		},
 	},
 	"BPO3": {
@@ -611,9 +605,8 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			BPO1:   bpo1BlobConfig,
-			BPO2:   bpo2BlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
 			BPO3:   params.DefaultBPO3BlobConfig,
 		},
 	},
@@ -644,9 +637,8 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			BPO1:   bpo1BlobConfig,
-			BPO2:   bpo2BlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
 			BPO3:   params.DefaultBPO3BlobConfig,
 		},
 	},
@@ -678,9 +670,8 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			BPO1:   bpo1BlobConfig,
-			BPO2:   bpo2BlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
 			BPO3:   params.DefaultBPO3BlobConfig,
 			BPO4:   params.DefaultBPO4BlobConfig,
 		},
@@ -713,9 +704,8 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
-			BPO1:   bpo1BlobConfig,
-			BPO2:   bpo2BlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
 			BPO3:   params.DefaultBPO3BlobConfig,
 			BPO4:   params.DefaultBPO4BlobConfig,
 		},
@@ -742,19 +732,44 @@ var Forks = map[string]*params.ChainConfig{
 		OsakaTime:               u64(0),
 		BPO1Time:                u64(0),
 		BPO2Time:                u64(0),
-		BPO3Time:                u64(0),
-		BPO4Time:                u64(0),
 		AmsterdamTime:           u64(0),
 		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
-			Cancun:    params.DefaultCancunBlobConfig,
-			Prague:    params.DefaultPragueBlobConfig,
-			Osaka:     params.DefaultOsakaBlobConfig,
-			BPO1:      bpo1BlobConfig,
-			BPO2:      bpo2BlobConfig,
-			BPO3:      params.DefaultBPO3BlobConfig,
-			BPO4:      params.DefaultBPO4BlobConfig,
-			Amsterdam: params.DefaultBPO4BlobConfig, // TODO update when defined
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
+		},
+	},
+	"BPO2ToAmsterdamAtTime15k": {
+		ChainID:                 big.NewInt(1),
+		HomesteadBlock:          big.NewInt(0),
+		EIP150Block:             big.NewInt(0),
+		EIP155Block:             big.NewInt(0),
+		EIP158Block:             big.NewInt(0),
+		ByzantiumBlock:          big.NewInt(0),
+		ConstantinopleBlock:     big.NewInt(0),
+		PetersburgBlock:         big.NewInt(0),
+		IstanbulBlock:           big.NewInt(0),
+		MuirGlacierBlock:        big.NewInt(0),
+		BerlinBlock:             big.NewInt(0),
+		LondonBlock:             big.NewInt(0),
+		ArrowGlacierBlock:       big.NewInt(0),
+		MergeNetsplitBlock:      big.NewInt(0),
+		TerminalTotalDifficulty: big.NewInt(0),
+		ShanghaiTime:            u64(0),
+		CancunTime:              u64(0),
+		PragueTime:              u64(0),
+		OsakaTime:               u64(0),
+		BPO1Time:                u64(0),
+		BPO2Time:                u64(0),
+		AmsterdamTime:           u64(15_000),
+		DepositContractAddress:  params.MainnetChainConfig.DepositContractAddress,
+		BlobScheduleConfig: &params.BlobScheduleConfig{
+			Cancun: params.DefaultCancunBlobConfig,
+			Prague: params.DefaultPragueBlobConfig,
+			BPO1:   params.DefaultBPO1BlobConfig,
+			BPO2:   params.DefaultBPO2BlobConfig,
 		},
 	},
 	"Verkle": {
@@ -801,21 +816,15 @@ var Forks = map[string]*params.ChainConfig{
 		BlobScheduleConfig: &params.BlobScheduleConfig{
 			Cancun: params.DefaultCancunBlobConfig,
 			Prague: params.DefaultPragueBlobConfig,
-			Osaka:  params.DefaultOsakaBlobConfig,
 		},
 	},
 }
 
-var bpo1BlobConfig = &params.BlobConfig{
-	Target:         9,
-	Max:            14,
-	UpdateFraction: 8832827,
-}
-
-var bpo2BlobConfig = &params.BlobConfig{
-	Target:         14,
-	Max:            21,
-	UpdateFraction: 13739630,
+func init() {
+	// Execution-spec-tests fixtures use the historical upgrade names for
+	// the EIP150 and EIP158 rulesets.
+	Forks["TangerineWhistle"] = Forks["EIP150"]
+	Forks["SpuriousDragon"] = Forks["EIP158"]
 }
 
 // AvailableForks returns the set of defined fork names

@@ -17,10 +17,14 @@
 package types
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/attestantio/go-eth2-client/spec/altair"
+	"github.com/attestantio/go-eth2-client/spec/gloas"
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -33,6 +37,15 @@ func TestBlockFromJSON(t *testing.T) {
 		wantBlockHash   common.Hash
 	}
 	tests := []blocktest{
+		{
+			// fulu reuses the electra block format, so an electra block
+			// must decode successfully with the fulu fork name as well
+			file:            "block_electra_withdrawals.json",
+			version:         "fulu",
+			wantSlot:        151850,
+			wantBlockNumber: 141654,
+			wantBlockHash:   common.HexToHash("0xf6730485a38be5ada3e110990a2c7adaabd2e8d4a49782134f1a8bfbc246a5d7"),
+		},
 		{
 			file:            "block_electra_withdrawals.json",
 			version:         "electra",
@@ -71,7 +84,7 @@ func TestBlockFromJSON(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.file, func(t *testing.T) {
+		t.Run(test.file+"/"+test.version, func(t *testing.T) {
 			data, err := os.ReadFile(filepath.Join("testdata", test.file))
 			if err != nil {
 				t.Fatal(err)
@@ -94,5 +107,52 @@ func TestBlockFromJSON(t *testing.T) {
 				t.Errorf("wrong block hash: %v", execBlock.Hash())
 			}
 		})
+	}
+}
+
+func TestGloasBlockFromJSON(t *testing.T) {
+	bidHash := common.HexToHash("0x4")
+	obj := &gloas.BeaconBlock{
+		Slot:          144512,
+		ProposerIndex: 780,
+		ParentRoot:    phase0.Root(common.HexToHash("0x1")),
+		StateRoot:     phase0.Root(common.HexToHash("0x2")),
+		Body: &gloas.BeaconBlockBody{
+			ETH1Data:      &phase0.ETH1Data{BlockHash: make([]byte, 32)},
+			SyncAggregate: &altair.SyncAggregate{SyncCommitteeBits: make([]byte, 64)},
+			SignedExecutionPayloadBid: &gloas.SignedExecutionPayloadBid{
+				Message: &gloas.ExecutionPayloadBid{
+					ParentBlockHash: phase0.Hash32(common.HexToHash("0x3")),
+					BlockHash:       phase0.Hash32(bidHash),
+					Slot:            144512,
+				},
+			},
+			ParentExecutionRequests: &gloas.ExecutionRequests{},
+		},
+	}
+	data, err := json.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, err := BlockFromJSON("gloas", data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if block.Slot() != 144512 {
+		t.Fatalf("slot = %d, want 144512", block.Slot())
+	}
+	root, _ := obj.HashTreeRoot()
+	if block.Root() != common.Hash(root) {
+		t.Fatalf("root = %x, want %x", block.Root(), root)
+	}
+	if header := block.Header(); header.Hash() != common.Hash(root) {
+		t.Fatalf("header root = %x, want %x", header.Hash(), root)
+	}
+	if _, err := block.ExecutionPayload(); err == nil {
+		t.Fatal("missing Gloas envelope accepted")
+	}
+	wrongEnvelope := []byte(`{"beacon_block_root":"0x0000000000000000000000000000000000000000000000000000000000000002"}`)
+	if err := block.SetGloasPayloadEnvelope(wrongEnvelope); err == nil {
+		t.Fatal("envelope with wrong beacon root accepted")
 	}
 }

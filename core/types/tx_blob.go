@@ -144,7 +144,11 @@ func (sc *BlobTxSidecar) encodedSize() uint64 {
 	for i := range sc.Proofs {
 		proofs += rlp.BytesSize(sc.Proofs[i][:])
 	}
-	return rlp.ListSize(blobs) + rlp.ListSize(commitments) + rlp.ListSize(proofs)
+	size := rlp.ListSize(blobs) + rlp.ListSize(commitments) + rlp.ListSize(proofs)
+	if sc.Version != BlobSidecarVersion0 {
+		size += uint64(rlp.IntSize(uint64(sc.Version)))
+	}
+	return size
 }
 
 // ValidateBlobCommitmentHashes checks whether the given hashes correspond to the
@@ -174,6 +178,16 @@ func (sc *BlobTxSidecar) Copy() *BlobTxSidecar {
 		Commitments: slices.Clone(sc.Commitments),
 		Proofs:      slices.Clone(sc.Proofs),
 	}
+}
+
+// BlobTxCellSidecar is a sidecar that carries cells instead of blobs.
+// The Custody field represents which cells of each blob this sidecar contains.
+type BlobTxCellSidecar struct {
+	Version     byte
+	Cells       []kzg4844.Cell
+	Commitments []kzg4844.Commitment
+	Proofs      []kzg4844.Proof
+	Custody     CustodyBitmap
 }
 
 // blobTxWithBlobs represents blob tx with its corresponding sidecar.

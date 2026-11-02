@@ -38,7 +38,9 @@ var (
 	ErrGasFeeCapTooLow      = errors.New("fee cap less than base fee")
 	ErrUint256Overflow      = errors.New("bigint overflow, too large for uint256")
 	errShortTypedTx         = errors.New("typed transaction too short")
-	errInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
+	errOversizedSigValue    = errors.New("transaction chain id or signature value exceeds 256 bits")
+	ErrInvalidYParity       = errors.New("'yParity' field must be 0 or 1")
+	errYParityOverflow      = errors.New("'yParity' field must fit in uint8")
 	errVYParityMismatch     = errors.New("'v' and 'yParity' fields do not match")
 	errVYParityMissing      = errors.New("missing 'yParity' or 'v' field in transaction")
 )
@@ -148,11 +150,14 @@ func (tx *Transaction) DecodeRLP(s *rlp.Stream) error {
 	case kind == rlp.List:
 		// It's a legacy transaction.
 		var inner LegacyTx
-		err := s.Decode(&inner)
-		if err == nil {
-			tx.setDecoded(&inner, rlp.ListSize(size))
+		if err := s.Decode(&inner); err != nil {
+			return err
 		}
-		return err
+		if err := validateDecoded(&inner); err != nil {
+			return err
+		}
+		tx.setDecoded(&inner, rlp.ListSize(size))
+		return nil
 	case kind == rlp.Byte:
 		return errShortTypedTx
 	default:
@@ -181,8 +186,10 @@ func (tx *Transaction) UnmarshalBinary(b []byte) error {
 	if len(b) > 0 && b[0] > 0x7f {
 		// It's a legacy transaction.
 		var data LegacyTx
-		err := rlp.DecodeBytes(b, &data)
-		if err != nil {
+		if err := rlp.DecodeBytes(b, &data); err != nil {
+			return err
+		}
+		if err := validateDecoded(&data); err != nil {
 			return err
 		}
 		tx.setDecoded(&data, uint64(len(b)))
@@ -215,8 +222,24 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
-	err := inner.decode(b[1:])
-	return inner, err
+	if err := inner.decode(b[1:]); err != nil {
+		return nil, err
+	}
+	if err := validateDecoded(inner); err != nil {
+		return nil, err
+	}
+	return inner, nil
+}
+
+func validateDecoded(inner TxData) error {
+	v, r, s := inner.rawSignatureValues()
+	if v.BitLen() > 256 || r.BitLen() > 256 || s.BitLen() > 256 {
+		return errOversizedSigValue
+	}
+	if inner.txType() != LegacyTxType && inner.chainID().BitLen() > 256 {
+		return errOversizedSigValue
+	}
+	return nil
 }
 
 // setDecoded sets the inner transaction and size after decoding.
@@ -372,7 +395,7 @@ func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
 }
 
 // calcEffectiveGasTip calculates the effective gas tip of the transaction and
-// saves the result to dst.
+// saves the result to dst. On error, dst is undefined.
 func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.Int) error {
 	if baseFee == nil {
 		if dst.SetFromBig(tx.inner.gasTipCap()) {
@@ -380,15 +403,12 @@ func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.In
 		}
 		return nil
 	}
-
-	var err error
 	if dst.SetFromBig(tx.inner.gasFeeCap()) {
 		return ErrUint256Overflow
 	}
 	if dst.Cmp(baseFee) < 0 {
-		err = ErrGasFeeCapTooLow
+		return ErrGasFeeCapTooLow
 	}
-
 	dst.Sub(dst, baseFee)
 	gasTipCap := new(uint256.Int)
 	if gasTipCap.SetFromBig(tx.inner.gasTipCap()) {
@@ -397,7 +417,7 @@ func (tx *Transaction) calcEffectiveGasTip(dst *uint256.Int, baseFee *uint256.In
 	if gasTipCap.Cmp(dst) < 0 {
 		dst.Set(gasTipCap)
 	}
-	return err
+	return nil
 }
 
 // EffectiveGasTipValue returns the effective gasTip value for the given base fee,
@@ -440,7 +460,15 @@ func (tx *Transaction) EffectiveGasTipIntCmp(other *uint256.Int, baseFee *uint25
 		return tx.GasTipCapIntCmp(other.ToBig())
 	}
 	txTip := new(uint256.Int)
-	tx.calcEffectiveGasTip(txTip, baseFee)
+	if err := tx.calcEffectiveGasTip(txTip, baseFee); err != nil {
+		if err == ErrGasFeeCapTooLow {
+			// The fee cap is below the base fee: the effective tip is
+			// negative, below any uint256.
+			return -1
+		}
+		// fall back to big int comparison in case of error
+		return tx.EffectiveGasTipValue(baseFee.ToBig()).Cmp(other.ToBig())
+	}
 	return txTip.Cmp(other)
 }
 

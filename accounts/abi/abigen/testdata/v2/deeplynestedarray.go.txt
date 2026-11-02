@@ -36,6 +36,11 @@ type DeeplyNestedArray struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *DeeplyNestedArray) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewDeeplyNestedArray creates a new instance of DeeplyNestedArray.
 func NewDeeplyNestedArray() *DeeplyNestedArray {
 	parsed, err := DeeplyNestedArrayMetaData.ParseABI()

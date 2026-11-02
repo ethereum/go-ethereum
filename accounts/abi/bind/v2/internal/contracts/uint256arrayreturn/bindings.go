@@ -36,6 +36,11 @@ type MyContract struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *MyContract) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewMyContract creates a new instance of MyContract.
 func NewMyContract() *MyContract {
 	parsed, err := MyContractMetaData.ParseABI()

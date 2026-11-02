@@ -75,11 +75,11 @@ func GetPotentialMatches(ctx context.Context, backend MatcherBackend, firstBlock
 	// find the log value index range to search
 	firstIndex, err := backend.GetBlockLvPointer(ctx, firstBlock)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve log value pointer for first block %d: %v", firstBlock, err)
+		return nil, fmt.Errorf("failed to retrieve log value pointer for first block %d: %w", firstBlock, err)
 	}
 	lastIndex, err := backend.GetBlockLvPointer(ctx, lastBlock+1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve log value pointer after last block %d: %v", lastBlock, err)
+		return nil, fmt.Errorf("failed to retrieve log value pointer after last block %d: %w", lastBlock, err)
 	}
 	if lastIndex > 0 {
 		lastIndex--
@@ -205,7 +205,7 @@ func (m *matcherEnv) process() ([]*types.Log, error) {
 					matchAllMeter.Mark(1)
 					return logs, err
 				}
-				return logs, fmt.Errorf("failed to process log index epoch %d: %v", waitEpoch, err)
+				return logs, fmt.Errorf("failed to process log index epoch %d: %w", waitEpoch, err)
 			}
 			delete(tasks, waitEpoch)
 			waitEpoch++
@@ -214,6 +214,8 @@ func (m *matcherEnv) process() ([]*types.Log, error) {
 					tasks[waitEpoch] = &task{epochIndex: waitEpoch, done: make(chan struct{})}
 				}
 			}
+		case <-m.ctx.Done():
+			return logs, m.ctx.Err()
 		}
 	}
 	return logs, nil
@@ -271,7 +273,7 @@ func (m *matcherEnv) getLogsFromMatches(matches potentialMatches) ([]*types.Log,
 		}
 		log, err := m.backend.GetLogByLvIndex(m.ctx, match)
 		if err != nil {
-			return logs, fmt.Errorf("failed to retrieve log at index %d: %v", match, err)
+			return logs, fmt.Errorf("failed to retrieve log at index %d: %w", match, err)
 		}
 		if log != nil {
 			logs = append(logs, log)
@@ -381,7 +383,7 @@ func (m *singleMatcherInstance) getMatchesForLayer(ctx context.Context, layerInd
 		groupRows, err := m.backend.GetFilterMapRows(ctx, m.mapIndices[ptr:ptr+groupLength], rowIndex, layerIndex == 0)
 		if err != nil {
 			m.stats.setState(&st, stNone)
-			return nil, fmt.Errorf("failed to retrieve filter map %d row %d: %v", m.mapIndices[ptr], rowIndex, err)
+			return nil, fmt.Errorf("failed to retrieve filter map %d row %d: %w", m.mapIndices[ptr], rowIndex, err)
 		}
 		m.stats.setState(&st, stOther)
 		for i := range groupLength {
@@ -506,7 +508,7 @@ func (m *matchAnyInstance) getMatchesForLayer(ctx context.Context, layerIndex ui
 	for i, childInstance := range m.childInstances {
 		results, err := childInstance.getMatchesForLayer(ctx, layerIndex)
 		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate child matcher on layer %d: %v", layerIndex, err)
+			return nil, fmt.Errorf("failed to evaluate child matcher on layer %d: %w", layerIndex, err)
 		}
 		for _, result := range results {
 			mr, ok := m.childResults[result.mapIndex]
@@ -756,7 +758,7 @@ func (m *matchSequenceInstance) dropIndices(dropIndices []uint32) {
 func (m *matchSequenceInstance) evalBase(ctx context.Context, layerIndex uint32) error {
 	results, err := m.baseInstance.getMatchesForLayer(ctx, layerIndex)
 	if err != nil {
-		return fmt.Errorf("failed to evaluate base matcher on layer %d: %v", layerIndex, err)
+		return fmt.Errorf("failed to evaluate base matcher on layer %d: %w", layerIndex, err)
 	}
 	var (
 		dropIndices []uint32
@@ -784,7 +786,7 @@ func (m *matchSequenceInstance) evalBase(ctx context.Context, layerIndex uint32)
 func (m *matchSequenceInstance) evalNext(ctx context.Context, layerIndex uint32) error {
 	results, err := m.nextInstance.getMatchesForLayer(ctx, layerIndex)
 	if err != nil {
-		return fmt.Errorf("failed to evaluate next matcher on layer %d: %v", layerIndex, err)
+		return fmt.Errorf("failed to evaluate next matcher on layer %d: %w", layerIndex, err)
 	}
 	var (
 		dropIndices []uint32

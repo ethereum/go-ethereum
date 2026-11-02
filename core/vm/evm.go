@@ -127,10 +127,18 @@ type EVM struct {
 	// jumpDests stores results of JUMPDEST analysis.
 	jumpDests JumpDestCache
 
+	// precompileCache stores outputs of pure precompile runs, may be nil.
+	precompileCache *PrecompileCache
+
 	readOnly   bool   // Whether to throw on stateful modifications
 	returnData []byte // Last CALL's return data for subsequent reuse
 
 	arena *stackArena
+
+	// forceTableLoop is a test-only switch. The differential test sets it so
+	// that Run uses the table loop (execTraced) for the whole call tree, which
+	// lets the test compare it against the generated dispatch.
+	forceTableLoop bool
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -147,9 +155,11 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		jumpDests:   newMapJumpDests(),
 		arena:       newArena(),
 	}
-	evm.precompiles = activePrecompiledContracts(evm.chainRules)
+	evm.precompiles = *activePrecompiledContracts(evm.chainRules)
 
 	switch {
+	case evm.chainRules.IsBogota:
+		evm.table = &bogotaInstructionSet
 	case evm.chainRules.IsAmsterdam:
 		evm.table = &amsterdamInstructionSet
 	case evm.chainRules.IsOsaka:
@@ -206,11 +216,29 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 // It is not thread-safe.
 func (evm *EVM) SetPrecompiles(precompiles PrecompiledContracts) {
 	evm.precompiles = precompiles
+	// Overridden precompiles no longer match the address keyed result cache.
+	evm.precompileCache = nil
 }
 
-// SetJumpDestCache configures the analysis cache.
+// SetJumpDestCache configures a shared analysis cache. It is fronted by a
+// per-transaction map, so that eviction from the shared cache never causes the
+// same code to be re-analysed within a transaction.
 func (evm *EVM) SetJumpDestCache(jumpDests JumpDestCache) {
-	evm.jumpDests = jumpDests
+	if jumpDests == nil {
+		evm.jumpDests = newMapJumpDests()
+		return
+	}
+	evm.jumpDests = newLayeredJumpDests(jumpDests)
+}
+
+// SetPrecompileCache configures the precompile result cache.
+func (evm *EVM) SetPrecompileCache(cache *PrecompileCache) {
+	evm.precompileCache = cache
+}
+
+// SetStateDB configures the state for interaction.
+func (evm *EVM) SetStateDB(statedb *state.StateDB) {
+	evm.StateDB = statedb
 }
 
 // SetTxContext resets the EVM with a new transaction context.
@@ -220,6 +248,11 @@ func (evm *EVM) SetTxContext(txCtx TxContext) {
 		txCtx.AccessEvents = state.NewAccessEvents()
 	}
 	evm.TxContext = txCtx
+
+	// Reset the per-tx jumpdest map
+	if jumpDests, ok := evm.jumpDests.(*layeredJumpDests); ok {
+		jumpDests.reset()
+	}
 }
 
 // Cancel cancels any running EVM operation. This may be called concurrently and
@@ -265,7 +298,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	if !syscall && !value.IsZero() && !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	snapshot, reservoir := evm.StateDB.Snapshot(), gas.StateGas
+	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
 	if !evm.StateDB.Exist(addr) {
 		if !isPrecompile && evm.chainRules.IsEIP4762 && !isSystemCall(caller) {
@@ -276,10 +309,10 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 			// list in write mode. If there is enough gas paying for the addition of the code
 			// hash leaf to the access list, then account creation will proceed unimpaired.
 			// Thus, only pay for the creation of the code hash leaf here.
-			wgas := evm.AccessEvents.CodeHashGas(addr, true, gas.RegularGas, false)
-			if _, ok := gas.ChargeRegular(wgas); !ok {
+			wgas := evm.AccessEvents.CodeHashGas(addr, true, gas.ExecutionGas, false)
+			if _, ok := gas.ChargeExecution(wgas); !ok {
 				evm.StateDB.RevertToSnapshot(snapshot)
-				return nil, gas.ExitHalt(reservoir), ErrOutOfGas
+				return nil, gas.ExitHalt(), ErrOutOfGas
 			}
 		}
 
@@ -289,16 +322,6 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 		}
 		evm.StateDB.CreateAccount(addr)
 	}
-	if evm.chainRules.IsAmsterdam && !value.IsZero() && evm.StateDB.Empty(addr) {
-		prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
-		if !ok {
-			evm.StateDB.RevertToSnapshot(snapshot)
-			return nil, gas.ExitHalt(reservoir), ErrOutOfGas
-		}
-		if evm.Config.Tracer.HasGasHook() {
-			evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
-		}
-	}
 	// Perform the value transfer only in non-syscall mode.
 	// Calling this is required even for zero-value transfers,
 	// to ensure the state clearing mechanism is applied.
@@ -307,7 +330,7 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 
 	if isPrecompile {
-		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
+		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules, evm.precompileCache)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		code := evm.resolveCode(addr)
@@ -324,15 +347,10 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	}
 
 	// Calculate the remaining gas at the end of frame
-	exitGas := gas.Exit(err, reservoir)
+	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-
-		if err != ErrExecutionReverted {
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
-			}
-		}
+		evm.traceFrameExit(gas, exitGas, err)
 	}
 	return ret, exitGas, err
 }
@@ -360,11 +378,11 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
 		return nil, gas, ErrInsufficientBalance
 	}
-	snapshot, reservoir := evm.StateDB.Snapshot(), gas.StateGas
+	snapshot := evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
+		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules, evm.precompileCache)
 	} else {
 		// Initialise a new contract and set the code that is to be used by the EVM.
 		// The contract is a scoped environment for this execution context only.
@@ -375,15 +393,10 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 	}
 
 	// Calculate the remaining gas at the end of frame
-	exitGas := gas.Exit(err, reservoir)
+	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-
-		if err != ErrExecutionReverted {
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
-			}
-		}
+		evm.traceFrameExit(gas, exitGas, err)
 	}
 	return ret, exitGas, err
 }
@@ -406,11 +419,11 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	if evm.depth > int(params.CallCreateDepth) {
 		return nil, gas, ErrDepth
 	}
-	snapshot, reservoir := evm.StateDB.Snapshot(), gas.StateGas
+	snapshot := evm.StateDB.Snapshot()
 
 	// It is allowed to call precompiles, even via delegatecall
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
+		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules, evm.precompileCache)
 	} else {
 		contract := NewContract(originCaller, caller, value, gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
@@ -419,15 +432,10 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 	}
 
 	// Calculate the remaining gas at the end of frame
-	exitGas := gas.Exit(err, reservoir)
+	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-
-		if err != ErrExecutionReverted {
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
-			}
-		}
+		evm.traceFrameExit(gas, exitGas, err)
 	}
 	return ret, exitGas, err
 }
@@ -453,7 +461,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	// after all empty accounts were deleted, so this is not required. However, if we omit this,
 	// then certain tests start failing; stRevertTest/RevertPrecompiledTouchExactOOG.json.
 	// We could change this, but for now it's left for legacy reasons
-	snapshot, reservoir := evm.StateDB.Snapshot(), gas.StateGas
+	snapshot := evm.StateDB.Snapshot()
 
 	// We do an AddBalance of zero here, just in order to trigger a touch.
 	// This doesn't matter on Mainnet, where all empties are gone at the time of Byzantium,
@@ -462,7 +470,7 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	evm.StateDB.AddBalance(addr, new(uint256.Int), tracing.BalanceChangeTouchAccount)
 
 	if p, isPrecompile := evm.precompile(addr); isPrecompile {
-		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules)
+		ret, gas, err = RunPrecompiledContract(evm.StateDB, p, addr, input, gas, evm.Config.Tracer, evm.chainRules, evm.precompileCache)
 	} else {
 		contract := NewContract(caller, addr, new(uint256.Int), gas, evm.jumpDests)
 		contract.SetCallCode(evm.resolveCodeHash(addr), evm.resolveCode(addr))
@@ -471,32 +479,79 @@ func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []b
 	}
 
 	// Calculate the remaining gas at the end of frame
-	exitGas := gas.Exit(err, reservoir)
+	exitGas := gas.Exit(err)
 	if err != nil {
 		evm.StateDB.RevertToSnapshot(snapshot)
-		if err != ErrExecutionReverted {
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
-			}
-		}
+		evm.traceFrameExit(gas, exitGas, err)
 	}
 	return ret, exitGas, err
 }
 
+// traceFrameExit reports the budget change a failing frame applies on its way out:
+// a halt burns the gas left, a revert refills the state-gas its rolled back state
+// creations had paid for. Pre-EIP-8037 a revert moves nothing and stays silent.
+func (evm *EVM) traceFrameExit(gas, exitGas GasBudget, err error) {
+	if !evm.Config.Tracer.HasGasHook() {
+		return
+	}
+	if err != ErrExecutionReverted {
+		evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeCallFailedExecution)
+	} else if gas != exitGas {
+		evm.Config.Tracer.EmitGasChange(gas.AsTracing(), exitGas.AsTracing(), tracing.GasChangeRefundRevertedState)
+	}
+}
+
+// createFramePreCheck the precondition before executing the contract deployment,
+// halts the create frame if fails with any check below.
+func (evm *EVM) createFramePreCheck(caller common.Address, value *uint256.Int) error {
+	if evm.depth > int(params.CallCreateDepth) {
+		return ErrDepth
+	}
+	if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
+		return ErrInsufficientBalance
+	}
+	nonce := evm.StateDB.GetNonce(caller)
+	if nonce+1 < nonce {
+		return ErrNonceUintOverflow
+	}
+	return nil
+}
+
+// chargeAccountCreation runs the create-frame precheck and charges the
+// account-creation state gas since Amsterdam, before the 63/64ths split.
+//
+// The charge only applies if the destination is empty, skipping pre-funded
+// deployment destinations. Note, a destination colliding on storage alone
+// (zero nonce, zero balance, empty code) is still empty and is charged.
+//
+// If halt is true, the caller must terminate with the returned error:
+//   - a failed precheck halts the create frame only and parent frame continues,
+//   - an insufficient charge halts the parent frame with ErrOutOfGas.
+func (evm *EVM) chargeAccountCreation(scope *ScopeContext, contractAddr common.Address, value *uint256.Int) (charged, halt bool, err error) {
+	if !evm.chainRules.IsAmsterdam {
+		return false, false, nil
+	}
+	if err := evm.createFramePreCheck(scope.Contract.Address(), value); err != nil {
+		scope.Stack.get().Clear()
+		evm.returnData = nil
+		return false, true, nil
+	}
+	if !evm.StateDB.Empty(contractAddr) {
+		return false, false, nil
+	}
+	cost := params.AccountCreationSize * evm.Context.CostPerStateByte
+	if !scope.Contract.chargeState(cost, evm.Config.Tracer, tracing.GasChangeAccountCreation) {
+		return false, true, ErrOutOfGas
+	}
+	return true, false, nil
+}
+
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, result GasBudget, err error) {
-	// Depth check execution. Fail if we're trying to execute above the
-	// limit.
-	var nonce uint64
-	if evm.depth > int(params.CallCreateDepth) {
-		err = ErrDepth
-	} else if !evm.Context.CanTransfer(evm.StateDB, caller, value) {
-		err = ErrInsufficientBalance
-	} else {
-		nonce = evm.StateDB.GetNonce(caller)
-		if nonce+1 < nonce {
-			err = ErrNonceUintOverflow
-		}
+	// Since Amsterdam, the precheck has been folded into the parent frame
+	// due to account-creation determination, so skip the duplicate check here.
+	if !evm.chainRules.IsAmsterdam {
+		err = evm.createFramePreCheck(caller, value)
 	}
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, typ, caller, address, code, gas, value.ToBig())
@@ -508,15 +563,14 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		return nil, common.Address{}, gas, err
 	}
 	// Increment the caller's nonce after passing all validations
-	evm.StateDB.SetNonce(caller, nonce+1, tracing.NonceChangeContractCreator)
-	reservoir := gas.StateGas
+	evm.StateDB.SetNonce(caller, evm.StateDB.GetNonce(caller)+1, tracing.NonceChangeContractCreator)
 
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
-		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address, gas.RegularGas)
-		prior, ok := gas.Charge(GasCosts{RegularGas: statelessGas})
+		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address, gas.ExecutionGas)
+		prior, ok := gas.Charge(GasCosts{ExecutionGas: statelessGas})
 		if !ok {
-			return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
+			return nil, common.Address{}, gas.ExitHalt(), ErrOutOfGas
 		}
 		if evm.Config.Tracer.HasGasHook() {
 			evm.Config.Tracer.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractCollisionCheck)
@@ -529,20 +583,18 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 		evm.StateDB.AddAddressToAccessList(address)
 	}
 	// Ensure there's no existing contract already at the designated address.
-	// Account is regarded as existent if any of these three conditions is met:
+	// Account is regarded as existent if either of these conditions is met:
 	// - the nonce is non-zero
 	// - the code is non-empty
-	// - the storage is non-empty
 	contractHash := evm.StateDB.GetCodeHash(address)
 	if evm.StateDB.GetNonce(address) != 0 ||
-		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) || // non-empty code
-		isEIP7610RejectedAccount(evm.ChainConfig().ChainID, address, evm.chainRules.IsEIP158) {
-		halt := gas.ExitHalt(reservoir)
+		(contractHash != (common.Hash{}) && contractHash != types.EmptyCodeHash) { // non-empty code
+		halt := gas.ExitHalt()
 		if evm.Config.Tracer.HasGasHook() {
 			evm.Config.Tracer.EmitGasChange(gas.AsTracing(), halt.AsTracing(), tracing.GasChangeCallFailedExecution)
 		}
 		// EIP-8037 collision rule: the state reservoir is fully preserved on
-		// address collision while regular gas is burnt.
+		// address collision while execution gas is burnt.
 		return nil, common.Address{}, halt, ErrContractAddressCollision
 	}
 	// Create a new account on the state only if the object was not present.
@@ -551,18 +603,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	snapshot := evm.StateDB.Snapshot()
 	if !evm.StateDB.Exist(address) {
 		evm.StateDB.CreateAccount(address)
-
-		if evm.chainRules.IsAmsterdam && evm.depth > 0 {
-			// Only charge state gas if we are not doing a create transaction.
-			// Prevents double charging with IntrinsicGas.
-			prev, ok := gas.ChargeState(params.AccountCreationSize * evm.Context.CostPerStateByte)
-			if !ok {
-				return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
-			}
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(prev.AsTracing(), gas.AsTracing(), tracing.GasChangeAccountCreation)
-			}
-		}
 	}
 	// CreateContract means that regardless of whether the account previously existed
 	// in the state trie or not, it _now_ becomes created as a _contract_ account.
@@ -575,11 +615,11 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	}
 	// Charge the contract creation init gas in verkle mode
 	if evm.chainRules.IsEIP4762 {
-		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas.RegularGas)
+		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas.ExecutionGas)
 		if consumed < wanted {
-			return nil, common.Address{}, gas.ExitHalt(reservoir), ErrOutOfGas
+			return nil, common.Address{}, gas.ExitHalt(), ErrOutOfGas
 		}
-		prior, _ := gas.Charge(GasCosts{RegularGas: consumed})
+		prior, _ := gas.Charge(GasCosts{ExecutionGas: consumed})
 		if evm.Config.Tracer.HasGasHook() {
 			evm.Config.Tracer.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractInit)
 		}
@@ -602,12 +642,8 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	if err != nil && (evm.chainRules.IsHomestead || err != ErrCodeStoreOutOfGas) {
 		evm.StateDB.RevertToSnapshot(snapshot)
 
-		exit := contract.Gas.Exit(err, reservoir)
-		if err != ErrExecutionReverted {
-			if evm.Config.Tracer.HasGasHook() {
-				evm.Config.Tracer.EmitGasChange(contract.Gas.AsTracing(), exit.AsTracing(), tracing.GasChangeCallFailedExecution)
-			}
-		}
+		exit := contract.Gas.Exit(err)
+		evm.traceFrameExit(contract.Gas, exit, err)
 		return ret, address, exit, err
 	}
 	// Either success, or pre-Homestead ErrCodeStoreOutOfGas (gas preserved).
@@ -628,8 +664,8 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		return ret, ErrInvalidCode
 	}
 	if evm.chainRules.IsEIP4762 {
-		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas.RegularGas)
-		contract.chargeRegular(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
+		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas.ExecutionGas)
+		contract.chargeExecution(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
 		if len(ret) > 0 && (consumed < wanted) {
 			return ret, ErrCodeStoreOutOfGas
 		}
@@ -642,9 +678,9 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
 			return ret, err
 		}
-		// Charge regular gas (hash cost) before state gas.
-		regularCost := toWordSize(uint64(len(ret))) * params.Keccak256WordGas
-		if !contract.chargeRegular(regularCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+		// Charge execution gas (hash cost) before state gas.
+		executionCost := toWordSize(uint64(len(ret))) * params.Keccak256WordGas
+		if !contract.chargeExecution(executionCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas
 		}
 		// Charge state gas (code-deposit) afterwards.
@@ -654,7 +690,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 		}
 	} else {
 		createDataCost := uint64(len(ret)) * params.CreateDataGas
-		if !contract.chargeRegular(createDataCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
+		if !contract.chargeExecution(createDataCost, evm.Config.Tracer, tracing.GasChangeCallCodeStorage) {
 			return ret, ErrCodeStoreOutOfGas
 		}
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
@@ -717,9 +753,7 @@ func (evm *EVM) ChainConfig() *params.ChainConfig { return evm.chainConfig }
 
 func (evm *EVM) captureBegin(depth int, typ OpCode, from common.Address, to common.Address, input []byte, startGas GasBudget, value *big.Int) {
 	tracer := evm.Config.Tracer
-	if tracer.OnEnter != nil {
-		tracer.OnEnter(depth, byte(typ), from, to, input, startGas.RegularGas, value)
-	}
+	tracer.EmitEnter(depth, byte(typ), from, to, input, startGas.AsTracing(), value)
 	if tracer.HasGasHook() {
 		tracer.EmitGasChange(tracing.Gas{}, startGas.AsTracing(), tracing.GasChangeCallInitialBalance)
 	}
@@ -737,21 +771,25 @@ func (evm *EVM) captureEnd(depth int, startGas GasBudget, leftOverGas GasBudget,
 	if !evm.chainRules.IsHomestead && errors.Is(err, ErrCodeStoreOutOfGas) {
 		reverted = false
 	}
-	if tracer.OnExit != nil {
-		tracer.OnExit(depth, ret, startGas.RegularGas-leftOverGas.RegularGas, VMErrorFromErr(err), reverted)
-	}
+	tracer.EmitExit(depth, ret, startGas.AsTracing(), leftOverGas.AsTracing(), VMErrorFromErr(err), reverted)
 }
 
 // GetVMContext provides context about the block being executed as well as state
 // to the tracers.
 func (evm *EVM) GetVMContext() *tracing.VMContext {
+	// Tracers are handed a view of the state whose reads leave no trace in the
+	// execution, e.g. in the block-level access list.
+	var statedb tracing.StateDB
+	if evm.StateDB != nil {
+		statedb = state.NewTracerView(evm.StateDB)
+	}
 	return &tracing.VMContext{
 		Coinbase:    evm.Context.Coinbase,
 		BlockNumber: evm.Context.BlockNumber,
 		Time:        evm.Context.Time,
 		Random:      evm.Context.Random,
 		BaseFee:     evm.Context.BaseFee,
-		StateDB:     evm.StateDB,
+		StateDB:     statedb,
 	}
 }
 

@@ -33,12 +33,10 @@ import (
 // while the latter is inserted/deleted in order to follow the rule of trie.
 // This tool can track all of them no matter the node is embedded in its
 // parent or not, but valueNode is never tracked.
-//
-// Note opTracer is not thread-safe, callers should be responsible for handling
-// the concurrency issues by themselves.
 type opTracer struct {
 	inserts map[string]struct{}
 	deletes map[string]struct{}
+	lock    sync.RWMutex
 }
 
 // newOpTracer initializes the tracer for capturing trie changes.
@@ -53,6 +51,9 @@ func newOpTracer() *opTracer {
 // in the deletion set (resurrected node), then just wipe it from
 // the deletion set as it's "untouched".
 func (t *opTracer) onInsert(path []byte) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	if _, present := t.deletes[string(path)]; present {
 		delete(t.deletes, string(path))
 		return
@@ -64,6 +65,9 @@ func (t *opTracer) onInsert(path []byte) {
 // in the addition set, then just wipe it from the addition set
 // as it's untouched.
 func (t *opTracer) onDelete(path []byte) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	if _, present := t.inserts[string(path)]; present {
 		delete(t.inserts, string(path))
 		return
@@ -73,12 +77,18 @@ func (t *opTracer) onDelete(path []byte) {
 
 // reset clears the content tracked by tracer.
 func (t *opTracer) reset() {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	clear(t.inserts)
 	clear(t.deletes)
 }
 
 // copy returns a deep copied tracer instance.
 func (t *opTracer) copy() *opTracer {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	return &opTracer{
 		inserts: maps.Clone(t.inserts),
 		deletes: maps.Clone(t.deletes),
@@ -87,6 +97,9 @@ func (t *opTracer) copy() *opTracer {
 
 // deletedList returns a list of node paths which are deleted from the trie.
 func (t *opTracer) deletedList() [][]byte {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
 	paths := make([][]byte, 0, len(t.deletes))
 	for path := range t.deletes {
 		paths = append(paths, []byte(path))

@@ -70,7 +70,7 @@ func InitDatabaseFromFreezer(db ethdb.Database) {
 		i += uint64(len(data))
 		// If we've spent too much time already, notify the user of what we're doing
 		if time.Since(logged) > 8*time.Second {
-			log.Info("Initializing database from freezer", "total", frozen, "number", i, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("Initializing database from freezer", "total", frozen, "number", i-1, "hash", hash, "elapsed", common.PrettyDuration(time.Since(start)))
 			logged = time.Now()
 		}
 	}

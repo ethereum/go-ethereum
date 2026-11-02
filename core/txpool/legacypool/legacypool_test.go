@@ -91,7 +91,7 @@ func (bc *testBlockChain) GetBlock(hash common.Hash, number uint64) *types.Block
 	return types.NewBlock(bc.CurrentBlock(), nil, nil, trie.NewStackTrie(nil))
 }
 
-func (bc *testBlockChain) StateAt(header *types.Header) (*state.StateDB, error) {
+func (bc *testBlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 
@@ -1200,6 +1200,46 @@ func TestPendingLimiting(t *testing.T) {
 	}
 	if err := validatePoolInternals(pool); err != nil {
 		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
+// Tests that the minimum tip filter of Pending cuts an account's transactions
+// at the first one whose fee cap is below the base fee: its effective tip is
+// negative, whatever its tip cap.
+func TestPendingMinTipBelowBaseFee(t *testing.T) {
+	t.Parallel()
+
+	pool, key := setupPoolWithConfig(eip1559Config)
+	defer pool.Close()
+
+	account := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, account, big.NewInt(1000000000000))
+
+	// fee caps 100, 100, 50: the third is below a base fee of 60
+	txs := []*types.Transaction{
+		dynamicFeeTx(0, 100000, big.NewInt(100), big.NewInt(10), key),
+		dynamicFeeTx(1, 100000, big.NewInt(100), big.NewInt(10), key),
+		dynamicFeeTx(2, 100000, big.NewInt(50), big.NewInt(10), key),
+		dynamicFeeTx(3, 100000, big.NewInt(100), big.NewInt(10), key),
+	}
+	for i, err := range pool.addRemotesSync(txs) {
+		if err != nil {
+			t.Fatalf("tx %d: failed to add transaction: %v", i, err)
+		}
+	}
+	for _, tt := range []struct {
+		baseFee uint64
+		want    int
+	}{
+		{baseFee: 40, want: 4},
+		{baseFee: 60, want: 2},
+		{baseFee: 95, want: 2}, // effective tip 5 of the first two
+		{baseFee: 101, want: 0},
+	} {
+		pending, _ := pool.Pending(txpool.PendingFilter{MinTip: uint256.NewInt(1), BaseFee: uint256.NewInt(tt.baseFee)})
+		if have := len(pending[account]); have != tt.want {
+			t.Errorf("base fee %d: have %d pending, want %d", tt.baseFee, have, tt.want)
+		}
 	}
 }
 

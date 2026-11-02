@@ -36,6 +36,11 @@ type Slicer struct {
 	abi abi.ABI
 }
 
+// GetABI returns the ABI associated with this contract binding.
+func (c *Slicer) GetABI() abi.ABI {
+	return c.abi
+}
+
 // NewSlicer creates a new instance of Slicer.
 func NewSlicer() *Slicer {
 	parsed, err := SlicerMetaData.ParseABI()

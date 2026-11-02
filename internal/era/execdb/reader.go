@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/era"
 	"github.com/ethereum/go-ethereum/internal/era/e2store"
 	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/klauspost/compress/snappy"
+	"github.com/golang/snappy"
 )
 
 // Era object represents an era file that contains blocks and their components.
@@ -202,6 +202,12 @@ func (e *Era) GetRawReceiptsByNumber(blockNum uint64) ([]byte, error) {
 func (e *Era) HasComponent(c componentType) bool {
 	_, ok := e.m.layout[c]
 	return ok
+}
+
+// HasReceipts reports whether the file contains a receipts component. Files
+// written with the "noreceipts" profile omit it.
+func (e *Era) HasReceipts() bool {
+	return e.HasComponent(receipts)
 }
 
 // InitialTD returns initial total difficulty before the difficulty of the

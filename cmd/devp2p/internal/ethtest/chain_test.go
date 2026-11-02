@@ -123,6 +123,24 @@ func TestEthProtocolNegotiation(t *testing.T) {
 	}
 }
 
+// TestChainHasAmsterdamWindow ensures the checked-in fixture keeps the recent
+// block window exercised by the eth/71 and snap/2 tests past Amsterdam.
+func TestChainHasAmsterdamWindow(t *testing.T) {
+	chain, err := NewChain("./testdata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := chain.Len() - 16
+	if start < 0 {
+		start = 0
+	}
+	for i := start; i < chain.Len(); i++ {
+		if chain.blocks[i].BlockAccessListHash() == nil {
+			t.Fatalf("test chain block %d has no block access list commitment", i)
+		}
+	}
+}
+
 // TestChainGetHeaders tests whether the test suite can correctly
 // respond to a GetBlockHeaders request from a node.
 func TestChainGetHeaders(t *testing.T) {
@@ -184,6 +202,21 @@ func TestChainGetHeaders(t *testing.T) {
 			},
 			expected: []*types.Header{
 				chain.Head().Header(),
+			},
+		},
+		{
+			req: eth.GetBlockHeadersPacket{
+				GetBlockHeadersRequest: &eth.GetBlockHeadersRequest{
+					Origin:  eth.HashOrNumber{Number: uint64(10)},
+					Amount:  uint64(3),
+					Skip:    1,
+					Reverse: true,
+				},
+			},
+			expected: []*types.Header{
+				chain.blocks[10].Header(),
+				chain.blocks[8].Header(),
+				chain.blocks[6].Header(),
 			},
 		},
 	}

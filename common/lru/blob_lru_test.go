@@ -153,3 +153,54 @@ func TestSizeConstrainedCacheEmpties(t *testing.T) {
 		}
 	}
 }
+
+// TestSizeConstrainedCacheCountsKeys verifies that a cache constructed with a
+// key-size function charges the key against the byte budget, so entries whose
+// bytes live in the key (empty or tiny values) can no longer grow it without
+// bound.
+func TestSizeConstrainedCacheCountsKeys(t *testing.T) {
+	const (
+		maxSize = 64 * 1024
+		keyLen  = 256
+	)
+	c := NewSizeConstrainedCacheWithKeySize[string, []byte](maxSize, func(k string) uint64 { return uint64(len(k)) })
+
+	// Add far more distinct keyLen-byte keys with EMPTY values than the budget
+	// can hold. Without key accounting the size would stay 0 and nothing would
+	// ever be evicted.
+	const n = 10000
+	for i := 0; i < n; i++ {
+		var key [keyLen]byte
+		binary.BigEndian.PutUint64(key[:8], uint64(i))
+		c.Add(string(key[:]), nil)
+	}
+	if c.size > maxSize {
+		t.Fatalf("reported size %d exceeds budget %d", c.size, maxSize)
+	}
+	if c.lru.Len() >= n {
+		t.Fatalf("no eviction happened: kept all %d empty-value entries", n)
+	}
+	// The earliest entry (all-zero key) must have been evicted.
+	var first [keyLen]byte
+	if _, ok := c.Get(string(first[:])); ok {
+		t.Fatal("oldest empty-value entry was never evicted")
+	}
+}
+
+// TestSizeConstrainedCacheKeysFreeByDefault pins the default behaviour: the
+// plain constructor does not count keys, so existing callers are unaffected.
+func TestSizeConstrainedCacheKeysFreeByDefault(t *testing.T) {
+	c := NewSizeConstrainedCache[string, []byte](1024)
+	const n = 1000
+	for i := 0; i < n; i++ {
+		var key [512]byte
+		binary.BigEndian.PutUint64(key[:8], uint64(i))
+		c.Add(string(key[:]), nil) // empty value -> size stays 0
+	}
+	if c.size != 0 {
+		t.Fatalf("expected size 0 with keys free, got %d", c.size)
+	}
+	if c.lru.Len() != n {
+		t.Fatalf("expected all %d entries retained, got %d", n, c.lru.Len())
+	}
+}

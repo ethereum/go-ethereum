@@ -1012,6 +1012,9 @@ func generateAndRelease(t *testing.T, scheme string) {
 	if err := snap.Release(); err != nil {
 		t.Fatalf("Release returned error: %v", err)
 	}
+	if err := helper.triedb.Close(); err != nil {
+		t.Fatalf("Close returned error: %v", err)
+	}
 }
 
 func testGenerateGoroutineLeak(t *testing.T, scheme string) {

@@ -24,7 +24,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm/runtime"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
@@ -137,5 +140,59 @@ func TestStructLogLegacyJSONSpecFormatting(t *testing.T) {
 				t.Fatalf("mismatched results\n\thave: %v\n\twant: %v", have, tt.want)
 			}
 		})
+	}
+}
+
+// Tests that a halted SSTORE records no storage on its step and that the
+// attempted value does not enter the storage snapshot of later steps.
+func TestHaltedStoreCapture(t *testing.T) {
+	var (
+		logger = NewStructLogger(nil)
+		addr   = common.HexToAddress("0xc0de")
+		code   = []byte{
+			// With calldata, attempt the SSTORE (inside the static call).
+			byte(vm.CALLDATASIZE), byte(vm.PUSH1), 0x15, byte(vm.JUMPI),
+			// Without calldata, STATICCALL self with one byte of calldata, then SLOAD another slot.
+			byte(vm.PUSH1), 0x0, byte(vm.PUSH1), 0x0, byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0,
+			byte(vm.ADDRESS), byte(vm.GAS), byte(vm.STATICCALL), byte(vm.POP),
+			byte(vm.PUSH1), 0x1, byte(vm.SLOAD), byte(vm.POP), byte(vm.STOP),
+			byte(vm.JUMPDEST), byte(vm.PUSH1), 0x1, byte(vm.PUSH1), 0x0, byte(vm.SSTORE), byte(vm.STOP),
+		}
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	)
+	statedb.SetCode(addr, code, tracing.CodeChangeUnspecified)
+	_, _, err := runtime.Call(addr, nil, &runtime.Config{
+		State:     statedb,
+		GasLimit:  1000000,
+		EVMConfig: vm.Config{Tracer: logger.Hooks()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sstore, sload map[string]json.RawMessage
+	for _, entry := range logger.logs {
+		var step map[string]json.RawMessage
+		if err := json.Unmarshal(entry, &step); err != nil {
+			t.Fatal(err)
+		}
+		switch string(step["op"]) {
+		case `"SSTORE"`:
+			sstore = step
+		case `"SLOAD"`:
+			sload = step
+		}
+	}
+	if sstore == nil || sload == nil {
+		t.Fatalf("missing SSTORE or SLOAD step: %s", logger.logs)
+	}
+	if sstore["error"] == nil {
+		t.Fatalf("expected SSTORE to halt, got %s", logger.logs)
+	}
+	if storage, ok := sstore["storage"]; ok {
+		t.Errorf("halted SSTORE must not record storage, got %s", storage)
+	}
+	want := `{"0x0000000000000000000000000000000000000000000000000000000000000001":"0x0000000000000000000000000000000000000000000000000000000000000000"}`
+	if have := string(sload["storage"]); have != want {
+		t.Errorf("SLOAD storage mismatch\n\thave: %v\n\twant: %v", have, want)
 	}
 }

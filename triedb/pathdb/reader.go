@@ -64,7 +64,16 @@ type reader struct {
 // node info. Don't modify the returned byte slice since it's not deep-copied
 // and still be referenced by database.
 func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
-	blob, got, loc, err := r.layer.node(owner, path, 0)
+	l, depth, err := r.db.tree.lookupNode(owner, path, r.state)
+	if err != nil {
+		return nil, err
+	}
+	// If the located layer is stale, fall back to the slow path to retrieve
+	// the trie node, see AccountRLP for details.
+	blob, got, loc, err := l.node(owner, path, depth)
+	if errors.Is(err, errSnapshotStale) {
+		blob, got, loc, err = r.layer.node(owner, path, 0)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +181,7 @@ func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
 func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	layer := db.tree.get(root)
 	if layer == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
+		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
 	return &reader{
 		db:          db,
@@ -187,7 +196,7 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 func (db *Database) StateReader(root common.Hash) (database.StateReader, error) {
 	layer := db.tree.get(root)
 	if layer == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
+		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
 	return &reader{
 		db:    db,
@@ -208,7 +217,7 @@ type HistoricalStateReader struct {
 func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, error) {
 	// Bail out if the state history hasn't been fully indexed
 	if db.stateIndexer == nil || db.stateFreezer == nil {
-		return nil, fmt.Errorf("historical state %x is not available", root)
+		return nil, fmt.Errorf("%w: %#x, no state history", database.ErrStateUnavailable, root)
 	}
 	if !db.stateIndexer.inited() {
 		return nil, errors.New("state histories haven't been fully indexed yet")
@@ -218,15 +227,21 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	//
 	// - States older than the current disk layer (including the disk layer
 	//   itself) are available via `db.HistoricReader`.
+	//
+	// The lookup and the history are written in background, wait for the
+	// scheduled writes first.
+	if err := db.waitWrites(); err != nil {
+		return nil, err
+	}
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
+		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
 	// Ensure the requested state is canonical, historical states on side chain
 	// are not accessible.
 	meta, err := readStateHistoryMeta(db.stateFreezer, *id+1)
 	if err != nil {
-		return nil, err // e.g., the referred state history has been pruned
+		return nil, fmt.Errorf("%w: %#x: %v", database.ErrStateUnavailable, root, err) // e.g., the referred state history has been pruned
 	}
 	if meta.parent != root {
 		return nil, fmt.Errorf("state %#x is not canonical", root)
@@ -234,7 +249,7 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	return &HistoricalStateReader{
 		id:     *id,
 		db:     db,
-		reader: newStateHistoryReader(db.diskdb, db.stateFreezer),
+		reader: newStateHistoryReader(db.diskdb, db.stateFreezer, db.waitWrites),
 	}, nil
 }
 
@@ -250,22 +265,22 @@ func (r *HistoricalStateReader) AccountRLP(address common.Address) ([]byte, erro
 		historicalAccountReadTimer.UpdateSince(start)
 	}(time.Now())
 
-	// TODO(rjl493456442): Theoretically, the obtained disk layer could become stale
-	// within a very short time window.
-	//
-	// While reading the account data while holding `db.tree.lock` can resolve
-	// this issue, but it will introduce a heavy contention over the lock.
-	//
-	// Let's optimistically assume the situation is very unlikely to happen,
-	// and try to define a low granularity lock if the current approach doesn't
-	// work later.
-	dl := r.db.tree.bottom()
 	hash := crypto.Keccak256Hash(address.Bytes())
-	latest, err := dl.account(hash, 0)
-	if err != nil {
-		return nil, err
+	for {
+		dl := r.db.tree.bottom()
+		latest, err := dl.account(hash, 0)
+		if err == nil {
+			return r.reader.read(newAccountIdentQuery(address, hash), r.id, dl.stateID(), latest)
+		}
+		if !errors.Is(err, errSnapshotStale) {
+			return nil, err
+		}
+		// Layer was replaced by a commit -> retry. Same bottom layer still
+		// stale (e.g. database disabled) -> give up.
+		if r.db.tree.bottom() == dl {
+			return nil, err
+		}
 	}
-	return r.reader.read(newAccountIdentQuery(address, hash), r.id, dl.stateID(), latest)
 }
 
 // Account directly retrieves the account associated with a particular address in
@@ -300,23 +315,23 @@ func (r *HistoricalStateReader) Storage(address common.Address, key common.Hash)
 		historicalStorageReadTimer.UpdateSince(start)
 	}(time.Now())
 
-	// TODO(rjl493456442): Theoretically, the obtained disk layer could become stale
-	// within a very short time window.
-	//
-	// While reading the account data while holding `db.tree.lock` can resolve
-	// this issue, but it will introduce a heavy contention over the lock.
-	//
-	// Let's optimistically assume the situation is very unlikely to happen,
-	// and try to define a low granularity lock if the current approach doesn't
-	// work later.
-	dl := r.db.tree.bottom()
 	addrHash := crypto.Keccak256Hash(address.Bytes())
 	keyHash := crypto.Keccak256Hash(key.Bytes())
-	latest, err := dl.storage(addrHash, keyHash, 0)
-	if err != nil {
-		return nil, err
+	for {
+		dl := r.db.tree.bottom()
+		latest, err := dl.storage(addrHash, keyHash, 0)
+		if err == nil {
+			return r.reader.read(newStorageIdentQuery(address, addrHash, key, keyHash), r.id, dl.stateID(), latest)
+		}
+		if !errors.Is(err, errSnapshotStale) {
+			return nil, err
+		}
+		// Layer was replaced by a commit -> retry. Same bottom layer still
+		// stale (e.g. database disabled) -> give up.
+		if r.db.tree.bottom() == dl {
+			return nil, err
+		}
 	}
-	return r.reader.read(newStorageIdentQuery(address, addrHash, key, keyHash), r.id, dl.stateID(), latest)
 }
 
 // HistoricalNodeReader is a wrapper over history reader, providing access to
@@ -331,7 +346,7 @@ type HistoricalNodeReader struct {
 func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader, error) {
 	// Bail out if the state history hasn't been fully indexed
 	if db.trienodeIndexer == nil || db.trienodeFreezer == nil {
-		return nil, fmt.Errorf("historical state %x is not available", root)
+		return nil, fmt.Errorf("%w: %#x, no trienode history", database.ErrStateUnavailable, root)
 	}
 	if !db.trienodeIndexer.inited() {
 		return nil, errors.New("trienode histories haven't been fully indexed yet")
@@ -341,15 +356,21 @@ func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader,
 	//
 	// - States older than the current disk layer (including the disk layer
 	//   itself) are available via `db.HistoricalNodeReader`.
+	//
+	// The lookup and the history are written in background, wait for the
+	// scheduled writes first.
+	if err := db.waitWrites(); err != nil {
+		return nil, err
+	}
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
-		return nil, fmt.Errorf("state %#x is not available", root)
+		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
 	// Ensure the requested trienode history is canonical, states on side chain
 	// are not accessible.
 	meta, err := readTrienodeMetadata(db.trienodeFreezer, *id+1)
 	if err != nil {
-		return nil, fmt.Errorf("state %#x is not available", root) // e.g., the referred trienode history has been pruned
+		return nil, fmt.Errorf("%w: %#x: %v", database.ErrStateUnavailable, root, err) // e.g., the referred trienode history has been pruned
 	}
 	if meta.parent != root {
 		return nil, fmt.Errorf("state %#x is not canonical", root)
@@ -357,7 +378,7 @@ func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader,
 	return &HistoricalNodeReader{
 		id:     *id,
 		db:     db,
-		reader: newTrienodeReader(db.diskdb, db.trienodeFreezer, int(db.config.FullValueCheckpoint)),
+		reader: newTrienodeReader(db.diskdb, db.trienodeFreezer, db.waitWrites, int(db.config.FullValueCheckpoint)),
 	}, nil
 }
 
@@ -373,35 +394,35 @@ func (r *HistoricalNodeReader) Node(owner common.Hash, path []byte, hash common.
 		historicalTrienodeReadTimer.UpdateSince(start)
 	}(time.Now())
 
-	// TODO(rjl493456442): Theoretically, the obtained disk layer could become stale
-	// within a very short time window.
-	//
-	// While reading the account data while holding `db.tree.lock` can resolve
-	// this issue, but it will introduce a heavy contention over the lock.
-	//
-	// Let's optimistically assume the situation is very unlikely to happen,
-	// and try to define a low granularity lock if the current approach doesn't
-	// work later.
-	dl := r.db.tree.bottom()
-	latest, h, _, err := dl.node(owner, path, 0)
-	if err != nil {
-		return nil, err
-	}
-	if h == hash {
-		return latest, nil
-	}
-	blob, err := r.reader.read(newTrienodeIdent(owner, string(path)), r.id, dl.stateID(), latest)
-	if err != nil {
-		return nil, err
-	}
-	// Error out if the local one is inconsistent with the target.
-	if crypto.Keccak256Hash(blob) != hash {
-		blobHex := "nil"
-		if len(blob) > 0 {
-			blobHex = hexutil.Encode(blob)
+	for {
+		dl := r.db.tree.bottom()
+		latest, h, _, err := dl.node(owner, path, 0)
+		if err == nil {
+			if h == hash {
+				return latest, nil
+			}
+			blob, err := r.reader.read(newTrienodeIdent(owner, string(path)), r.id, dl.stateID(), latest)
+			if err != nil {
+				return nil, err
+			}
+			// Error out if the local one is inconsistent with the target.
+			if crypto.Keccak256Hash(blob) != hash {
+				blobHex := "nil"
+				if len(blob) > 0 {
+					blobHex = hexutil.Encode(blob)
+				}
+				log.Error("Unexpected historical trie node", "owner", owner.Hex(), "path", path, "blob", blobHex)
+				return nil, fmt.Errorf("unexpected historical trie node: (%x %v), blob: %s", owner, path, blobHex)
+			}
+			return blob, nil
 		}
-		log.Error("Unexpected historical trie node", "owner", owner.Hex(), "path", path, "blob", blobHex)
-		return nil, fmt.Errorf("unexpected historical trie node: (%x %v), blob: %s", owner, path, blobHex)
+		if !errors.Is(err, errSnapshotStale) {
+			return nil, err
+		}
+		// Layer was replaced by a commit -> retry. Same bottom layer still
+		// stale (e.g. database disabled) -> give up.
+		if r.db.tree.bottom() == dl {
+			return nil, err
+		}
 	}
-	return blob, nil
 }

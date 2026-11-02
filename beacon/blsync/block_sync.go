@@ -35,6 +35,12 @@ type beaconBlockSync struct {
 	serverHeads  map[request.Server]common.Hash
 	headTracker  headTracker
 
+	// prefetch reports whether the block at a slot may be fetched before it is
+	// validated. From Gloas on, the execution payload envelope is published later
+	// in the slot than the block: fetching it at the head announcement fails,
+	// and each failure also delays the server.
+	prefetch func(slot uint64) bool
+
 	lastHeadInfo  types.HeadInfo
 	chainHeadFeed event.FeedOf[types.ChainHeadEvent]
 }
@@ -80,13 +86,15 @@ func (s *beaconBlockSync) Process(requester request.Requester, events []request.
 		}
 	}
 	s.updateEventFeed()
+
 	// request validated head block if unavailable and not yet requested
 	if vh, ok := s.headTracker.ValidatedOptimistic(); ok {
 		s.tryRequestBlock(requester, vh.Attested.Hash(), false)
 	}
 	// request prefetch head if the given server has announced it
-	if prefetchHead := s.headTracker.PrefetchHead().BlockRoot; prefetchHead != (common.Hash{}) {
-		s.tryRequestBlock(requester, prefetchHead, true)
+	if prefetchHead := s.headTracker.PrefetchHead(); prefetchHead.BlockRoot != (common.Hash{}) &&
+		(s.prefetch == nil || s.prefetch(prefetchHead.Slot)) {
+		s.tryRequestBlock(requester, prefetchHead.BlockRoot, true)
 	}
 }
 
@@ -132,7 +140,7 @@ func (s *beaconBlockSync) updateEventFeed() {
 		fe := finality.Attested.Header.Epoch()
 		switch {
 		case he == fe:
-			finalizedHash = finality.Finalized.PayloadHeader.BlockHash()
+			finalizedHash = finality.Finalized.BlockHash()
 		case he < fe:
 			return
 		case he == fe+1:

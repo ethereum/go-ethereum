@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -466,7 +467,19 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 	options.TxLookupLimit = 0 // index all txs
 
 	accman, acc := newTestAccountManager(t)
+	if gspec.Alloc == nil {
+		gspec.Alloc = types.GenesisAlloc{}
+	}
 	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
+
+	// Most of the configs used here are merged up to the latest fork, whose
+	// system calls invalidate every generated block unless the contracts they
+	// target are deployed. Anything the caller allocated explicitly wins.
+	for addr, account := range core.SystemContractAllocs() {
+		if _, ok := gspec.Alloc[addr]; !ok {
+			gspec.Alloc[addr] = account
+		}
+	}
 
 	// Generate blocks for testing
 	db, blocks, receipts := core.GenerateChainWithGenesis(gspec, engine, n+1, generator)
@@ -573,7 +586,7 @@ func (b testBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.Bloc
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	stateDb, err := b.chain.StateAt(header)
+	stateDb, err := b.chain.StateAt(header.Root, header.Number, header.Time)
 	return stateDb, header, err
 }
 func (b testBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *types.Header, error) {
@@ -1600,7 +1613,7 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want:      nil,
-			expectErr: &invalidTxError{Message: fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4712388)", randomAccounts[0].addr.String()), Code: errCodeInsufficientFunds},
+			expectErr: &invalidTxError{Message: fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4712388)", randomAccounts[0].addr.String()), Code: ErrCodeInsufficientFunds},
 		}, {
 			// EVM error
 			name: "evm-error",
@@ -1622,7 +1635,7 @@ func TestSimulateV1(t *testing.T) {
 				BaseFeePerGas: "0x0",
 				Calls: []callRes{{
 					ReturnValue: "0x",
-					Error:       callErr{Message: "stack underflow (0 <=> 2)", Code: errCodeVMError},
+					Error:       callErr{Message: "stack underflow (0 <=> 2)", Code: ErrCodeVMError},
 					GasUsed:     "0x47e7c4",
 					Logs:        []log{},
 					Status:      "0x0",
@@ -2066,7 +2079,7 @@ func TestSimulateV1(t *testing.T) {
 			}},
 			validation: &validation,
 			want:       nil,
-			expectErr:  &invalidTxError{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: errCodeNonceTooHigh},
+			expectErr:  &invalidTxError{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: ErrCodeNonceTooHigh},
 		},
 		// Contract sends tx in validation mode.
 		{
@@ -2684,6 +2697,95 @@ func TestSimulateV1TxSender(t *testing.T) {
 	require.Equal(t, sender2, summary[1].Transactions[0].From, "sender address mismatch")
 }
 
+// TestSimulateV1LogIndex checks that logs which are dropped because their call or call frame
+// failed do not use a log index, so the indices match the ones in receipts.
+func TestSimulateV1LogIndex(t *testing.T) {
+	t.Parallel()
+
+	var (
+		sender   = newAccounts(1)[0].addr
+		reverter = common.HexToAddress("0xc0de000000000000000000000000000000000001")
+		emitter  = common.HexToAddress("0xc0de000000000000000000000000000000000002")
+		outer    = common.HexToAddress("0xc0de000000000000000000000000000000000003")
+		invalid  = common.HexToAddress("0xc0de000000000000000000000000000000000004")
+		// PUSH0 PUSH0 LOG0 PUSH0 PUSH0 REVERT
+		reverterCode = hex2Bytes("5f5fa05f5ffd")
+		// PUSH0 PUSH0 LOG0 STOP
+		emitterCode = hex2Bytes("5f5fa000")
+		// LOG0, CALL(gas, reverter, 0, 0, 0, 0, 0) POP, LOG0, STOP
+		outerCode = hex2Bytes("5f5fa05f5f5f5f5f73" + strings.TrimPrefix(reverter.Hex(), "0x") + "5af1505f5fa000")
+		// PUSH0 PUSH0 LOG0 INVALID
+		invalidCode = hex2Bytes("5f5fa0fe")
+		// INVALID uses all the gas of its call.
+		invalidGas = hexutil.Uint64(100_000)
+	)
+	gspec := &core.Genesis{
+		Config: params.MergedTestChainConfig,
+		Alloc:  types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}},
+	}
+	for _, tc := range []struct {
+		name  string
+		calls []TransactionArgs
+		want  []uint
+	}{
+		{
+			name:  "failed call before a successful one",
+			calls: []TransactionArgs{{From: &sender, To: &reverter}, {From: &sender, To: &emitter}},
+			want:  []uint{0},
+		},
+		{
+			name:  "failed call without revert",
+			calls: []TransactionArgs{{From: &sender, To: &invalid, Gas: &invalidGas}, {From: &sender, To: &emitter}},
+			want:  []uint{0},
+		},
+		{
+			name:  "reverted inner frame",
+			calls: []TransactionArgs{{From: &sender, To: &outer}},
+			want:  []uint{0, 1},
+		},
+		{
+			name:  "indices continue across calls",
+			calls: []TransactionArgs{{From: &sender, To: &emitter}, {From: &sender, To: &reverter}, {From: &sender, To: &emitter}},
+			want:  []uint{0, 1},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+			stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+			if err != nil {
+				t.Fatalf("failed to get state and header: %v", err)
+			}
+			sim := &simulator{
+				b:           backend,
+				state:       stateDB,
+				base:        baseHeader,
+				chainConfig: backend.ChainConfig(),
+				budget:      newGasBudget(0),
+			}
+			results, err := sim.execute(context.Background(), []simBlock{{
+				StateOverrides: &override.StateOverride{
+					reverter: override.OverrideAccount{Code: reverterCode},
+					emitter:  override.OverrideAccount{Code: emitterCode},
+					outer:    override.OverrideAccount{Code: outerCode},
+					invalid:  override.OverrideAccount{Code: invalidCode},
+				},
+				Calls: tc.calls,
+			}})
+			if err != nil {
+				t.Fatalf("simulation execution failed: %v", err)
+			}
+			require.Len(t, results, 1)
+			var have []uint
+			for _, call := range results[0].Calls {
+				for _, log := range call.Logs {
+					have = append(have, log.Index)
+				}
+			}
+			require.Equal(t, tc.want, have)
+		})
+	}
+}
+
 // TestSimulateV1WithdrawalsByFork verifies that withdrawals and withdrawalsRoot
 // are only emitted in the simulated block result when the simulated block is
 // post-Shanghai. Pre-Shanghai blocks must omit both fields, otherwise the
@@ -2743,6 +2845,173 @@ func TestSimulateV1WithdrawalsByFork(t *testing.T) {
 		// MergedTestChainConfig has every fork active from genesis.
 		run(t, params.MergedTestChainConfig, nil, true)
 	})
+}
+
+func TestSimulateV1DifficultyOverride(t *testing.T) {
+	t.Parallel()
+
+	run := func(t *testing.T, cfg *params.ChainConfig, genesisDifficulty *big.Int, n int) ([]*simBlockResult, error) {
+		t.Helper()
+		gspec := &core.Genesis{Config: cfg, Difficulty: genesisDifficulty, Alloc: types.GenesisAlloc{}}
+		backend := newTestBackend(t, n, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+		stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+		if err != nil {
+			t.Fatalf("failed to get state and header: %v", err)
+		}
+		sim := &simulator{
+			b:           backend,
+			state:       stateDB,
+			base:        baseHeader,
+			chainConfig: backend.ChainConfig(),
+			budget:      newGasBudget(0),
+		}
+		block := simBlock{BlockOverrides: &override.BlockOverrides{Difficulty: (*hexutil.Big)(big.NewInt(1))}}
+		return sim.execute(context.Background(), []simBlock{block})
+	}
+
+	t.Run("pre-merge", func(t *testing.T) {
+		results, err := run(t, params.TestChainConfig, nil, 1)
+		if err != nil {
+			t.Fatalf("simulation execution failed: %v", err)
+		}
+		if diff := results[0].Block.Difficulty(); diff.Cmp(big.NewInt(1)) != 0 {
+			t.Fatalf("difficulty mismatch: have %v, want 1", diff)
+		}
+	})
+	t.Run("post-merge", func(t *testing.T) {
+		_, err := run(t, params.MergedTestChainConfig, nil, 1)
+		var paramsErr *invalidParamsError
+		if !errors.As(err, &paramsErr) {
+			t.Fatalf("expected invalid params error, have %v", err)
+		}
+	})
+	t.Run("zero-difficulty-base", func(t *testing.T) {
+		cfg := *params.TestChainConfig
+		cfg.TerminalTotalDifficulty = big.NewInt(1)
+		_, err := run(t, &cfg, common.Big0, 0)
+		var paramsErr *invalidParamsError
+		if !errors.As(err, &paramsErr) {
+			t.Fatalf("expected invalid params error, have %v", err)
+		}
+	})
+}
+
+// TestSimulateV1TransferLogs verifies that traceTransfers reports each ether
+// transfer exactly once across the Amsterdam boundary: before the fork the
+// tracer synthesizes an ERC-20 style log from the ERC-7528 sentinel address,
+// after it only the protocol-emitted EIP-7708 log remains.
+func TestSimulateV1TransferLogs(t *testing.T) {
+	t.Parallel()
+
+	var (
+		accounts  = newAccounts(2)
+		sender    = accounts[0].addr
+		recipient = accounts[1].addr
+		value     = big.NewInt(1000)
+	)
+	run := func(t *testing.T, cfg *params.ChainConfig, wantAddr common.Address) {
+		t.Helper()
+		gspec := &core.Genesis{
+			Config: cfg,
+			Alloc:  types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}},
+		}
+		backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+
+		ctx := context.Background()
+		stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+		if err != nil {
+			t.Fatalf("failed to get state and header: %v", err)
+		}
+		sim := &simulator{
+			b:              backend,
+			state:          stateDB,
+			base:           baseHeader,
+			chainConfig:    backend.ChainConfig(),
+			budget:         newGasBudget(0),
+			traceTransfers: true,
+		}
+		results, err := sim.execute(ctx, []simBlock{{Calls: []TransactionArgs{{
+			From:  &sender,
+			To:    &recipient,
+			Value: (*hexutil.Big)(value),
+		}}}})
+		if err != nil {
+			t.Fatalf("simulation execution failed: %v", err)
+		}
+		require.Len(t, results, 1)
+		require.Len(t, results[0].Calls, 1)
+
+		logs := results[0].Calls[0].Logs
+		if len(logs) != 1 {
+			addrs := make([]common.Address, len(logs))
+			for i, log := range logs {
+				addrs[i] = log.Address
+			}
+			t.Fatalf("transfer logged %d times, want exactly once (emitters: %v)", len(logs), addrs)
+		}
+		if logs[0].Address != wantAddr {
+			t.Errorf("log address = %v, want %v", logs[0].Address, wantAddr)
+		}
+		wantTopics := []common.Hash{
+			transferTopic,
+			common.BytesToHash(sender.Bytes()),
+			common.BytesToHash(recipient.Bytes()),
+		}
+		if !slices.Equal(logs[0].Topics, wantTopics) {
+			t.Errorf("log topics = %v, want %v", logs[0].Topics, wantTopics)
+		}
+		if !bytes.Equal(logs[0].Data, common.BigToHash(value).Bytes()) {
+			t.Errorf("log data = %x, want %x", logs[0].Data, common.BigToHash(value).Bytes())
+		}
+	}
+
+	t.Run("pre-amsterdam", func(t *testing.T) {
+		run(t, params.MergedTestChainConfig, transferAddress)
+	})
+	t.Run("post-amsterdam", func(t *testing.T) {
+		cfg := *params.MergedTestChainConfig
+		cfg.AmsterdamTime = new(uint64)
+		run(t, &cfg, params.SystemAddress)
+	})
+}
+
+// TestSimulateV1NonceLimit checks that a call from a sender whose nonce is 2^64-1 fails in
+// both validation modes (EIP-2681), instead of wrapping the nonce when validation is off.
+func TestSimulateV1NonceLimit(t *testing.T) {
+	t.Parallel()
+
+	var (
+		accounts  = newAccounts(2)
+		sender    = accounts[0].addr
+		recipient = accounts[1].addr
+		maxNonce  = hexutil.Uint64(^uint64(0))
+	)
+	gspec := &core.Genesis{
+		Config: params.MergedTestChainConfig,
+		Alloc:  types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}},
+	}
+	for _, validate := range []bool{false, true} {
+		t.Run(fmt.Sprintf("validation=%v", validate), func(t *testing.T) {
+			backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+			stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+			if err != nil {
+				t.Fatalf("failed to get state and header: %v", err)
+			}
+			sim := &simulator{
+				b:           backend,
+				state:       stateDB,
+				base:        baseHeader,
+				chainConfig: backend.ChainConfig(),
+				budget:      newGasBudget(0),
+				validate:    validate,
+			}
+			_, err = sim.execute(context.Background(), []simBlock{{
+				StateOverrides: &override.StateOverride{sender: override.OverrideAccount{Nonce: &maxNonce}},
+				Calls:          []TransactionArgs{{From: &sender, To: &recipient}},
+			}})
+			require.ErrorContains(t, err, core.ErrNonceMax.Error())
+		})
+	}
 }
 
 func TestSignTransaction(t *testing.T) {
@@ -3942,6 +4211,391 @@ func TestCreateAccessListWithStateOverrides(t *testing.T) {
 	require.Equal(t, expected, result.Accesslist)
 }
 
+func TestCreateAccessListFeeDefaults(t *testing.T) {
+	t.Parallel()
+	funded := newAccounts(1)[0]
+	genesis := &core.Genesis{
+		Config: params.MergedTestChainConfig,
+		Alloc: types.GenesisAlloc{
+			funded.addr: {Balance: big.NewInt(params.Ether)},
+		},
+	}
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+
+	to := common.Address{0xbb}
+	tests := []struct {
+		name    string
+		args    TransactionArgs
+		wantErr bool
+	}{
+		{
+			name: "unfunded sender, all fee fields omitted",
+			args: TransactionArgs{From: &common.Address{0xaa}, To: &to},
+		},
+		{
+			name: "priority fee only",
+			args: TransactionArgs{From: &funded.addr, To: &to, MaxPriorityFeePerGas: (*hexutil.Big)(big.NewInt(1))},
+		},
+		{
+			name:    "explicit zero blob fee cap rejected",
+			args:    TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big), BlobHashes: []common.Hash{{0x01}}},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := api.CreateAccessList(context.Background(), tt.args, nil, nil)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got result %+v", result)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("CreateAccessList failed: %v", err)
+			}
+			if result.Error != "" {
+				t.Fatalf("unexpected vm error: %v", result.Error)
+			}
+			if uint64(result.GasUsed) != params.TxGas {
+				t.Fatalf("unexpected gasUsed (got %d want %d)", uint64(result.GasUsed), params.TxGas)
+			}
+		})
+	}
+}
+
+// TestCreateAccessListBlobFeeDefault tests that eth_createAccessList keeps the
+// default blob fee cap for a request with blob hashes, so BLOBBASEFEE reads the
+// block's blob base fee.
+func TestCreateAccessListBlobFeeDefault(t *testing.T) {
+	t.Parallel()
+	var (
+		funded = newAccounts(1)[0]
+		// BLOBBASEFEE SLOAD POP STOP
+		contract = common.Address{0xcc}
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				funded.addr: {Balance: big.NewInt(params.Ether)},
+				contract:    {Code: common.FromHex("0x4a545000")},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+	args := TransactionArgs{
+		From:       &funded.addr,
+		To:         &contract,
+		GasPrice:   (*hexutil.Big)(big.NewInt(params.GWei)),
+		BlobHashes: []common.Hash{{0x01}},
+	}
+	result, err := api.CreateAccessList(context.Background(), args, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateAccessList failed: %v", err)
+	}
+	blobBaseFee := eip4844.CalcBlobFee(params.MergedTestChainConfig, backend.CurrentHeader())
+	want := types.AccessList{{Address: contract, StorageKeys: []common.Hash{common.BigToHash(blobBaseFee)}}}
+	if !reflect.DeepEqual(*result.Accesslist, want) {
+		t.Fatalf("unexpected access list: have %v, want %v", *result.Accesslist, want)
+	}
+}
+
+// TestBlobFeeCapWithoutHashes tests that eth_call, eth_estimateGas and
+// eth_createAccessList reject maxFeePerBlobGas without blob hashes, before and
+// after Cancun.
+func TestBlobFeeCapWithoutHashes(t *testing.T) {
+	t.Parallel()
+	funded := newAccounts(1)[0]
+	newAPI := func(config *params.ChainConfig, engine consensus.Engine, gen func(int, *core.BlockGen)) *BlockChainAPI {
+		genesis := &core.Genesis{
+			Config: config,
+			Alloc: types.GenesisAlloc{
+				funded.addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+		return NewBlockChainAPI(newTestBackend(t, 1, genesis, engine, gen))
+	}
+	apis := map[string]*BlockChainAPI{
+		"before cancun": newAPI(params.TestChainConfig, ethash.NewFaker(), nil),
+		"cancun": newAPI(params.MergedTestChainConfig, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+			b.SetPoS()
+		}),
+	}
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+	to := common.Address{0xbb}
+	tests := []struct {
+		name string
+		args TransactionArgs
+	}{
+		{
+			name: "blob fee cap",
+			args: TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: (*hexutil.Big)(big.NewInt(1))},
+		},
+		{
+			name: "zero blob fee cap",
+			args: TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big)},
+		},
+		{
+			name: "blob fee cap with gas price",
+			args: TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: (*hexutil.Big)(big.NewInt(1)), GasPrice: (*hexutil.Big)(big.NewInt(params.GWei))},
+		},
+		{
+			name: "blob fee cap with empty blob hashes",
+			args: TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: (*hexutil.Big)(big.NewInt(1)), BlobHashes: []common.Hash{}},
+		},
+	}
+	for fork, api := range apis {
+		for _, tt := range tests {
+			t.Run(fork+"/"+tt.name, func(t *testing.T) {
+				_, callErr := api.Call(context.Background(), tt.args, &latest, nil, nil)
+				_, estimateErr := api.EstimateGas(context.Background(), tt.args, &latest, nil, nil)
+				_, accessListErr := api.CreateAccessList(context.Background(), tt.args, &latest, nil)
+				for _, err := range []error{callErr, estimateErr, accessListErr} {
+					if err == nil || err.Error() != "maxFeePerBlobGas specified without blobVersionedHashes" {
+						t.Fatalf("expected blob fee cap error, got %v", err)
+					}
+				}
+			})
+		}
+	}
+	// eth_simulateV1 is not covered by the rule. It accepts a lone cap from Cancun.
+	sim := simOpts{BlockStateCalls: []simBlock{{Calls: []TransactionArgs{
+		{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big)},
+	}}}}
+	if _, err := apis["cancun"].SimulateV1(context.Background(), sim, &latest); err != nil {
+		t.Fatalf("simulate with a lone blob fee cap after cancun failed: %v", err)
+	}
+	if _, err := apis["before cancun"].SimulateV1(context.Background(), sim, &latest); err == nil || !strings.Contains(err.Error(), core.ErrTxTypeNotSupported.Error()) {
+		t.Fatalf("expected %v for simulate before cancun, got %v", core.ErrTxTypeNotSupported, err)
+	}
+}
+
+func TestEstimateGasAmsterdam(t *testing.T) {
+	t.Parallel()
+	var (
+		accounts = newAccounts(2)
+		config   = *params.MergedTestChainConfig
+		genesis  = &core.Genesis{
+			Config:     &config,
+			Difficulty: common.Big0,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+				accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	config.AmsterdamTime = new(uint64)
+	api := NewBlockChainAPI(newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil))
+
+	var testSuite = []struct {
+		call TransactionArgs
+		want uint64
+	}{
+		// value transfer to an existing account: EIP-2780 intrinsic gas
+		{
+			call: TransactionArgs{
+				From:  &accounts[0].addr,
+				To:    &accounts[1].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+			want: 21000,
+		},
+		// zero-value call to an existing account: below the legacy 21000 floor
+		{
+			call: TransactionArgs{
+				From: &accounts[0].addr,
+				To:   &accounts[1].addr,
+			},
+			want: 15000,
+		},
+		// self transfer: base cost only
+		{
+			call: TransactionArgs{
+				From:  &accounts[0].addr,
+				To:    &accounts[0].addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+			want: 12000,
+		},
+	}
+	latest := rpc.LatestBlockNumber
+	for i, tc := range testSuite {
+		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &latest}, nil, nil)
+		if err != nil {
+			t.Errorf("test %d: want no error, have %v", i, err)
+			continue
+		}
+		if uint64(result) != tc.want {
+			t.Errorf("test %d: result mismatch, have %v, want %v", i, uint64(result), tc.want)
+		}
+	}
+}
+
+// TestExecutionGasCapAmsterdam checks that after Amsterdam (EIP-8037), eth_call
+// and non-strict eth_simulateV1 may spend more than params.MaxTxGas on execution,
+// while eth_estimateGas and strict eth_simulateV1 are still bound by it.
+func TestExecutionGasCapAmsterdam(t *testing.T) {
+	t.Parallel()
+
+	const (
+		threshold = 20_000_000 // Execution gas the contract requires, above params.MaxTxGas
+		gasLimit  = 30_000_000 // Gas limit of the calls
+		gasCap    = 50_000_000 // RPC gas cap
+	)
+	var (
+		accounts = newAccounts(1)
+		contract = common.HexToAddress("0x000000000000000000000000000000000000c0de")
+		config   = *params.MergedTestChainConfig
+		genesis  = &core.Genesis{
+			Config:     &config,
+			Difficulty: common.Big0,
+			GasLimit:   60_000_000,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: new(big.Int).Mul(big.NewInt(10), big.NewInt(params.Ether))},
+				// Returns the gas left at entry if it is at least threshold, reverts otherwise:
+				//   GAS PUSH4 threshold DUP2 LT PUSH1 0x11 JUMPI
+				//   PUSH0 MSTORE PUSH1 0x20 PUSH0 RETURN
+				//   JUMPDEST PUSH0 PUSH0 REVERT
+				contract: {Code: common.FromHex("0x5a6301312d0081106011575f5260205ff35b5f5ffd")},
+			},
+		}
+	)
+	config.AmsterdamTime = new(uint64)
+	backend := newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil)
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+	newArgs := func() TransactionArgs {
+		gas := hexutil.Uint64(gasLimit)
+		return TransactionArgs{
+			From:         &accounts[0].addr,
+			To:           &contract,
+			Gas:          &gas,
+			MaxFeePerGas: (*hexutil.Big)(big.NewInt(params.GWei)),
+		}
+	}
+
+	// eth_call gets the whole gas limit for execution.
+	res, err := DoCall(context.Background(), backend, newArgs(), latest, nil, nil, time.Second, gasCap)
+	if err != nil {
+		t.Fatalf("eth_call: unexpected error: %v", err)
+	}
+	if res.Err != nil {
+		t.Fatalf("eth_call: execution failed: %v", res.Err)
+	}
+	if left := new(big.Int).SetBytes(res.ReturnData); left.Cmp(big.NewInt(threshold)) < 0 {
+		t.Fatalf("eth_call: execution gas too low: have %v, want >= %d", left, threshold)
+	}
+
+	// eth_estimateGas must not report a gas limit that a transaction cannot
+	// actually execute with.
+	if gas, err := DoEstimateGas(context.Background(), backend, newArgs(), latest, nil, nil, gasCap); err == nil {
+		t.Fatalf("eth_estimateGas: expected error, have estimate %d", gas)
+	}
+
+	// eth_simulateV1 lifts the cap only in non-strict mode.
+	for _, validate := range []bool{false, true} {
+		state, base, err := backend.StateAndHeaderByNumberOrHash(context.Background(), latest)
+		if err != nil {
+			t.Fatalf("failed to retrieve state: %v", err)
+		}
+		sim := &simulator{
+			b:           backend,
+			state:       state,
+			base:        base,
+			chainConfig: backend.ChainConfig(),
+			budget:      newGasBudget(gasCap),
+			validate:    validate,
+		}
+		results, err := sim.execute(context.Background(), []simBlock{{Calls: []TransactionArgs{newArgs()}}})
+		if err != nil {
+			t.Fatalf("eth_simulateV1 (validate=%v): unexpected error: %v", validate, err)
+		}
+		call := results[0].Calls[0]
+		if validate {
+			if call.Status != hexutil.Uint64(types.ReceiptStatusFailed) {
+				t.Errorf("eth_simulateV1 (validate=true): expected failure, have status %d", call.Status)
+			}
+		} else {
+			if call.Status != hexutil.Uint64(types.ReceiptStatusSuccessful) {
+				t.Errorf("eth_simulateV1 (validate=false): expected success, have status %d, error %v", call.Status, call.Error)
+			}
+		}
+	}
+}
+
+// TestSimulateGasLimitAmsterdam checks that after Amsterdam (EIP-8037), the
+// default and the maximum gas of a call in non-strict eth_simulateV1 account
+// for the uncapped execution gas reservation of the preceding calls.
+func TestSimulateGasLimitAmsterdam(t *testing.T) {
+	t.Parallel()
+
+	const gasLimit = 30_000_000 // Block gas limit, above params.MaxTxGas
+	var (
+		accounts = newAccounts(1)
+		config   = *params.MergedTestChainConfig
+		genesis  = &core.Genesis{
+			Config:     &config,
+			Difficulty: common.Big0,
+			GasLimit:   gasLimit,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+	)
+	config.AmsterdamTime = new(uint64)
+	backend := newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil)
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+	simulate := func(calls ...TransactionArgs) ([]*simBlockResult, error) {
+		state, base, err := backend.StateAndHeaderByNumberOrHash(context.Background(), latest)
+		if err != nil {
+			t.Fatalf("failed to retrieve state: %v", err)
+		}
+		sim := &simulator{
+			b:           backend,
+			state:       state,
+			base:        base,
+			chainConfig: backend.ChainConfig(),
+			budget:      newGasBudget(50_000_000),
+		}
+		return sim.execute(context.Background(), []simBlock{{Calls: calls}})
+	}
+	newArgs := func(gas *hexutil.Uint64) TransactionArgs {
+		return TransactionArgs{
+			From:         &accounts[0].addr,
+			To:           &accounts[0].addr,
+			Gas:          gas,
+			MaxFeePerGas: (*hexutil.Big)(big.NewInt(params.GWei)),
+		}
+	}
+
+	// A call without gas following another call defaults to the gas left.
+	results, err := simulate(newArgs(nil), newArgs(nil))
+	if err != nil {
+		t.Fatalf("default gas: unexpected error: %v", err)
+	}
+	for i, call := range results[0].Calls {
+		if call.Status != hexutil.Uint64(types.ReceiptStatusSuccessful) {
+			t.Errorf("default gas: call %d failed: %v", i, call.Error)
+		}
+	}
+
+	// A call with more gas than left in the execution dimension is rejected
+	// with the block gas limit error.
+	gas := hexutil.Uint64(gasLimit)
+	_, err = simulate(newArgs(nil), newArgs(&gas))
+	var gasErr *blockGasLimitReachedError
+	if !errors.As(err, &gasErr) {
+		t.Fatalf("explicit gas: want block gas limit error, have %v", err)
+	}
+}
+
 func TestEstimateGasWithMovePrecompile(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
@@ -4019,24 +4673,47 @@ func TestEIP7910Config(t *testing.T) {
 			},
 		}
 	)
-	gspec := core.DefaultHoodiGenesisBlock()
-	gspec.Config = config
+	// bpoConfig schedules the optional BPO forks only partially: Osaka, BPO1 and
+	// BPO2 are configured, BPO3-BPO5 are not, and Amsterdam is scheduled after.
+	// The next fork after BPO2 must skip the unconfigured BPO forks and report
+	// Amsterdam.
+	bpoConfig := *config
+	bpoConfig.OsakaTime = newUint64(1743000832)
+	bpoConfig.BPO1Time = newUint64(1743001832)
+	bpoConfig.BPO2Time = newUint64(1743002832)
+	bpoConfig.AmsterdamTime = newUint64(1743003832)
+	bpoConfig.BlobScheduleConfig = &params.BlobScheduleConfig{
+		Cancun: params.DefaultCancunBlobConfig,
+		Prague: params.DefaultPragueBlobConfig,
+		BPO1:   params.DefaultBPO1BlobConfig,
+		BPO2:   params.DefaultBPO2BlobConfig,
+	}
 
 	var testSuite = []struct {
-		time uint64
-		file string
+		config *params.ChainConfig
+		time   uint64
+		file   string
 	}{
 		{
-			time: 0,
-			file: "next-and-last",
+			config: config,
+			time:   0,
+			file:   "next-and-last",
 		},
 		{
-			time: *gspec.Config.PragueTime,
-			file: "current",
+			config: config,
+			time:   *config.PragueTime,
+			file:   "current",
+		},
+		{
+			config: &bpoConfig,
+			time:   *bpoConfig.BPO2Time,
+			file:   "bpo-skip",
 		},
 	}
 
 	for i, tt := range testSuite {
+		gspec := core.DefaultHoodiGenesisBlock()
+		gspec.Config = tt.config
 		backend := configTimeBackend{nil, gspec, tt.time}
 		api := NewBlockChainAPI(backend)
 		result, err := api.Config(context.Background())
@@ -4163,8 +4840,8 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	if !errors.As(err, &de) {
 		t.Fatalf("expected data error with code/data, got %T %v", err, err)
 	}
-	if de.ErrorCode() != errCodeTxSyncTimeout {
-		t.Fatalf("expected code %d, got %d", errCodeTxSyncTimeout, de.ErrorCode())
+	if de.ErrorCode() != ErrCodeTxSyncTimeout {
+		t.Fatalf("expected code %d, got %d", ErrCodeTxSyncTimeout, de.ErrorCode())
 	}
 	tx := new(types.Transaction)
 	if e := tx.UnmarshalBinary(raw); e != nil {
@@ -4338,4 +5015,97 @@ func TestStateMethodsDefaultToLatest(t *testing.T) {
 		func() any { return new(map[common.Address][]hexutil.Bytes) },
 		[]any{map[common.Address][]common.Hash{acc: {slot}}, "latest"},
 		[]any{map[common.Address][]common.Hash{acc: {slot}}})
+}
+
+// TestCreateAccessListAuthorizationGas checks that eth_createAccessList accepts
+// the gas limit returned by eth_estimateGas for a set-code transaction with
+// several authorizations, both before and after Amsterdam.
+func TestCreateAccessListAuthorizationGas(t *testing.T) {
+	t.Parallel()
+
+	const numAuths = 9
+	accounts := newAccounts(numAuths + 1)
+	// accounts[0] is the sender; every other account is already delegated and
+	// re-delegates, so that no account or authorization creation is charged.
+	var authList []types.SetCodeAuthorization
+	for _, acc := range accounts[1:] {
+		auth, err := types.SignSetCode(acc.key, types.SetCodeAuthorization{
+			Address: common.Address{0xaa},
+		})
+		require.NoError(t, err)
+		authList = append(authList, auth)
+	}
+	newAPI := func(amsterdam bool) *BlockChainAPI {
+		alloc := types.GenesisAlloc{accounts[0].addr: {Balance: big.NewInt(params.Ether)}}
+		for _, acc := range accounts[1:] {
+			alloc[acc.addr] = types.Account{
+				Balance: big.NewInt(params.Ether),
+				Code:    types.AddressToDelegation(common.Address{0xbb}),
+			}
+		}
+		config := *params.MergedTestChainConfig
+		if amsterdam {
+			config.AmsterdamTime = new(uint64)
+		}
+		genesis := &core.Genesis{Config: &config, Difficulty: common.Big0, Alloc: alloc}
+		return NewBlockChainAPI(newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil))
+	}
+	for _, tc := range []struct {
+		name      string
+		amsterdam bool
+	}{
+		{"pre-Amsterdam", false},
+		{"Amsterdam", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := newAPI(tc.amsterdam)
+			args := TransactionArgs{
+				From:              &accounts[0].addr,
+				To:                &accounts[0].addr,
+				AuthorizationList: authList,
+			}
+			estimated, err := api.EstimateGas(context.Background(), args, nil, nil, nil)
+			require.NoError(t, err)
+
+			args.Gas = &estimated
+			result, err := api.CreateAccessList(context.Background(), args, nil, nil)
+			require.NoError(t, err)
+			require.Empty(t, result.Error)
+		})
+	}
+}
+
+// headerErrorBackend fails header lookups of the safe and finalized tags.
+type headerErrorBackend struct {
+	*testBackend
+	err error
+}
+
+func (b headerErrorBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	if number == rpc.SafeBlockNumber || number == rpc.FinalizedBlockNumber {
+		return nil, b.err
+	}
+	return b.testBackend.HeaderByNumber(ctx, number)
+}
+
+// A safe or finalized tag that cannot be resolved to a block yet is null, while
+// any other backend failure is still reported.
+func TestGetHeaderByNumberUnresolvedTag(t *testing.T) {
+	t.Parallel()
+
+	backend := newTestBackend(t, 0, &core.Genesis{Config: params.MergedTestChainConfig, Difficulty: common.Big0}, beacon.New(ethash.NewFaker()), nil)
+	failure := errors.New("database failure")
+	for number, notFound := range map[rpc.BlockNumber]error{
+		rpc.SafeBlockNumber:      ErrSafeBlockNotFound,
+		rpc.FinalizedBlockNumber: ErrFinalizedBlockNotFound,
+	} {
+		api := NewBlockChainAPI(headerErrorBackend{backend, notFound})
+		if header, err := api.GetHeaderByNumber(context.Background(), number); header != nil || err != nil {
+			t.Errorf("%v not found: have %v %v, want null", number, header, err)
+		}
+		api = NewBlockChainAPI(headerErrorBackend{backend, failure})
+		if _, err := api.GetHeaderByNumber(context.Background(), number); !errors.Is(err, failure) {
+			t.Errorf("%v failure: have %v, want %v", number, err, failure)
+		}
+	}
 }
