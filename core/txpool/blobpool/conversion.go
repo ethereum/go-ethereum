@@ -32,6 +32,12 @@ import (
 // with 6 blobs each) would consume approximately 1.5GB of memory.
 const maxPendingConversionTasks = 2048
 
+var (
+	ErrConversionQueueClosed     = errors.New("conversion queue closed")
+	ErrConversionInterrupted     = errors.New("conversion is interrupted")
+	ErrConversionQueueOverloaded = errors.New("conversion queue is overloaded")
+)
+
 type convertResult struct {
 	ptx *BlobTxForPool
 	err error
@@ -80,7 +86,7 @@ func (q *conversionQueue) convert(tx *types.Transaction) (*BlobTxForPool, error)
 		res := <-done
 		return res.ptx, res.err
 	case <-q.closed:
-		return nil, errors.New("conversion queue closed")
+		return nil, ErrConversionQueueClosed
 	}
 }
 
@@ -90,7 +96,7 @@ func (q *conversionQueue) launchConversion(fn func()) error {
 	case q.startConversion <- fn:
 		return nil
 	case <-q.closed:
-		return errors.New("conversion queue closed")
+		return ErrConversionQueueClosed
 	}
 }
 
@@ -111,7 +117,7 @@ func (q *conversionQueue) run(tasks []*txConvert, done chan struct{}, interrupt 
 
 	for _, t := range tasks {
 		if interrupt != nil && interrupt.Load() != 0 {
-			t.done <- convertResult{err: errors.New("conversion is interrupted")}
+			t.done <- convertResult{err: ErrConversionInterrupted}
 			continue
 		}
 		// Run the conversion, the original sidecar will be mutated in place
@@ -139,7 +145,7 @@ func (q *conversionQueue) loop() {
 		select {
 		case t := <-q.tasks:
 			if len(txTasks) >= maxPendingConversionTasks {
-				t.done <- convertResult{err: errors.New("conversion queue is overloaded")}
+				t.done <- convertResult{err: ErrConversionQueueOverloaded}
 				continue
 			}
 			txTasks = append(txTasks, t)
@@ -186,7 +192,7 @@ func (q *conversionQueue) loop() {
 			for _, t := range txTasks {
 				// Best-effort notify; t.done is a buffered channel of size 1
 				// created by convert(), and we send exactly once per task.
-				t.done <- convertResult{err: errors.New("conversion queue closed")}
+				t.done <- convertResult{err: ErrConversionQueueClosed}
 			}
 			// Drop references to allow GC of the backing array.
 			txTasks = txTasks[:0]
