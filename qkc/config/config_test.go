@@ -308,18 +308,19 @@ func TestInvalidTOML(t *testing.T) {
 		{"local network field", true, "[Node]\nDataDir = \"data\""},
 		{"network local field", false, "[Root]\nPoSW = {}"},
 		{"local typo", false, "[Master.Node]\nHttpPort = 1234"},
-		{"legacy shard id", false, "[[ShardNodes]]\nShardID = 0"},
-		{"legacy internal address", false, "[[ShardNodes]]\nChainID = 100001\nAddress = \"127.0.0.1:38000\""},
-		{"legacy cluster host", false, "[[ShardNodes]]\nChainID = 100001\nClusterHost = \"127.0.0.1\""},
+		{"legacy shard nodes", false, "[[ShardNodes]]\nChainID = 100001"},
+		{"legacy shard id", false, "[[Slaves]]\nShardID = 0"},
+		{"legacy internal address", false, "[[Slaves]]\nChainID = 100001\nAddress = \"127.0.0.1:38000\""},
+		{"legacy cluster host", false, "[[Slaves]]\nChainID = 100001\nClusterHost = \"127.0.0.1\""},
 		{"invalid public port type", false, "[Master]\nPublicPort = \"invalid\""},
 		{"short master coinbase", false, "[Master]\nCoinbaseAddress = \"0x12\""},
-		{"legacy shard coinbase", false, "[[ShardNodes]]\nChainID = 100001\nCoinbaseAddress = \"0x111111111111111111111111111111111111111100000001\""},
-		{"invalid shard coinbase", false, "[[ShardNodes]]\nChainID = 100001\nCoinbaseAddress = \"0xgg11111111111111111111111111111111111111\""},
-		{"nested typo", false, "[[ShardNodes]]\nChainID = 100001\n[ShardNodes.Eth.Miner]\nUnknown = 1"},
-		{"invalid sync mode", false, "[[ShardNodes]]\nChainID = 100001\n[ShardNodes.Eth]\nSyncMode = \"invalid\""},
+		{"legacy shard coinbase", false, "[[Slaves]]\nChainID = 100001\nCoinbaseAddress = \"0x111111111111111111111111111111111111111100000001\""},
+		{"invalid shard coinbase", false, "[[Slaves]]\nChainID = 100001\nCoinbaseAddress = \"0xgg11111111111111111111111111111111111111\""},
+		{"nested typo", false, "[[Slaves]]\nChainID = 100001\n[Slaves.Eth.Miner]\nUnknown = 1"},
+		{"invalid sync mode", false, "[[Slaves]]\nChainID = 100001\n[Slaves.Eth]\nSyncMode = \"invalid\""},
 		{"derived role", false, "[Master]\nRole = \"master\""},
 		{"duplicate endpoint map", false, "[Master.ShardEndpoints]\n0 = \"127.0.0.1:38000\""},
-		{"chain id overflow", false, "[[ShardNodes]]\nChainID = 4294967296"},
+		{"chain id overflow", false, "[[Slaves]]\nChainID = 4294967296"},
 		{"obsolete posw flag", true, "[Root.PoSW]\nEnabled = true"},
 		{"invalid stake", true, "[Root.PoSW]\nStakePerBlock = \"invalid\""},
 		{"invalid ratio", true, "[Root.PoSW]\nDecayFactor = \"invalid\""},
@@ -384,12 +385,12 @@ func TestClusterExample(t *testing.T) {
 		common.HexToAddress("0x2222222222222222222222222222222222222222"),
 		common.HexToAddress("0x3333333333333333333333333333333333333333"),
 	}
-	for i, entry := range cfg.ShardNodes {
-		selected, err := cfg.SelectNode(RoleShard, entry.ChainID)
+	for i, entry := range cfg.Slaves {
+		selected, err := cfg.SelectNode(RoleSlave, entry.ChainID)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if selected != &cfg.ShardNodes[i] || selected.NetworkFile != cfg.NetworkFile || selected.ShardEndpoints != nil {
+		if selected != &cfg.Slaves[i] || selected.NetworkFile != cfg.NetworkFile || selected.ShardEndpoints != nil {
 			t.Fatal("process selection did not return the shard's own configuration")
 		}
 		if selected.CoinbaseAddress != addresses[i] {
@@ -405,8 +406,8 @@ func TestClusterExample(t *testing.T) {
 			t.Fatal("omitted execution settings did not inherit geth defaults")
 		}
 	}
-	cfg.ShardNodes[0].Eth.DatabaseCache = 0
-	if cfg.ShardNodes[1].Eth.DatabaseCache != 256 {
+	cfg.Slaves[0].Eth.DatabaseCache = 0
+	if cfg.Slaves[1].Eth.DatabaseCache != 256 {
 		t.Fatal("selected shard settings changed another shard")
 	}
 }
@@ -427,7 +428,7 @@ func TestNodeDefaults(t *testing.T) {
 		}
 	}
 	if shard.Eth.NetworkId != 0 || shard.Node.P2P.ListenAddr != "" || shard.Node.P2P.MaxPeers != 0 || !shard.Node.P2P.NoDiscovery || !shard.Node.P2P.NoDial {
-		t.Fatal("shard external P2P was not disabled")
+		t.Fatal("slave external P2P was not disabled")
 	}
 	if (master.Node.DataDir != "" && master.Node.DataDir == shard.Node.DataDir) || master.Node.Name == shard.Node.Name {
 		t.Fatal("process defaults share a data directory or instance name")
@@ -455,12 +456,12 @@ func TestClusterPublicEndpoint(t *testing.T) {
 		master            bool
 	}{
 		{"master", "[Master]\nPublicHost = \"127.0.0.1\"\nPublicPort = 18544", "127.0.0.1", 18544, true},
-		{"shard", "[[ShardNodes]]\nChainID = 100001\nPublicHost = \"127.0.0.1\"\nPublicPort = 18545", "127.0.0.1", 18545, false},
-		{"inherited public port", "[[ShardNodes]]\nChainID = 100001\nPublicHost = \"127.0.0.1\"", "127.0.0.1", node.DefaultHTTPPort, false},
-		{"public port leaves HTTP disabled", "[[ShardNodes]]\nChainID = 100001\nPublicPort = 18545", "", 18545, false},
-		{"native fallback", "[[ShardNodes]]\nChainID = 100001\n[ShardNodes.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "127.0.0.2", 18547, false},
-		{"public override", "[[ShardNodes]]\nChainID = 100001\nPublicHost = \"127.0.0.1\"\nPublicPort = 18545\n[ShardNodes.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "127.0.0.1", 18545, false},
-		{"explicit empty and zero", "[[ShardNodes]]\nChainID = 100001\nPublicHost = \"\"\nPublicPort = 0\n[ShardNodes.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "", 0, false},
+		{"shard", "[[Slaves]]\nChainID = 100001\nPublicHost = \"127.0.0.1\"\nPublicPort = 18545", "127.0.0.1", 18545, false},
+		{"inherited public port", "[[Slaves]]\nChainID = 100001\nPublicHost = \"127.0.0.1\"", "127.0.0.1", node.DefaultHTTPPort, false},
+		{"public port leaves HTTP disabled", "[[Slaves]]\nChainID = 100001\nPublicPort = 18545", "", 18545, false},
+		{"native fallback", "[[Slaves]]\nChainID = 100001\n[Slaves.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "127.0.0.2", 18547, false},
+		{"public override", "[[Slaves]]\nChainID = 100001\nPublicHost = \"127.0.0.1\"\nPublicPort = 18545\n[Slaves.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "127.0.0.1", 18545, false},
+		{"explicit empty and zero", "[[Slaves]]\nChainID = 100001\nPublicHost = \"\"\nPublicPort = 0\n[Slaves.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "", 0, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg, err := LoadCluster(writeConfig(t, []byte(test.input)))
@@ -469,7 +470,7 @@ func TestClusterPublicEndpoint(t *testing.T) {
 			}
 			selected := &cfg.Master
 			if !test.master {
-				selected = &cfg.ShardNodes[0]
+				selected = &cfg.Slaves[0]
 			}
 			if selected.Node.HTTPHost != test.host || selected.Node.HTTPPort != test.port {
 				t.Fatalf("effective HTTP endpoint = %q:%d, want %q:%d", selected.Node.HTTPHost, selected.Node.HTTPPort, test.host, test.port)
@@ -482,18 +483,18 @@ func TestClusterDefaultOverrides(t *testing.T) {
 	cfg, err := LoadCluster(writeConfig(t, []byte(`[Master.Node.P2P]
 MaxPeers = 0
 DiscoveryV4 = false
-[[ShardNodes]]
+[[Slaves]]
 ChainID = 100001
 PrivateHost = "127.0.0.1"
 PrivatePort = 38000
-[ShardNodes.Eth]
+[Slaves.Eth]
 DatabaseCache = 0
-[ShardNodes.Eth.Miner]
+[Slaves.Eth.Miner]
 GasPrice = "123"
-[ShardNodes.Eth.GPO]
+[Slaves.Eth.GPO]
 MaxPrice = "456"
 IgnorePrice = "7"
-[[ShardNodes]]
+[[Slaves]]
 ChainID = 100002
 PrivateHost = "127.0.0.1"
 PrivatePort = 38001
@@ -504,10 +505,10 @@ PrivatePort = 38001
 	if err := cfg.Validate(exampleNetwork(t)); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Master.Node.P2P.MaxPeers != 0 || cfg.Master.Node.P2P.DiscoveryV4 || cfg.ShardNodes[0].Eth.DatabaseCache != 0 {
+	if cfg.Master.Node.P2P.MaxPeers != 0 || cfg.Master.Node.P2P.DiscoveryV4 || cfg.Slaves[0].Eth.DatabaseCache != 0 {
 		t.Fatal("explicit zero or false was replaced by defaults")
 	}
-	first, second := cfg.ShardNodes[0].Eth, cfg.ShardNodes[1].Eth
+	first, second := cfg.Slaves[0].Eth, cfg.Slaves[1].Eth
 	if first.Miner.GasPrice.Int64() != 123 || first.GPO.MaxPrice.Int64() != 456 || first.GPO.IgnorePrice.Int64() != 7 {
 		t.Fatal("explicit big integer overrides were not applied")
 	}
@@ -521,7 +522,7 @@ PrivatePort = 38001
 		t.Fatal("mutable geth defaults are shared with a shard")
 	}
 	// Omitting the entire Master table still supplies its defaults.
-	cfg, err = LoadCluster(writeConfig(t, []byte("[[ShardNodes]]\nChainID = 100001\nPrivateHost = \"localhost\"\nPrivatePort = 38000\n")))
+	cfg, err = LoadCluster(writeConfig(t, []byte("[[Slaves]]\nChainID = 100001\nPrivateHost = \"localhost\"\nPrivatePort = 38000\n")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -540,41 +541,41 @@ func TestClusterNestedDefaults(t *testing.T) {
 		input  string
 		change func(*ethconfig.Config)
 	}{
-		{"miner gas price", "[ShardNodes.Eth.Miner]\nGasPrice = \"123\"", func(c *ethconfig.Config) {
+		{"miner gas price", "[Slaves.Eth.Miner]\nGasPrice = \"123\"", func(c *ethconfig.Config) {
 			c.Miner.GasPrice = big.NewInt(123)
 		}},
-		{"miner zeros", "[ShardNodes.Eth.Miner]\nGasCeil = 0\nRecommit = 0\nGasPrice = \"0\"", func(c *ethconfig.Config) {
+		{"miner zeros", "[Slaves.Eth.Miner]\nGasCeil = 0\nRecommit = 0\nGasPrice = \"0\"", func(c *ethconfig.Config) {
 			c.Miner.GasCeil, c.Miner.Recommit, c.Miner.GasPrice = 0, 0, new(big.Int)
 		}},
-		{"GPO price", "[ShardNodes.Eth.GPO]\nMaxPrice = \"456\"", func(c *ethconfig.Config) {
+		{"GPO price", "[Slaves.Eth.GPO]\nMaxPrice = \"456\"", func(c *ethconfig.Config) {
 			c.GPO.MaxPrice = big.NewInt(456)
 		}},
-		{"GPO zeros", "[ShardNodes.Eth.GPO]\nBlocks = 0\nMaxPrice = \"0\"", func(c *ethconfig.Config) {
+		{"GPO zeros", "[Slaves.Eth.GPO]\nBlocks = 0\nMaxPrice = \"0\"", func(c *ethconfig.Config) {
 			c.GPO.Blocks, c.GPO.MaxPrice = 0, new(big.Int)
 		}},
-		{"txpool price bump", "[ShardNodes.Eth.TxPool]\nPriceBump = 25", func(c *ethconfig.Config) {
+		{"txpool price bump", "[Slaves.Eth.TxPool]\nPriceBump = 25", func(c *ethconfig.Config) {
 			c.TxPool.PriceBump = 25
 		}},
-		{"txpool zero and false", "[ShardNodes.Eth.TxPool]\nPriceLimit = 0\nNoLocals = false", func(c *ethconfig.Config) {
+		{"txpool zero and false", "[Slaves.Eth.TxPool]\nPriceLimit = 0\nNoLocals = false", func(c *ethconfig.Config) {
 			c.TxPool.PriceLimit, c.TxPool.NoLocals = 0, false
 		}},
-		{"blobpool capacity", "[ShardNodes.Eth.BlobPool]\nDatacap = 123", func(c *ethconfig.Config) {
+		{"blobpool capacity", "[Slaves.Eth.BlobPool]\nDatacap = 123", func(c *ethconfig.Config) {
 			c.BlobPool.Datacap = 123
 		}},
-		{"blobpool zero", "[ShardNodes.Eth.BlobPool]\nDatacap = 0", func(c *ethconfig.Config) {
+		{"blobpool zero", "[Slaves.Eth.BlobPool]\nDatacap = 0", func(c *ethconfig.Config) {
 			c.BlobPool.Datacap = 0
 		}},
-		{"empty tables", "[ShardNodes.Eth.Miner]\n[ShardNodes.Eth.GPO]\n[ShardNodes.Eth.TxPool]\n[ShardNodes.Eth.BlobPool]", func(*ethconfig.Config) {}},
+		{"empty tables", "[Slaves.Eth.Miner]\n[Slaves.Eth.GPO]\n[Slaves.Eth.TxPool]\n[Slaves.Eth.BlobPool]", func(*ethconfig.Config) {}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			input := "[[ShardNodes]]\nChainID = 100001\n" + test.input + "\n[[ShardNodes]]\nChainID = 100002\n"
+			input := "[[Slaves]]\nChainID = 100001\n" + test.input + "\n[[Slaves]]\nChainID = 100002\n"
 			cfg, err := LoadCluster(writeConfig(t, []byte(input)))
 			if err != nil {
 				t.Fatal(err)
 			}
 			want := ethconfig.Defaults
 			test.change(&want)
-			got := cfg.ShardNodes[0].Eth
+			got := cfg.Slaves[0].Eth
 			for _, prices := range [][2]*big.Int{
 				{got.Miner.GasPrice, want.Miner.GasPrice},
 				{got.GPO.MaxPrice, want.GPO.MaxPrice},
@@ -589,7 +590,7 @@ func TestClusterNestedDefaults(t *testing.T) {
 			if !reflect.DeepEqual(got, &want) {
 				t.Fatalf("nested override lost defaults or explicit values:\nhave %+v\nwant %+v", got, &want)
 			}
-			if !reflect.DeepEqual(cfg.ShardNodes[1].Eth, &ethconfig.Defaults) {
+			if !reflect.DeepEqual(cfg.Slaves[1].Eth, &ethconfig.Defaults) {
 				t.Fatal("nested overrides affected another shard")
 			}
 		})
@@ -604,11 +605,11 @@ func TestProcessSelection(t *testing.T) {
 		want string
 	}{
 		{"", nil, "set --qkc.role"},
-		{"slave", nil, "set --qkc.role"},
+		{"shard", nil, "set --qkc.role"},
 		{RoleMaster, &zero, "master cannot select"},
-		{RoleShard, nil, "requires a chain ID"},
-		{RoleShard, &unknown, "not in the deployment"},
-		{RoleShard, &zero, "not in the deployment"},
+		{RoleSlave, nil, "requires a chain ID"},
+		{RoleSlave, &unknown, "not in the deployment"},
+		{RoleSlave, &zero, "not in the deployment"},
 	} {
 		if _, err := exampleCluster(t).SelectNode(test.role, test.id); err == nil || !strings.Contains(err.Error(), test.want) {
 			t.Fatalf("have %v, want error containing %q", err, test.want)
@@ -622,24 +623,24 @@ func TestClusterValidation(t *testing.T) {
 		change func(*ClusterConfig)
 		want   string
 	}{
-		{"missing shard", func(c *ClusterConfig) { c.ShardNodes = c.ShardNodes[:1] }, "every network shard"},
-		{"missing id", func(c *ClusterConfig) { c.ShardNodes[0].ChainID = nil }, "ChainID is required"},
-		{"duplicate shard", func(c *ClusterConfig) { *c.ShardNodes[1].ChainID = 100001 }, "duplicate deployed chain"},
-		{"unknown shard", func(c *ClusterConfig) { *c.ShardNodes[1].ChainID = 100003 }, "not in the network"},
+		{"missing shard", func(c *ClusterConfig) { c.Slaves = c.Slaves[:1] }, "every network shard"},
+		{"missing id", func(c *ClusterConfig) { c.Slaves[0].ChainID = nil }, "ChainID is required"},
+		{"duplicate shard", func(c *ClusterConfig) { *c.Slaves[1].ChainID = 100001 }, "duplicate deployed chain"},
+		{"unknown shard", func(c *ClusterConfig) { *c.Slaves[1].ChainID = 100003 }, "not in the network"},
 		{"duplicate cluster endpoint", func(c *ClusterConfig) {
-			c.ShardNodes[1].PrivateHost = c.ShardNodes[0].PrivateHost
-			c.ShardNodes[1].PrivatePort = c.ShardNodes[0].PrivatePort
+			c.Slaves[1].PrivateHost = c.Slaves[0].PrivateHost
+			c.Slaves[1].PrivatePort = c.Slaves[0].PrivatePort
 		}, "TCP listeners conflict"},
 		{"equivalent IPv6 addresses", func(c *ClusterConfig) {
-			c.ShardNodes[0].PrivateHost = "::1"
-			c.ShardNodes[1].PrivateHost = "0:0:0:0:0:0:0:1"
-			c.ShardNodes[1].PrivatePort = c.ShardNodes[0].PrivatePort
+			c.Slaves[0].PrivateHost = "::1"
+			c.Slaves[1].PrivateHost = "0:0:0:0:0:0:0:1"
+			c.Slaves[1].PrivatePort = c.Slaves[0].PrivatePort
 		}, "TCP listeners conflict"},
 		{"IPv4 mapped address", func(c *ClusterConfig) {
-			c.ShardNodes[1].PrivateHost = "::ffff:127.0.0.1"
-			c.ShardNodes[1].PrivatePort = c.ShardNodes[0].PrivatePort
+			c.Slaves[1].PrivateHost = "::ffff:127.0.0.1"
+			c.Slaves[1].PrivatePort = c.Slaves[0].PrivatePort
 		}, "TCP listeners conflict"},
-		{"shared datadir", func(c *ClusterConfig) { c.ShardNodes[1].Node.DataDir = c.Master.Node.DataDir }, "data directory is shared"},
+		{"shared datadir", func(c *ClusterConfig) { c.Slaves[1].Node.DataDir = c.Master.Node.DataDir }, "data directory is shared"},
 		{"master chain id", func(c *ClusterConfig) { c.Master.ChainID = new(uint32) }, "Master must not specify ChainID"},
 		{"master execution", func(c *ClusterConfig) { c.Master.Eth = &ethconfig.Config{} }, "master cannot configure Eth"},
 		{"master cluster host", func(c *ClusterConfig) { c.Master.PrivateHost = "localhost" }, "master cannot configure Eth"},
@@ -654,7 +655,7 @@ func TestClusterValidation(t *testing.T) {
 		})
 	}
 	cfg := exampleCluster(t)
-	cfg.Master.Node.DataDir, cfg.ShardNodes[0].Node.DataDir, cfg.ShardNodes[1].Node.DataDir = "", "", ""
+	cfg.Master.Node.DataDir, cfg.Slaves[0].Node.DataDir, cfg.Slaves[1].Node.DataDir = "", "", ""
 	if err := cfg.Validate(exampleNetwork(t)); err != nil {
 		t.Fatalf("ephemeral data directories should be supported: %v", err)
 	}
@@ -667,52 +668,52 @@ func TestClusterTCPEndpoints(t *testing.T) {
 		conflict bool
 	}{
 		{"duplicate HTTP", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[1].Node.HTTPPort
+			c.Slaves[0].Node.HTTPPort = c.Slaves[1].Node.HTTPPort
 		}, true},
 		{"master and shard HTTP", func(c *ClusterConfig) {
-			c.Master.Node.HTTPHost = c.ShardNodes[0].Node.HTTPHost
-			c.Master.Node.HTTPPort = c.ShardNodes[0].Node.HTTPPort
+			c.Master.Node.HTTPHost = c.Slaves[0].Node.HTTPHost
+			c.Master.Node.HTTPPort = c.Slaves[0].Node.HTTPPort
 		}, true},
 		{"HTTP and WS across processes", func(c *ClusterConfig) {
-			c.ShardNodes[1].Node.WSHost = c.ShardNodes[0].Node.HTTPHost
-			c.ShardNodes[1].Node.WSPort = c.ShardNodes[0].Node.HTTPPort
+			c.Slaves[1].Node.WSHost = c.Slaves[0].Node.HTTPHost
+			c.Slaves[1].Node.WSPort = c.Slaves[0].Node.HTTPPort
 		}, true},
 		{"duplicate WS", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.WSHost, c.ShardNodes[1].Node.WSHost = "localhost", "localhost"
+			c.Slaves[0].Node.WSHost, c.Slaves[1].Node.WSHost = "localhost", "localhost"
 		}, true},
 		{"equivalent IPv6", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPHost = "::1"
-			c.ShardNodes[1].Node.HTTPHost = "0:0:0:0:0:0:0:1"
-			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[1].Node.HTTPPort
+			c.Slaves[0].Node.HTTPHost = "::1"
+			c.Slaves[1].Node.HTTPHost = "0:0:0:0:0:0:0:1"
+			c.Slaves[0].Node.HTTPPort = c.Slaves[1].Node.HTTPPort
 		}, true},
 		{"hostname case", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPHost, c.ShardNodes[1].Node.HTTPHost = "LOCALHOST", "localhost"
-			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[1].Node.HTTPPort
+			c.Slaves[0].Node.HTTPHost, c.Slaves[1].Node.HTTPHost = "LOCALHOST", "localhost"
+			c.Slaves[0].Node.HTTPPort = c.Slaves[1].Node.HTTPPort
 		}, true},
 		{"wildcard first", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPHost = "0.0.0.0"
-			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[1].Node.HTTPPort
+			c.Slaves[0].Node.HTTPHost = "0.0.0.0"
+			c.Slaves[0].Node.HTTPPort = c.Slaves[1].Node.HTTPPort
 		}, true},
 		{"wildcard second", func(c *ClusterConfig) {
-			c.ShardNodes[1].Node.HTTPHost = "::"
-			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[1].Node.HTTPPort
+			c.Slaves[1].Node.HTTPHost = "::"
+			c.Slaves[0].Node.HTTPPort = c.Slaves[1].Node.HTTPPort
 		}, true},
 		{"HTTP and own internal listener", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPPort = 38000
+			c.Slaves[0].Node.HTTPPort = 38000
 		}, true},
 		{"HTTP and later internal listener", func(c *ClusterConfig) {
 			c.Master.Node.HTTPHost, c.Master.Node.HTTPPort = "127.0.0.1", 38001
 		}, true},
 		{"WS and earlier internal listener", func(c *ClusterConfig) {
-			c.ShardNodes[1].Node.WSHost, c.ShardNodes[1].Node.WSPort = "127.0.0.1", 38000
+			c.Slaves[1].Node.WSHost, c.Slaves[1].Node.WSPort = "127.0.0.1", 38000
 		}, true},
 		{"default WS host and internal listener", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.WSHost = node.DefaultWSHost
-			c.ShardNodes[0].Node.WSPort = c.ShardNodes[0].PrivatePort
+			c.Slaves[0].Node.WSHost = node.DefaultWSHost
+			c.Slaves[0].Node.WSPort = c.Slaves[0].PrivatePort
 		}, true},
 		{"internal hostname and HTTP IP", func(c *ClusterConfig) {
-			c.ShardNodes[0].PrivateHost = "localhost"
-			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[0].PrivatePort
+			c.Slaves[0].PrivateHost = "localhost"
+			c.Slaves[0].Node.HTTPPort = c.Slaves[0].PrivatePort
 		}, true},
 		{"HTTP hostname and later internal IP", func(c *ClusterConfig) {
 			c.Master.Node.HTTPHost, c.Master.Node.HTTPPort = "LOCALHOST", 38000
@@ -721,12 +722,12 @@ func TestClusterTCPEndpoints(t *testing.T) {
 			c.Master.Node.P2P.ListenAddr = "localhost:18545"
 		}, true},
 		{"default WS host and mapped IPv4", func(c *ClusterConfig) {
-			c.ShardNodes[0].PrivateHost = "::ffff:127.0.0.1"
-			c.ShardNodes[0].Node.WSHost = node.DefaultWSHost
-			c.ShardNodes[0].Node.WSPort = c.ShardNodes[0].PrivatePort
+			c.Slaves[0].PrivateHost = "::ffff:127.0.0.1"
+			c.Slaves[0].Node.WSHost = node.DefaultWSHost
+			c.Slaves[0].Node.WSPort = c.Slaves[0].PrivatePort
 		}, true},
 		{"P2P and shard HTTP", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPPort = 30303
+			c.Slaves[0].Node.HTTPPort = 30303
 		}, true},
 		{"P2P and master HTTP", func(c *ClusterConfig) {
 			c.Master.Node.HTTPHost, c.Master.Node.HTTPPort = "127.0.0.1", 30303
@@ -736,59 +737,59 @@ func TestClusterTCPEndpoints(t *testing.T) {
 		}, true},
 		{"P2P and wildcard WS", func(c *ClusterConfig) {
 			c.Master.Node.P2P.ListenAddr = "127.0.0.1:30303"
-			c.ShardNodes[0].Node.WSHost, c.ShardNodes[0].Node.WSPort = "0.0.0.0", 30303
+			c.Slaves[0].Node.WSHost, c.Slaves[0].Node.WSPort = "0.0.0.0", 30303
 		}, true},
 		{"internal listener and mapped IPv4 HTTP", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPHost, c.ShardNodes[0].Node.HTTPPort = "::ffff:127.0.0.1", 38000
+			c.Slaves[0].Node.HTTPHost, c.Slaves[0].Node.HTTPPort = "::ffff:127.0.0.1", 38000
 		}, true},
 		{"shared WS listener and internal listener", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPHost = "127.0.0.2"
-			c.ShardNodes[0].Node.WSHost = "127.0.0.1"
-			c.ShardNodes[0].Node.HTTPPort, c.ShardNodes[0].Node.WSPort = 38000, 38000
+			c.Slaves[0].Node.HTTPHost = "127.0.0.2"
+			c.Slaves[0].Node.WSHost = "127.0.0.1"
+			c.Slaves[0].Node.HTTPPort, c.Slaves[0].Node.WSPort = 38000, 38000
 		}, true},
 		{"dynamic ports", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPPort, c.ShardNodes[1].Node.HTTPPort = 0, 0
+			c.Slaves[0].Node.HTTPPort, c.Slaves[1].Node.HTTPPort = 0, 0
 		}, false},
 		{"disabled HTTP", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPHost = ""
-			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[1].Node.HTTPPort
+			c.Slaves[0].Node.HTTPHost = ""
+			c.Slaves[0].Node.HTTPPort = c.Slaves[1].Node.HTTPPort
 		}, false},
 		{"same port on different hosts", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPHost = "127.0.0.2"
-			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[1].Node.HTTPPort
+			c.Slaves[0].Node.HTTPHost = "127.0.0.2"
+			c.Slaves[0].Node.HTTPPort = c.Slaves[1].Node.HTTPPort
 		}, false},
 		{"HTTP and WS in one process", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.WSHost = c.ShardNodes[0].Node.HTTPHost
-			c.ShardNodes[0].Node.WSPort = c.ShardNodes[0].Node.HTTPPort
+			c.Slaves[0].Node.WSHost = c.Slaves[0].Node.HTTPHost
+			c.Slaves[0].Node.WSPort = c.Slaves[0].Node.HTTPPort
 		}, false},
 		{"shared listener uses WS host", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPPort = c.ShardNodes[1].Node.HTTPPort
-			c.ShardNodes[0].Node.WSHost = "127.0.0.2"
-			c.ShardNodes[0].Node.WSPort = c.ShardNodes[0].Node.HTTPPort
+			c.Slaves[0].Node.HTTPPort = c.Slaves[1].Node.HTTPPort
+			c.Slaves[0].Node.WSHost = "127.0.0.2"
+			c.Slaves[0].Node.WSPort = c.Slaves[0].Node.HTTPPort
 		}, false},
 		{"shared WS listener avoids internal listener", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.WSHost = "127.0.0.2"
-			c.ShardNodes[0].Node.HTTPPort, c.ShardNodes[0].Node.WSPort = 38000, 38000
+			c.Slaves[0].Node.WSHost = "127.0.0.2"
+			c.Slaves[0].Node.HTTPPort, c.Slaves[0].Node.WSPort = 38000, 38000
 		}, false},
 		{"internal and HTTP on different hosts", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPHost, c.ShardNodes[0].Node.HTTPPort = "127.0.0.2", 38000
+			c.Slaves[0].Node.HTTPHost, c.Slaves[0].Node.HTTPPort = "127.0.0.2", 38000
 		}, false},
 		{"default WS host and distinct loopback IP", func(c *ClusterConfig) {
-			c.ShardNodes[0].PrivateHost = "127.0.0.2"
-			c.ShardNodes[0].Node.WSHost = node.DefaultWSHost
-			c.ShardNodes[0].Node.WSPort = c.ShardNodes[0].PrivatePort
+			c.Slaves[0].PrivateHost = "127.0.0.2"
+			c.Slaves[0].Node.WSHost = node.DefaultWSHost
+			c.Slaves[0].Node.WSPort = c.Slaves[0].PrivatePort
 		}, false},
 		{"shared WS listener ignores HTTP hostname", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.HTTPHost, c.ShardNodes[0].Node.HTTPPort = "localhost", 38000
-			c.ShardNodes[0].Node.WSHost, c.ShardNodes[0].Node.WSPort = "127.0.0.2", 38000
+			c.Slaves[0].Node.HTTPHost, c.Slaves[0].Node.HTTPPort = "localhost", 38000
+			c.Slaves[0].Node.WSHost, c.Slaves[0].Node.WSPort = "127.0.0.2", 38000
 		}, false},
 		{"P2P and HTTP on different hosts", func(c *ClusterConfig) {
 			c.Master.Node.P2P.ListenAddr = "127.0.0.2:30303"
-			c.ShardNodes[0].Node.HTTPPort = 30303
+			c.Slaves[0].Node.HTTPPort = 30303
 		}, false},
 		{"disabled P2P listener", func(c *ClusterConfig) {
 			c.Master.Node.P2P.ListenAddr = ""
-			c.ShardNodes[0].Node.HTTPPort = 30303
+			c.Slaves[0].Node.HTTPPort = 30303
 		}, false},
 		{"dynamic P2P port", func(c *ClusterConfig) {
 			c.Master.Node.P2P.ListenAddr = ":0"
@@ -823,29 +824,29 @@ func TestClusterIPCEndpoints(t *testing.T) {
 		conflict bool
 	}{
 		{"shared explicit path", func(c *ClusterConfig) {
-			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "ipc/shared.ipc", "ipc/shared.ipc"
+			c.Master.Node.IPCPath, c.Slaves[0].Node.IPCPath = "ipc/shared.ipc", "ipc/shared.ipc"
 		}, true},
 		{"normalized paths", func(c *ClusterConfig) {
-			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "ipc/shared.ipc", "ipc/./shared.ipc"
+			c.Master.Node.IPCPath, c.Slaves[0].Node.IPCPath = "ipc/shared.ipc", "ipc/./shared.ipc"
 		}, true},
 		{"resolved bare filename", func(c *ClusterConfig) {
-			c.ShardNodes[0].Node.IPCPath = c.Master.Node.IPCEndpoint()
+			c.Slaves[0].Node.IPCPath = c.Master.Node.IPCEndpoint()
 		}, true},
 		{"same name with empty datadirs", func(c *ClusterConfig) {
-			c.Master.Node.DataDir, c.ShardNodes[0].Node.DataDir = "", ""
-			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "shared.ipc", "shared.ipc"
+			c.Master.Node.DataDir, c.Slaves[0].Node.DataDir = "", ""
+			c.Master.Node.IPCPath, c.Slaves[0].Node.IPCPath = "shared.ipc", "shared.ipc"
 		}, true},
 		{"same name with distinct datadirs", func(c *ClusterConfig) {
-			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "shared.ipc", "shared.ipc"
+			c.Master.Node.IPCPath, c.Slaves[0].Node.IPCPath = "shared.ipc", "shared.ipc"
 		}, runtime.GOOS == "windows"},
 		{"absolute and relative paths", func(c *ClusterConfig) {
-			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = absolute, "ipc/shared.ipc"
+			c.Master.Node.IPCPath, c.Slaves[0].Node.IPCPath = absolute, "ipc/shared.ipc"
 		}, runtime.GOOS != "windows"},
 		{"named pipe case", func(c *ClusterConfig) {
-			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "shared.ipc", "SHARED.ipc"
+			c.Master.Node.IPCPath, c.Slaves[0].Node.IPCPath = "shared.ipc", "SHARED.ipc"
 		}, runtime.GOOS == "windows"},
 		{"disabled IPC", func(c *ClusterConfig) {
-			c.Master.Node.IPCPath, c.ShardNodes[0].Node.IPCPath = "", ""
+			c.Master.Node.IPCPath, c.Slaves[0].Node.IPCPath = "", ""
 		}, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -896,7 +897,7 @@ func TestNodeValidation(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cluster := exampleCluster(t)
-			cfg := &cluster.ShardNodes[0]
+			cfg := &cluster.Slaves[0]
 			if test.master {
 				cfg = &cluster.Master
 			}
@@ -912,7 +913,7 @@ func TestNodeValidation(t *testing.T) {
 		t.Fatalf("port zero must be valid: %v", err)
 	}
 	cluster := exampleCluster(t)
-	cluster.ShardNodes[0].PrivateHost = "::1"
+	cluster.Slaves[0].PrivateHost = "::1"
 	if err := cluster.Validate(exampleNetwork(t)); err != nil {
 		t.Fatalf("IPv6 internal endpoints must be valid: %v", err)
 	}

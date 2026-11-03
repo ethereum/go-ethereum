@@ -57,21 +57,21 @@ type RootConfig struct {
 
 const (
 	RoleMaster = "master"
-	RoleShard  = "shard"
+	RoleSlave  = "slave"
 )
 
 // ClusterConfig describes a deployment. Every process reads the same network
-// definition and selects either Master or one entry from ShardNodes.
+// definition and selects either Master or one entry from Slaves.
 type ClusterConfig struct {
 	NetworkFile string
 	Master      NodeConfig
-	ShardNodes  []NodeConfig
+	Slaves      []NodeConfig
 }
 
 // NodeConfig contains the effective settings of one process. Master has no
-// ChainID, PrivateHost, PrivatePort or Eth settings. A shard's PrivateHost and
+// ChainID, PrivateHost, PrivatePort or Eth settings. A slave's PrivateHost and
 // PrivatePort define its internal TCP endpoint, used both for listening and for
-// dialing by Master and the other shards. The TOML PublicHost and PublicPort
+// dialing by Master and the other slaves. The TOML PublicHost and PublicPort
 // keys configure Node.HTTPHost and Node.HTTPPort without duplicating their state.
 type NodeConfig struct {
 	ChainID         *uint32
@@ -93,13 +93,13 @@ var tomlSettings = toml.Config{
 }
 
 // DefaultNodeConfig returns per-process geth defaults. A nil chainID selects
-// Master; a non-nil ID selects the shard with that EVM chain ID.
+// Master; a non-nil ID selects the slave for that EVM chain ID.
 func DefaultNodeConfig(chainID *uint32) NodeConfig {
 	cfg := NodeConfig{Role: RoleMaster, Node: node.DefaultConfig}
 	name := "master"
 	if chainID != nil {
 		id := *chainID
-		cfg.Role, cfg.ChainID = RoleShard, &id
+		cfg.Role, cfg.ChainID = RoleSlave, &id
 		name = fmt.Sprintf("shard-%d", id)
 		eth := ethconfig.Defaults
 		// TOML text decoding mutates big integers in place. Keep defaults and
@@ -193,19 +193,19 @@ func (c *ClusterConfig) SelectNode(role string, chainID *uint32) (*NodeConfig, e
 			return nil, errors.New("master cannot select a chain ID")
 		}
 		selected = &c.Master
-		selected.ShardEndpoints = make(map[uint32]string, len(c.ShardNodes))
-		for _, shard := range c.ShardNodes {
+		selected.ShardEndpoints = make(map[uint32]string, len(c.Slaves))
+		for _, shard := range c.Slaves {
 			if shard.ChainID != nil {
 				selected.ShardEndpoints[*shard.ChainID] = shard.PrivateEndpoint()
 			}
 		}
-	case RoleShard:
+	case RoleSlave:
 		if chainID == nil {
-			return nil, errors.New("shard process requires a chain ID")
+			return nil, errors.New("slave process requires a chain ID")
 		}
-		for i := range c.ShardNodes {
-			if c.ShardNodes[i].ChainID != nil && *c.ShardNodes[i].ChainID == *chainID {
-				selected = &c.ShardNodes[i]
+		for i := range c.Slaves {
+			if c.Slaves[i].ChainID != nil && *c.Slaves[i].ChainID == *chainID {
+				selected = &c.Slaves[i]
 				break
 			}
 		}
@@ -213,7 +213,7 @@ func (c *ClusterConfig) SelectNode(role string, chainID *uint32) (*NodeConfig, e
 			return nil, fmt.Errorf("chain ID %d is not in the deployment", *chainID)
 		}
 	default:
-		return nil, errors.New("set --qkc.role to master or shard")
+		return nil, errors.New("set --qkc.role to master or slave")
 	}
 	selected.NetworkFile = c.NetworkFile
 	return selected, nil
@@ -243,17 +243,17 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 	}
 	ids, dirs, ipcEndpoints := make(map[uint32]bool), make(map[string]bool), make(map[string]bool)
 	tcpEndpoints := make(map[uint64][]*net.TCPAddr)
-	for i, cfg := range append([]NodeConfig{c.Master}, c.ShardNodes...) {
+	for i, cfg := range append([]NodeConfig{c.Master}, c.Slaves...) {
 		if i > 0 {
 			if cfg.ChainID == nil {
-				return fmt.Errorf("ShardNodes[%d]: ChainID is required", i-1)
+				return fmt.Errorf("Slaves[%d]: ChainID is required", i-1)
 			}
 			if ids[*cfg.ChainID] {
 				return fmt.Errorf("duplicate deployed chain ID %d", *cfg.ChainID)
 			}
 			ids[*cfg.ChainID] = true
 			if err := cfg.Validate(network); err != nil {
-				return fmt.Errorf("ShardNodes[%d]: %w", i-1, err)
+				return fmt.Errorf("Slaves[%d]: %w", i-1, err)
 			}
 		}
 		endpoints := []string{cfg.PrivateEndpoint(), cfg.Node.P2P.ListenAddr, cfg.Node.WSEndpoint()}
@@ -447,9 +447,9 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 		if c.Eth != nil || c.ChainID != nil || c.PrivateHost != "" || c.PrivatePort != 0 {
 			return errors.New("master cannot configure Eth, ChainID, PrivateHost or PrivatePort")
 		}
-	case RoleShard:
+	case RoleSlave:
 		if c.ChainID == nil || c.Eth == nil {
-			return errors.New("shard requires ChainID and execution settings")
+			return errors.New("slave requires ChainID and execution settings")
 		}
 		found := false
 		for _, shard := range network.Shards {
@@ -469,7 +469,7 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 		p := c.Node.P2P
 		if p.ListenAddr != "" || p.DiscAddr != "" || p.MaxPeers != 0 || !p.NoDiscovery || !p.NoDial ||
 			p.DiscoveryV4 || p.DiscoveryV5 || len(p.BootstrapNodes)+len(p.BootstrapNodesV5)+len(p.StaticNodes)+len(p.TrustedNodes) != 0 {
-			return errors.New("shard external P2P must be disabled; configure PrivateHost and PrivatePort instead")
+			return errors.New("slave external P2P must be disabled; configure PrivateHost and PrivatePort instead")
 		}
 	default:
 		return fmt.Errorf("invalid process role %q", c.Role)

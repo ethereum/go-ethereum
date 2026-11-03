@@ -5,7 +5,7 @@ A QKC deployment uses two TOML files:
 | File | What it configures | Example |
 | --- | --- | --- |
 | `network.toml` | Shared network rules: network ID, shards, EVM chain IDs, forks, and consensus parameters. | [network.toml](examples/network.toml) |
-| `cluster.toml` | Process settings: one Master and one process per shard, with their addresses, data directories, and RPC settings. | [cluster.toml](examples/cluster.toml) |
+| `cluster.toml` | Process settings: one Master and one Slave per shard, with their addresses, data directories, and RPC settings. | [cluster.toml](examples/cluster.toml) |
 
 `cluster.toml` points to the shared network file through `NetworkFile`. Each
 process selects its own entry from the deployment. CLI flags can override that
@@ -13,7 +13,7 @@ process's settings; network rules remain in the shared file.
 
 ## Validate the example deployment
 
-The example defines one Master and two shards. From the repository root, check
+The example defines one Master and two Slaves. From the repository root, check
 the configuration for each process:
 
 ```sh
@@ -23,11 +23,11 @@ go run ./cmd/qkc checkconfig \
 
 # Chain 100001
 go run ./cmd/qkc checkconfig \
-  --config qkc/config/examples/cluster.toml --qkc.role shard --qkc.chain 100001
+  --config qkc/config/examples/cluster.toml --qkc.role slave --qkc.chain 100001
 
 # Chain 100002, with its configured HTTP endpoint disabled
 go run ./cmd/qkc checkconfig \
-  --config qkc/config/examples/cluster.toml --qkc.role shard --qkc.chain 100002 --http=false
+  --config qkc/config/examples/cluster.toml --qkc.role slave --qkc.chain 100002 --http=false
 ```
 
 Each command applies overrides to the selected process, then validates the
@@ -109,15 +109,15 @@ These settings do not deploy the staking contract. See
 
 ## Configure processes in `cluster.toml`
 
-The deployment must contain each network shard exactly once. Master and shards
+The deployment must contain each network shard exactly once. Master and Slaves
 have different responsibilities:
 
 - **Master** connects to the external P2P network. Configure its process settings
   under `[Master.Node]` and external devp2p under `[Master.Node.P2P]`.
-- **Each shard** has a `[[ShardNodes]]` entry. Set `ChainID` to its EVM chain ID and
-  `PrivateHost` and `PrivatePort` to its internal TCP endpoint. Set `PublicHost`
+- **Each Slave** runs one shard and has a `[[Slaves]]` entry. Set `ChainID` to its
+  EVM chain ID and `PrivateHost` and `PrivatePort` to its internal TCP endpoint. Set `PublicHost`
   and `PublicPort` for client-facing HTTP JSON-RPC. Put other process settings
-  under `[ShardNodes.Node]` and execution settings under `[ShardNodes.Eth]`.
+  under `[Slaves.Node]` and execution settings under `[Slaves.Eth]`.
 
 For field definitions, see [node.Config](../../node/config.go) for the `Node`
 sections and [ethconfig.Config](../../eth/ethconfig/config.go) for shard `Eth`
@@ -129,27 +129,27 @@ in MiB. Omitted execution settings inherit geth defaults.
 ### Select a process
 
 Use `--qkc.role master` to select Master. Use
-`--qkc.role shard --qkc.chain <id>` to select a shard. The chain selector is
+`--qkc.role slave --qkc.chain <id>` to select a Slave. The chain selector is
 required and uses the same ID as EVM execution and internal routing. For example,
 select the chain with `ChainID = "100001"` using `--qkc.chain 100001`.
 
 ### Addresses, storage, and RPC
 
-Each shard's `PrivateHost` and `PrivatePort` define its internal QKC TCP endpoint,
-used both for listening and for dialing by Master and other shards. For example,
+Each Slave's `PrivateHost` and `PrivatePort` define its internal QKC TCP endpoint,
+used both for listening and for dialing by Master and other Slaves. For example,
 set `PrivateHost = "127.0.0.1"` and `PrivatePort = 38000`. The host must be concrete
 and the port must be from 1 to 65535. For IPv6, use an unbracketed host such as
 `PrivateHost = "::1"`. Master derives its shard endpoint map from these fields.
 
 `PublicHost` and `PublicPort` configure client-facing HTTP JSON-RPC. Set them
-under `[Master]` or in a `[[ShardNodes]]` entry. They map directly to geth's
+under `[Master]` or in a `[[Slaves]]` entry. They map directly to geth's
 `Node.HTTPHost` and `Node.HTTPPort`, taking
 precedence if both forms are configured. An empty public host disables HTTP;
 port zero requests a dynamically assigned port. Explicit CLI flags apply last.
 
 | Interface | Host | Port | Purpose |
 | --- | --- | --- | --- |
-| QKC cluster TCP | `PrivateHost` | `PrivatePort` | Master and shard communication. |
+| QKC cluster TCP | `PrivateHost` | `PrivatePort` | Master and Slave communication. |
 | HTTP JSON-RPC | `PublicHost` | `PublicPort` | Client requests. |
 | WebSocket JSON-RPC | `Node.WSHost` | `Node.WSPort` | Client requests and subscriptions. |
 

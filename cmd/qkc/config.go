@@ -37,11 +37,11 @@ var (
 	}
 	qkcRoleFlag = &cli.StringFlag{
 		Name:  "qkc.role",
-		Usage: "Process role: master or shard",
+		Usage: "Process role: master or slave",
 	}
 	qkcChainFlag = &cli.Uint64Flag{
 		Name:  "qkc.chain",
-		Usage: "Chain ID to select from the deployment (required for shard role)",
+		Usage: "Chain ID to select from the deployment (required for slave role)",
 	}
 )
 
@@ -92,7 +92,7 @@ func loadQKCConfig(ctx *cli.Context) (*qkcconfig.NodeConfig, *qkcconfig.NetworkC
 	if cfg.Role == qkcconfig.RoleMaster {
 		for _, flag := range []cli.Flag{utils.SyncModeFlag, utils.StateSchemeFlag, utils.RPCGlobalGasCapFlag, utils.RPCGlobalEVMTimeoutFlag, utils.RPCGlobalTxFeeCapFlag} {
 			if ctx.IsSet(flag.Names()[0]) {
-				return nil, nil, fmt.Errorf("--%s requires shard role", flag.Names()[0])
+				return nil, nil, fmt.Errorf("--%s requires slave role", flag.Names()[0])
 			}
 		}
 	}
@@ -193,7 +193,7 @@ func checkQKCConfig(ctx *cli.Context) error {
 	}
 	identity := cfg.Role
 	if cfg.ChainID != nil {
-		identity = fmt.Sprintf("shard, chain ID %d", *cfg.ChainID)
+		identity = fmt.Sprintf("%s, chain ID %d", cfg.Role, *cfg.ChainID)
 	}
 	_, err = fmt.Fprintf(ctx.App.Writer, "QuarkChain configuration is valid (%s, network ID %d)\n", identity, network.NetworkID)
 	return err
