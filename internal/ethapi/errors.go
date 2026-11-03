@@ -65,7 +65,7 @@ func newRevertError(revert []byte) *revertError {
 }
 
 // TxIndexingError is an API error that indicates the transaction indexing is not
-// fully finished yet with JSON error code and a binary data blob.
+// fully finished yet.
 type TxIndexingError struct{}
 
 // NewTxIndexingError creates a TxIndexingError instance.
@@ -81,9 +81,6 @@ func (e *TxIndexingError) Error() string {
 func (e *TxIndexingError) ErrorCode() int {
 	return -32000 // to be decided
 }
-
-// ErrorData returns the hex encoded revert reason.
-func (e *TxIndexingError) ErrorData() interface{} { return "transaction indexing is in progress" }
 
 type callError struct {
 	Message string `json:"message"`
