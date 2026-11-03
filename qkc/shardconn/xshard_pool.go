@@ -14,8 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/qkc/wire"
 )
 
-// XshardPool manages chain-to-chain connections indexed by chain ID.
-// Connections and chain IDs remain indexed until the pool closes.
+// XshardPool manages connections to other shard nodes, indexed by ChainID.
+// Connections and ChainIDs remain indexed until the pool closes. Concurrent
+// dials may establish multiple connections to the same node.
 type XshardPool struct {
 	// mu guards all mutable pool state below. Registration
 	// (registerConnection) and Close are multi-map transactions over these
@@ -37,9 +38,10 @@ type XshardPool struct {
 
 // Public API
 
-// NewXshardPool creates a pool for the local chain. selfID and
-// configuredChainIDs correspond to QuarkChainConfig.ShardID and ShardIDs.
-// A zero payload limit uses the maximum supported frame payload length.
+// NewXshardPool creates a connection pool for the local shard node. selfID is
+// its ChainID, and configuredChainIDs contains the cluster's configured
+// ChainIDs. A zero maxPayloadSize uses the protocol's maximum payload size.
+// handler serves inbound xshard requests and must not be nil.
 func NewXshardPool(selfID uint32, configuredChainIDs []uint32, maxPayloadSize uint32, handler XshardHandler, logger log.Logger) (*XshardPool, error) {
 	if handler == nil {
 		return nil, errors.New("xshard handler must not be nil")
@@ -69,7 +71,8 @@ func NewXshardPool(selfID uint32, configuredChainIDs []uint32, maxPayloadSize ui
 	}, nil
 }
 
-// DialToChain establishes an outbound connection to the given chain.
+// DialToChain establishes an outbound connection to the shard node identified
+// by chainInfo.ChainID.
 func (p *XshardPool) DialToChain(ctx context.Context, chainInfo wire.ChainInfo) error {
 	if _, ok := p.configuredChainIDs[chainInfo.ChainID]; !ok {
 		return fmt.Errorf("chain ID %d is not configured", chainInfo.ChainID)
@@ -83,7 +86,7 @@ func (p *XshardPool) DialToChain(ctx context.Context, chainInfo wire.ChainInfo) 
 	// Dialer.Timeout keeps bounding the dial when ctx is never cancelled.
 	nc, err := (&net.Dialer{Timeout: defaultDialTimeout}).DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return fmt.Errorf("dial xshard chain %s: %w", addr, err)
+		return fmt.Errorf("dial xshard peer %s: %w", addr, err)
 	}
 
 	conn, err := newXshardConn(nc, p.maxPayloadSize, p.selfID, chainInfo.ChainID, true, p.handler, p.log)
@@ -115,9 +118,8 @@ func (p *XshardPool) DialToChain(ctx context.Context, chainInfo wire.ChainInfo) 
 		return fmt.Errorf("chain ID mismatch for %s: expected %d, got %d", conn.base.RemoteAddr(), chainInfo.ChainID, id)
 	}
 
-	// Avoid rechecking deduplication here: simultaneous dials may otherwise
-	// close both outbound connections.
-
+	// Do not deduplicate again after the handshake: simultaneous dials could
+	// otherwise cause both nodes to close their outbound connections.
 	if err := p.registerConnection(conn); err != nil {
 		return err
 	}

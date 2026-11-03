@@ -7,6 +7,5 @@ import "time"
 // defaultDialTimeout bounds outbound TCP connection establishment.
 const defaultDialTimeout = 10 * time.Second
 
-// xshardHandshakeTimeout bounds the wait for the initial PING from an
-// inbound peer.
+// xshardHandshakeTimeout bounds the inbound PING and outbound PONG waits.
 const xshardHandshakeTimeout = 10 * time.Second

@@ -26,25 +26,29 @@ type XshardHandler interface {
 	AddXshardTxList(req *wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error)
 }
 
-// XshardConn is a direct TCP connection to another chain.
+// XshardConn is a direct TCP connection between shard nodes.
 type XshardConn struct {
 	base *conn.BaseConn
 
 	handler XshardHandler
 
 	localID uint32
-	// Inbound identity is published by closing pingReceived after the first PING.
+	// peerID is the remote shard node's ChainID.
 	peerID uint32
 
 	outbound     bool
-	pingReceived chan struct{} // closed on the first PING (py: ping_received_event)
-	pingOnce     sync.Once     // keeps the close exactly-once under concurrent PINGs
+	pingReceived chan struct{} // closed after the first PING
+	pingOnce     sync.Once     // records only the first PING
 
-	// Inbound registration completes before the handshake response is sent.
+	// inboundRegistered is closed by the pool after it indexes an inbound
+	// connection. The PING handler waits for it before returning PONG. It is
+	// nil for outbound connections, which are indexed after receiving PONG.
 	inboundRegistered chan struct{}
 }
 
-// newXshardConn creates a chain-to-chain connection.
+// newXshardConn creates a connection to another shard node. For outbound
+// connections peerID is the expected ChainID; for inbound connections the
+// remote ChainID is learned from the first PING.
 func newXshardConn(nc net.Conn, maxPayloadSize uint32, localID, peerID uint32, outbound bool, handler XshardHandler, logger log.Logger) (*XshardConn, error) {
 	if handler == nil {
 		return nil, errors.New("xshard handler must not be nil")
@@ -99,7 +103,8 @@ func (x *XshardConn) SendAddXshardTxList(ctx context.Context, req *wire.AddXshar
 
 // Internal implementation
 
-// handlePing records the inbound chain ID and responds after registration.
+// handlePing records the remote ChainID for inbound connections and signals
+// the pool. Inbound PONGs are sent after the pool registers the connection.
 func (x *XshardConn) handlePing(req any) (any, error) {
 	ping := req.(*wire.PingRequest)
 
