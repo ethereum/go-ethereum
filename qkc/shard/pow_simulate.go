@@ -29,6 +29,9 @@ import (
 // consensus. It waits for an exponentially distributed delay after the
 // candidate's timestamp, as PoW block intervals are, and returns a random
 // nonce. Chains mined this way must not verify seals.
+//
+// TODO: the PoSW engine verifies every seal. Add a chain config switch to skip
+// seal verification, like pyquarkchain's DISABLE_POW_CHECK.
 type simulatedSearch struct {
 	blockTime time.Duration
 }

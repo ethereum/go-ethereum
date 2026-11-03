@@ -214,14 +214,9 @@ func (m *PoWMiner) SubmitWork(sealHash common.Hash, nonce types.BlockNonce, mixH
 	}
 	extra.Nonce, extra.MixHash = nonce, mixHash
 	header.Extra = extra.Encode()
-	// Like pyquarkchain, the import verifies the seal before executing the
-	// block: InsertChain runs the engine's VerifyHeader first.
-	//
-	// TODO: no engine verifies QKC seals yet. The QKC engine's VerifyHeader
-	// must check that MixDigest is posw.CalcDifficulty from the parent, and that
-	// the seal meets posw.AdjustedShardDifficulty unless the chain is configured
-	// for simulated PoW. The seal check, its ethash epoch caches and the chain
-	// config switch between ethash and simulate belong to that engine.
+	// Like pyquarkchain, the seal is not verified here but by the import,
+	// before executing the block: ValidateBody calls the engine's VerifySeal
+	// once the parent state is available.
 	if err := m.backend.InsertMinedBlock(block.WithSeal(header)); err != nil {
 		return err
 	}
