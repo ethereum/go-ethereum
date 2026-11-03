@@ -53,8 +53,6 @@ func (miner *Miner) BuildQKCBlock(ctx context.Context, args QKCBlockArgs) (*type
 	if !args.NoTxs && miner.txpool == nil {
 		return nil, errors.New("transaction pool not configured")
 	}
-	// TODO: Set MixDigest from the raw (pre-PoSW) difficulty before
-	// executing transactions so PREVRANDAO matches block re-execution.
 	result := miner.generateWork(ctx, &generateParams{
 		parentHash:     args.Parent,
 		timestamp:      args.Timestamp,

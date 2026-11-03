@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/posw"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -285,5 +286,77 @@ func TestBuildXShardDeposits(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestBuildQKCBlockDifficulty(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	config.QuarkChain = params.NewTestQuarkChainConfig(1, 0, 1)
+	// The contract stores PREVRANDAO, so import fails unless re-execution sees
+	// the difficulty the builder used.
+	contract := common.Address{0xdd}
+	alloc := core.SystemContractAllocs()
+	maps.Copy(alloc, core.PoSWStakingContractAllocs(config.QuarkChain.ChainID))
+	alloc[testBankAddress] = types.Account{Balance: testBankFunds}
+	alloc[contract] = types.Account{Code: common.FromHex("0x4460005500"), Balance: new(big.Int)}
+	genesis := &core.Genesis{
+		Config: &config, GasLimit: 1_000_000, Mixhash: common.BigToHash(big.NewInt(1_000_000)),
+		ExtraData: (&types.QKCExtra{ChainID: 1, Cursor: types.XShardCursor{RootBlockHeight: 1}}).Encode(),
+		Alloc:     alloc,
+	}
+	// The PoSW engine prepares the difficulty, before the builder executes transactions.
+	pow, err := posw.New(config.QuarkChain, genesis.ToBlock().Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := qkcTestEngine{pow}
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, engine, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer chain.Stop()
+	chain.SetXShardInbox(&miningInbox{})
+	pool, err := txpool.New(testTxPoolConfig.PriceLimit, chain, []txpool.SubPool{legacypool.New(testTxPoolConfig, chain)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	tx := types.MustSignNewTx(testBankKey, types.LatestSigner(&config), &types.DynamicFeeTx{
+		ChainID: config.ChainID, Gas: 100_000, To: &contract,
+		GasFeeCap: big.NewInt(2 * params.GWei), GasTipCap: big.NewInt(params.GWei),
+	})
+	if err := pool.Add([]*types.Transaction{tx}, true)[0]; err != nil {
+		t.Fatal(err)
+	}
+	miner := New(NewMockBackend(chain, pool), DefaultConfig, engine)
+	parent := chain.Genesis().Header()
+	// A fast block raises the difficulty and a slow one lowers it.
+	for i, timestamp := range []uint64{5, 25} {
+		block, err := miner.BuildQKCBlock(context.Background(), QKCBlockArgs{
+			Parent: parent.Hash(), PrevRootBlock: common.Hash{0x77}, Timestamp: timestamp, NoTxs: i > 0,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := posw.CalcDifficulty(config.QuarkChain.PoSW, timestamp, parent.Time, parent.QKCDifficulty())
+		if got := block.Header().QKCDifficulty(); got.Cmp(want) != 0 || got.Cmp(parent.QKCDifficulty()) == 0 {
+			t.Fatalf("block %d difficulty %v, want %v", i+1, got, want)
+		}
+		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
+			t.Fatalf("import block %d: %v", i+1, err)
+		}
+		if i == 0 {
+			if len(block.Transactions()) != 1 {
+				t.Fatal("missing the PREVRANDAO transaction")
+			}
+			state, err := chain.StateAt(block.Root(), block.Number(), block.Time())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := state.GetState(contract, common.Hash{}); got != block.MixDigest() {
+				t.Fatalf("PREVRANDAO %x, want difficulty %x", got, block.MixDigest())
+			}
+		}
+		parent = block.Header()
 	}
 }
