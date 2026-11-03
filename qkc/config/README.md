@@ -44,6 +44,14 @@ To build the standalone CLI, run `make qkc`. You can then replace
 The network file defines the root chain's consensus settings and each shard's
 EVM chain ID, forks, and consensus settings. All processes share these rules.
 
+Configure the shared EVM fork heights once under `[ShardForks]`: `HomesteadBlock`,
+`EIP150Block`, `EIP155Block`, `EIP158Block`, `ByzantiumBlock`,
+`ConstantinopleBlock`, `PetersburgBlock`, `IstanbulBlock`, `BerlinBlock`, and
+`LondonBlock`. The loader copies these values into every shard's native
+`params.ChainConfig`. Setting any of these fields in `[[Shards]]` is an error,
+including when the value matches the shared setting. Nonzero heights are
+allowed; omitted fields remain unset, while `"0"` activates a fork at genesis.
+
 ### Network ID and chain ID
 
 These IDs serve different purposes:

@@ -41,6 +41,7 @@ import (
 
 // NetworkConfig is shared by every node in a network. NetworkID identifies the
 // P2P network, independently of the EVM ChainID in each shard's chain config.
+// TOML decoding expands ShardForks into each shard's native chain config.
 type NetworkConfig struct {
 	NetworkID uint32
 	Root      RootConfig
@@ -321,6 +322,60 @@ func canonicalHost(host string) string {
 		return ip.Unmap().String()
 	}
 	return strings.ToLower(host)
+}
+
+// UnmarshalTOML expands shared fork heights into independent native chain
+// configs. Per-shard definitions of these forks are rejected, even if equal.
+func (c *NetworkConfig) UnmarshalTOML(decode func(interface{}) error) error {
+	var input struct {
+		NetworkID  uint32
+		Root       RootConfig
+		ShardForks struct {
+			HomesteadBlock      *big.Int
+			EIP150Block         *big.Int
+			EIP155Block         *big.Int
+			EIP158Block         *big.Int
+			ByzantiumBlock      *big.Int
+			ConstantinopleBlock *big.Int
+			PetersburgBlock     *big.Int
+			IstanbulBlock       *big.Int
+			BerlinBlock         *big.Int
+			LondonBlock         *big.Int
+		}
+		Shards []params.ChainConfig
+	}
+	if err := decode(&input); err != nil {
+		return err
+	}
+	forks := &input.ShardForks
+	for i := range input.Shards {
+		shard := &input.Shards[i]
+		for _, fork := range []struct {
+			name   string
+			block  *big.Int
+			target **big.Int
+		}{
+			{"HomesteadBlock", forks.HomesteadBlock, &shard.HomesteadBlock},
+			{"EIP150Block", forks.EIP150Block, &shard.EIP150Block},
+			{"EIP155Block", forks.EIP155Block, &shard.EIP155Block},
+			{"EIP158Block", forks.EIP158Block, &shard.EIP158Block},
+			{"ByzantiumBlock", forks.ByzantiumBlock, &shard.ByzantiumBlock},
+			{"ConstantinopleBlock", forks.ConstantinopleBlock, &shard.ConstantinopleBlock},
+			{"PetersburgBlock", forks.PetersburgBlock, &shard.PetersburgBlock},
+			{"IstanbulBlock", forks.IstanbulBlock, &shard.IstanbulBlock},
+			{"BerlinBlock", forks.BerlinBlock, &shard.BerlinBlock},
+			{"LondonBlock", forks.LondonBlock, &shard.LondonBlock},
+		} {
+			if *fork.target != nil {
+				return fmt.Errorf("Shards[%d].%s must be configured in ShardForks", i, fork.name)
+			}
+			if fork.block != nil {
+				*fork.target = new(big.Int).Set(fork.block)
+			}
+		}
+	}
+	*c = NetworkConfig{NetworkID: input.NetworkID, Root: input.Root, Shards: input.Shards}
+	return nil
 }
 
 // LoadNetwork loads and validates a network definition. Each shard's routing

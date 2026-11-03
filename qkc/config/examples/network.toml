@@ -2,6 +2,19 @@
 # Internal routing lists are derived from the configured chain IDs: [100001, 100002].
 NetworkID = 2
 
+# Shared EVM fork activation heights for every shard.
+[ShardForks]
+HomesteadBlock = "0"
+EIP150Block = "0"
+EIP155Block = "0"
+EIP158Block = "0"
+ByzantiumBlock = "0"
+ConstantinopleBlock = "0"
+PetersburgBlock = "0"
+IstanbulBlock = "0"
+BerlinBlock = "0"
+LondonBlock = "0"
+
 [Root]
 ConsensusType = "POW_ETHASH"
 # Intended root reward and staking chain; runtime integration follows separately.
@@ -20,18 +33,15 @@ WindowSize = 256
 StakePerBlock = "1000000000000000000000000000000"
 DiffDivider = 20
 
+# Each entry maps to params.ChainConfig; see params/config.go for all fields.
+# ChainID identifies this shard; [Shards.QuarkChain] maps to ChainConfig.QuarkChain
+# (defined in params/quarkchain.go).
+# The loader copies [ShardForks] into every chain config; those ten fields must
+# be configured only in [ShardForks].
+# Other native fields can be decoded, but QKC runtime support must be verified
+# separately (for example, BogotaTime).
 [[Shards]]
 ChainID = "100001"
-HomesteadBlock = "0"
-EIP150Block = "0"
-EIP155Block = "0"
-EIP158Block = "0"
-ByzantiumBlock = "0"
-ConstantinopleBlock = "0"
-PetersburgBlock = "0"
-IstanbulBlock = "0"
-BerlinBlock = "0"
-LondonBlock = "0"
 
 [Shards.QuarkChain]
 ConsensusType = "POW_ETHASH"
@@ -51,16 +61,6 @@ StakingEnabled = false
 
 [[Shards]]
 ChainID = "100002"
-HomesteadBlock = "0"
-EIP150Block = "0"
-EIP155Block = "0"
-EIP158Block = "0"
-ByzantiumBlock = "0"
-ConstantinopleBlock = "0"
-PetersburgBlock = "0"
-IstanbulBlock = "0"
-BerlinBlock = "0"
-LondonBlock = "0"
 
 [Shards.QuarkChain]
 ConsensusType = "POW_SIMULATE"

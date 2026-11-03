@@ -151,6 +151,64 @@ func TestNetworkConsensusTypes(t *testing.T) {
 	}
 }
 
+func TestNetworkSharedShardForks(t *testing.T) {
+	input, err := os.ReadFile("examples/network.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	forks := []string{
+		"HomesteadBlock", "EIP150Block", "EIP155Block", "EIP158Block", "ByzantiumBlock",
+		"ConstantinopleBlock", "PetersburgBlock", "IstanbulBlock", "BerlinBlock", "LondonBlock",
+	}
+	// Keep each shard's fork order valid when changing any single fork height.
+	content := string(input)
+	for i, fork := range forks {
+		content = strings.ReplaceAll(content, fork+` = "0"`, fmt.Sprintf("%s = \"%d\"", fork, (i+1)*10))
+	}
+	cfg, err := LoadNetwork(writeConfig(t, []byte(content)))
+	if err != nil {
+		t.Fatalf("matching nonzero fork heights rejected: %v", err)
+	}
+	for i, fork := range forks {
+		t.Run(fork, func(t *testing.T) {
+			height := int64((i + 1) * 10)
+			for _, shard := range cfg.Shards {
+				block := reflect.ValueOf(shard).FieldByName(fork).Interface().(*big.Int)
+				if block == nil || block.Cmp(big.NewInt(height)) != 0 {
+					t.Fatalf("chain %v: %s = %v, want %d", shard.ChainID, fork, block, height)
+				}
+			}
+			first := reflect.ValueOf(cfg.Shards[0]).FieldByName(fork).Interface().(*big.Int)
+			second := reflect.ValueOf(cfg.Shards[1]).FieldByName(fork).Interface().(*big.Int)
+			first.Add(first, big.NewInt(1))
+			if second.Cmp(big.NewInt(height)) != 0 {
+				t.Fatal("changing a fork height affected another shard")
+			}
+			// Even repeating the shared value in a shard entry is an error.
+			for _, value := range []int64{0, height} {
+				override := strings.Replace(content, "[[Shards]]", fmt.Sprintf("[[Shards]]\n%s = \"%d\"", fork, value), 1)
+				_, err := LoadNetwork(writeConfig(t, []byte(override)))
+				want := fmt.Sprintf("Shards[0].%s must be configured in ShardForks", fork)
+				if err == nil || !strings.Contains(err.Error(), want) {
+					t.Fatalf("have %v, want error containing %q", err, want)
+				}
+			}
+		})
+	}
+	t.Run("omitted fork", func(t *testing.T) {
+		content := strings.Replace(string(input), `LondonBlock = "0"`, "", 1)
+		cfg, err := LoadNetwork(writeConfig(t, []byte(content)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, shard := range cfg.Shards {
+			if shard.HomesteadBlock == nil || shard.HomesteadBlock.Sign() != 0 || shard.LondonBlock != nil {
+				t.Fatal("explicit zero and omitted forks were not preserved")
+			}
+		}
+	})
+}
+
 func TestNetworkConfirmationLimit(t *testing.T) {
 	input, err := os.ReadFile("examples/network.toml")
 	if err != nil {
@@ -305,6 +363,9 @@ func TestInvalidTOML(t *testing.T) {
 		{"network id overflow", true, "NetworkID = 4294967296"},
 		{"negative network id", true, "NetworkID = -1"},
 		{"duplicate key", true, "NetworkID = 2\nNetworkID = 3"},
+		{"shared fork typo", true, "[ShardForks]\nHomesteadblock = \"0\""},
+		{"shared chain id", true, "[ShardForks]\nChainID = \"1\""},
+		{"invalid shared fork", true, "[ShardForks]\nLondonBlock = \"invalid\""},
 		{"local network field", true, "[Node]\nDataDir = \"data\""},
 		{"network local field", false, "[Root]\nPoSW = {}"},
 		{"local typo", false, "[Master.Node]\nHttpPort = 1234"},
