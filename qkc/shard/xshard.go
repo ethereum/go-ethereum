@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/bitutil"
@@ -34,14 +35,15 @@ var errInvalidSentMessage = errors.New("invalid SentMessage event")
 
 // XShardDeposits converts the cross-shard messages sent by a block of the chain,
 // the SentMessage events of the outbox in its receipts, into deposits grouped
-// by destination shard. Every other shard of the network gets a list, empty if
+// by destination chain ID, using its decimal string as a value-based map key.
+// Every other shard of the network gets a list, empty if
 // the block sends it nothing, so that it knows the block has no deposits for it.
 //
 // The receipts are read from the chain database, so the block must already be
 // inserted into the chain.
-func XShardDeposits(chain *core.BlockChain, blockHash common.Hash) (map[uint32][]*types.DepositTx, error) {
-	config := chain.Config().QuarkChain
-	if config == nil {
+func XShardDeposits(chain *core.BlockChain, blockHash common.Hash) (map[string][]*types.DepositTx, error) {
+	config := chain.Config()
+	if config.QuarkChain == nil {
 		return nil, errors.New("not a QuarkChain shard chain")
 	}
 	header := chain.GetHeaderByHash(blockHash)
@@ -61,11 +63,11 @@ func XShardDeposits(chain *core.BlockChain, blockHash common.Hash) (map[uint32][
 
 // depositsFromLogs converts the SentMessage events of the outbox among the logs
 // of a block into deposits grouped by destination shard, as XShardDeposits.
-func depositsFromLogs(config *params.QuarkChainConfig, blockHash common.Hash, logs []*types.Log) (map[uint32][]*types.DepositTx, error) {
-	deposits := make(map[uint32][]*types.DepositTx)
-	for _, shard := range config.ChainIDs {
-		if shard != config.ChainID {
-			deposits[shard] = []*types.DepositTx{}
+func depositsFromLogs(config *params.ChainConfig, blockHash common.Hash, logs []*types.Log) (map[string][]*types.DepositTx, error) {
+	deposits := make(map[string][]*types.DepositTx)
+	for _, shard := range config.QuarkChain.ChainIDs {
+		if shard.Cmp(config.ChainID) != 0 {
+			deposits[shard.String()] = []*types.DepositTx{}
 		}
 	}
 	for _, log := range logs {
@@ -76,12 +78,12 @@ func depositsFromLogs(config *params.QuarkChainConfig, blockHash common.Hash, lo
 		if err != nil {
 			return nil, fmt.Errorf("log %d: %w", log.Index, err)
 		}
-		list, ok := deposits[dstShard]
+		list, ok := deposits[dstShard.String()]
 		if !ok {
 			return nil, fmt.Errorf("log %d: invalid destination shard %d", log.Index, dstShard)
 		}
 		deposit.SourceBlockHash, deposit.SourceLogIndex = blockHash, uint64(log.Index)
-		deposits[dstShard] = append(list, deposit)
+		deposits[dstShard.String()] = append(list, deposit)
 	}
 	return deposits, nil
 }
@@ -92,28 +94,28 @@ func depositsFromLogs(config *params.QuarkChainConfig, blockHash common.Hash, lo
 //
 //	topics: SentMessage, dstShard, from, to
 //	data:   value, gasPrice, gasLimit, isMove, data offset (0xa0), data length, data padded to words
-func unpackSentMessage(log *types.Log) (uint32, *types.DepositTx, error) {
+func unpackSentMessage(log *types.Log) (*big.Int, *types.DepositTx, error) {
 	if len(log.Topics) != 4 {
-		return 0, nil, errInvalidSentMessage
+		return nil, nil, errInvalidSentMessage
 	}
 	dstShard, from, toTopic := log.Topics[1], log.Topics[2], log.Topics[3]
-	if bitutil.TestBytes(dstShard[:28]) || bitutil.TestBytes(from[:12]) || bitutil.TestBytes(toTopic[:12]) {
-		return 0, nil, errInvalidSentMessage
+	if bitutil.TestBytes(from[:12]) || bitutil.TestBytes(toTopic[:12]) {
+		return nil, nil, errInvalidSentMessage
 	}
 	data := log.Data
 	if len(data) < 6*32 || bitutil.TestBytes(data[64:88]) || bitutil.TestBytes(data[96:127]) || data[127] > 1 {
-		return 0, nil, errInvalidSentMessage
+		return nil, nil, errInvalidSentMessage
 	}
 	if offset := new(uint256.Int).SetBytes(data[128:160]); !offset.Eq(uint256.NewInt(5 * 32)) {
-		return 0, nil, errInvalidSentMessage
+		return nil, nil, errInvalidSentMessage
 	}
 	// Bound the length by the data first, so that padding it cannot overflow.
 	size := new(uint256.Int).SetBytes(data[160:192])
 	if !size.IsUint64() || size.Uint64() > uint64(len(data)) || uint64(len(data)) != 6*32+(size.Uint64()+31)/32*32 {
-		return 0, nil, errInvalidSentMessage
+		return nil, nil, errInvalidSentMessage
 	}
 	to := common.BytesToAddress(toTopic[12:])
-	return binary.BigEndian.Uint32(dstShard[28:]), &types.DepositTx{
+	return new(big.Int).SetBytes(dstShard[:]), &types.DepositTx{
 		Version:  types.DepositTxVersion,
 		From:     common.BytesToAddress(from[12:]),
 		To:       &to,

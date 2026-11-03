@@ -131,7 +131,7 @@ type ShardChain struct {
 // and its engine; nil supports import-only shards. Call Init before use.
 func NewShardChain(db ethdb.KeyValueStore, chain *core.BlockChain, builder *miner.Miner) *ShardChain {
 	c := &ShardChain{db: db, chain: chain, builder: builder}
-	if config := chain.Config().QuarkChain; config != nil {
+	if config := chain.Config(); config.QuarkChain != nil {
 		chain.SetXShardInbox(NewXShardInbox(config, c))
 	}
 	return c
@@ -221,8 +221,8 @@ func (c *ShardChain) RootTip() *qkctypes.RootBlockHeader {
 // genesis header. Other shards' genesis hashes and heights are their own
 // responsibility; this shard only decodes their chain IDs to skip them.
 func (c *ShardChain) validateGenesisRoot(root *qkctypes.RootBlock) (*types.Header, error) {
-	config := c.chain.Config().QuarkChain
-	if config == nil {
+	config := c.chain.Config()
+	if config.QuarkChain == nil {
 		return nil, errNotQuarkChain
 	}
 	if root.Number() != 0 || root.ParentHash() != (common.Hash{}) {
@@ -236,7 +236,7 @@ func (c *ShardChain) validateGenesisRoot(root *qkctypes.RootBlock) (*types.Heade
 	if err != nil {
 		return nil, fmt.Errorf("%w: genesis: %w", ErrShardStateInconsistency, err)
 	}
-	if extra.ChainID != config.ChainID || extra.PrevRootBlock != (common.Hash{}) {
+	if extra.ChainID.Cmp(config.ChainID) != 0 || extra.PrevRootBlock != (common.Hash{}) {
 		return nil, fmt.Errorf("%w: genesis must have the local chain ID and an empty previous root", ErrShardStateInconsistency)
 	}
 	found := false
@@ -245,7 +245,7 @@ func (c *ShardChain) validateGenesisRoot(root *qkctypes.RootBlock) (*types.Heade
 		if err != nil {
 			return nil, fmt.Errorf("%w: genesis shard header: %w", ErrInvalidRootBlock, err)
 		}
-		if extra.ChainID != config.ChainID {
+		if extra.ChainID.Cmp(config.ChainID) != 0 {
 			continue
 		}
 		if found || header.Number.Sign() != 0 || header.Hash() != genesis.Hash() {
@@ -542,8 +542,8 @@ func (c *ShardChain) InsertRootBlock(root *qkctypes.RootBlock) (bool, error) {
 //	R carries A and C. A must be a child of C', and C must reference R1 or
 //	an ancestor of it.
 func (c *ShardChain) validateRootBlock(root *qkctypes.RootBlock) (*types.Header, error) {
-	config := c.chain.Config().QuarkChain
-	if config == nil {
+	config := c.chain.Config()
+	if config.QuarkChain == nil {
 		return nil, errNotQuarkChain
 	}
 	header := root.Header()
@@ -576,7 +576,7 @@ func (c *ShardChain) validateRootBlock(root *qkctypes.RootBlock) (*types.Header,
 		if err != nil {
 			return nil, fmt.Errorf("shard block %x: %w", block.Hash(), err)
 		}
-		if extra.ChainID != config.ChainID {
+		if extra.ChainID.Cmp(config.ChainID) != 0 {
 			if err := c.validateXShardDeposits(block, extra, config); err != nil {
 				return nil, err
 			}
@@ -587,7 +587,7 @@ func (c *ShardChain) validateRootBlock(root *qkctypes.RootBlock) (*types.Header,
 		}
 		blocks = append(blocks, block)
 	}
-	if limit := config.MaxBlocksPerRootBlock; limit != 0 && uint64(len(blocks)) > limit {
+	if limit := config.QuarkChain.MaxBlocksPerRootBlock; limit != 0 && uint64(len(blocks)) > limit {
 		return nil, fmt.Errorf("%w: %d, max %d", ErrTooManyConfirmedBlocks, len(blocks), limit)
 	}
 	// Rule 3 local continuity check. The master must validate the complete
@@ -627,7 +627,7 @@ func (c *ShardChain) validateRootBlock(root *qkctypes.RootBlock) (*types.Header,
 // Sources in this shard's network must have a deposit list, even if empty.
 // Sources outside the network must have no list.
 // These rules also apply to ordinary blocks referencing R0.
-func (c *ShardChain) validateXShardDeposits(block *types.Header, extra *types.QKCExtra, config *params.QuarkChainConfig) error {
+func (c *ShardChain) validateXShardDeposits(block *types.Header, extra *types.QKCExtra, config *params.ChainConfig) error {
 	// All shards start at R0, so an unknown root cannot be explained by this
 	// shard having been created after the referenced root, as in pyquarkchain.
 	exist := rawdb.HasRootBlock(c.db, extra.PrevRootBlock)

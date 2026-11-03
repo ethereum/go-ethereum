@@ -23,15 +23,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
+	"math/big"
 )
 
 // RootChainID is reserved for root-chain traffic handled by the Master. It is
-// never a valid chain ID.
-const RootChainID uint32 = math.MaxUint32
+// zero and is never a valid shard chain ID.
+var RootChainID = new(big.Int)
 
 const (
-	chainIDSize       = 4
+	chainIDSize       = 32
 	clusterPeerIDSize = 8
 	opcodeSize        = 1
 	rpcIDSize         = 8
@@ -68,11 +68,11 @@ type ClusterFrame struct {
 // P2PFrame is an external cluster↔cluster message carried as one devp2p
 // protocol message. The devp2p message boundary supplies the frame length.
 //
-// Wire payload: [4B chain_id][1B opcode][8B rpc_id][payload].
+// Wire payload: [32B chain_id][1B opcode][8B rpc_id][payload].
 type P2PFrame struct {
 	// ChainID selects the destination chain. RootChainID routes root-chain
 	// traffic to the Master.
-	ChainID uint32
+	ChainID *big.Int
 	Opcode  byte
 	RPCID   uint64
 	Payload []byte
@@ -171,7 +171,7 @@ func DecodeP2PFrame(data []byte) (*P2PFrame, error) {
 
 	body := data[chainIDSize:]
 	return &P2PFrame{
-		ChainID: binary.BigEndian.Uint32(data[:chainIDSize]),
+		ChainID: new(big.Int).SetBytes(data[:chainIDSize]),
 		Opcode:  body[0],
 		RPCID:   binary.BigEndian.Uint64(body[1:frameBodyHeader]),
 		Payload: body[frameBodyHeader:],
@@ -185,8 +185,11 @@ func EncodeP2PFrame(frame *P2PFrame) ([]byte, error) {
 	if frame == nil {
 		return nil, errors.New("nil P2P frame")
 	}
+	if frame.ChainID == nil || frame.ChainID.Sign() < 0 || frame.ChainID.BitLen() > 256 {
+		return nil, fmt.Errorf("invalid routing chain ID: %v", frame.ChainID)
+	}
 	buf := make([]byte, chainIDSize+frameBodyHeader+len(frame.Payload))
-	binary.BigEndian.PutUint32(buf[:chainIDSize], frame.ChainID)
+	frame.ChainID.FillBytes(buf[:chainIDSize])
 	buf[chainIDSize] = frame.Opcode
 	binary.BigEndian.PutUint64(buf[chainIDSize+opcodeSize:chainIDSize+frameBodyHeader], frame.RPCID)
 	copy(buf[chainIDSize+frameBodyHeader:], frame.Payload)

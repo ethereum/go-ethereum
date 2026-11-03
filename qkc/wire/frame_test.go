@@ -22,6 +22,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"math/big"
 	"strings"
 	"testing"
 )
@@ -72,7 +73,7 @@ func TestClusterFrameWithPeerIDRoundTrip(t *testing.T) {
 }
 
 func TestP2PFrameRoundTrip(t *testing.T) {
-	frame := &P2PFrame{ChainID: 0x01020304, Opcode: 0x02, RPCID: 7, Payload: []byte("p2p")}
+	frame := &P2PFrame{ChainID: big.NewInt(0x01020304), Opcode: 0x02, RPCID: 7, Payload: []byte("p2p")}
 	encoded, err := EncodeP2PFrame(frame)
 	if err != nil {
 		t.Fatal(err)
@@ -84,14 +85,35 @@ func TestP2PFrameRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ChainID != frame.ChainID || got.Opcode != frame.Opcode || got.RPCID != frame.RPCID || !bytes.Equal(got.Payload, frame.Payload) {
+	if got.ChainID.Cmp(frame.ChainID) != 0 || got.Opcode != frame.Opcode || got.RPCID != frame.RPCID || !bytes.Equal(got.Payload, frame.Payload) {
 		t.Fatalf("round trip mismatch: got %+v, want %+v", got, frame)
+	}
+}
+
+func TestP2PFrameLargeChainID(t *testing.T) {
+	id := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+	encoded, err := EncodeP2PFrame(&P2PFrame{ChainID: id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	frame, err := DecodeP2PFrame(encoded)
+	if err != nil || frame.ChainID.Cmp(id) != 0 {
+		t.Fatalf("chain ID truncated: frame %v, error %v", frame, err)
+	}
+	clear(encoded[:chainIDSize])
+	if frame.ChainID.Cmp(id) != 0 {
+		t.Fatal("decoded chain ID aliases the input")
+	}
+	for _, invalid := range []*big.Int{nil, big.NewInt(-1), new(big.Int).Lsh(big.NewInt(1), 256)} {
+		if _, err := EncodeP2PFrame(&P2PFrame{ChainID: invalid}); err == nil {
+			t.Fatalf("accepted invalid chain ID %v", invalid)
+		}
 	}
 }
 
 func TestP2PFramePayloadAliasesInput(t *testing.T) {
 	var encoded bytes.Buffer
-	if err := WriteP2PFrame(&encoded, &P2PFrame{Payload: []byte("abc")}); err != nil {
+	if err := WriteP2PFrame(&encoded, &P2PFrame{ChainID: big.NewInt(10001), Payload: []byte("abc")}); err != nil {
 		t.Fatal(err)
 	}
 	data := encoded.Bytes()
@@ -106,8 +128,8 @@ func TestP2PFramePayloadAliasesInput(t *testing.T) {
 }
 
 func TestRootChainID(t *testing.T) {
-	if RootChainID != math.MaxUint32 {
-		t.Fatalf("root chain ID = %d, want %d", RootChainID, uint32(math.MaxUint32))
+	if RootChainID.Sign() != 0 {
+		t.Fatalf("root chain ID = %d, want zero", RootChainID)
 	}
 	var encoded bytes.Buffer
 	if err := WriteP2PFrame(&encoded, &P2PFrame{ChainID: RootChainID}); err != nil {
@@ -117,7 +139,7 @@ func TestRootChainID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if frame.ChainID != RootChainID {
+	if frame.ChainID.Cmp(RootChainID) != 0 {
 		t.Fatalf("decoded chain ID = %d, want %d", frame.ChainID, RootChainID)
 	}
 }
@@ -146,10 +168,10 @@ func TestFrameWireLayouts(t *testing.T) {
 	}
 
 	var p2p bytes.Buffer
-	if err := WriteP2PFrame(&p2p, &P2PFrame{ChainID: 0xaabbccdd, Opcode: frame.Opcode, RPCID: frame.RPCID, Payload: frame.Payload}); err != nil {
+	if err := WriteP2PFrame(&p2p, &P2PFrame{ChainID: big.NewInt(0xaabbccdd), Opcode: frame.Opcode, RPCID: frame.RPCID, Payload: frame.Payload}); err != nil {
 		t.Fatal(err)
 	}
-	wantP2P := []byte{0xaa, 0xbb, 0xcc, 0xdd, 0x10, 1, 2, 3, 4, 5, 6, 7, 8, 0xaa}
+	wantP2P := append(make([]byte, 28), []byte{0xaa, 0xbb, 0xcc, 0xdd, 0x10, 1, 2, 3, 4, 5, 6, 7, 8, 0xaa}...)
 	if !bytes.Equal(p2p.Bytes(), wantP2P) {
 		t.Fatalf("P2PFrame bytes = %x, want %x", p2p.Bytes(), wantP2P)
 	}

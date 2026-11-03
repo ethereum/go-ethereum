@@ -33,7 +33,7 @@ import (
 )
 
 func newTestMinorHeader(shard uint32, number int64) *ctypes.Header {
-	extra := &ctypes.QKCExtra{ChainID: shard, Cursor: ctypes.XShardCursor{RootBlockHeight: 1}}
+	extra := &ctypes.QKCExtra{ChainID: new(big.Int).SetUint64(uint64(shard)), Cursor: ctypes.XShardCursor{RootBlockHeight: 1}}
 	return &ctypes.Header{
 		Number:     big.NewInt(number),
 		Difficulty: common.Big0,

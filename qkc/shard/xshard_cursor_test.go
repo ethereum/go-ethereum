@@ -56,11 +56,11 @@ func (c *testXShardChain) XShardDeposits(hash common.Hash) []*types.DepositTx {
 }
 
 // sourceBlock returns a block header of the given shard, unique by number.
-func sourceBlock(shard uint32, number int64) *types.Header {
+func sourceBlock(shard int64, number int64) *types.Header {
 	return &types.Header{
 		Number:     big.NewInt(number),
 		Difficulty: new(big.Int),
-		Extra:      (&types.QKCExtra{ChainID: shard}).Encode(),
+		Extra:      (&types.QKCExtra{ChainID: big.NewInt(shard)}).Encode(),
 	}
 }
 
@@ -94,7 +94,7 @@ func cursorAt(height, minor, deposit uint64) *types.Header {
 // block D of shard 2, and R3 nothing. Shard 1 received two deposits from A,
 // none from C and one from D, and shard 0 one from B and one from D.
 func testRootChain() (roots []*qkctypes.RootBlock, a, b, c, d *types.Header, toShard0, toShard1 *testXShardChain) {
-	a, b, c, d = sourceBlock(0, 1), sourceBlock(1, 1), sourceBlock(2, 1), sourceBlock(2, 2)
+	a, b, c, d = sourceBlock(10001, 1), sourceBlock(10002, 1), sourceBlock(10003, 1), sourceBlock(10003, 2)
 	confirmed := [][]*types.Header{nil, {a, b, c}, {d}, nil}
 	toShard0 = &testXShardChain{roots: make(map[common.Hash]*qkctypes.RootBlock), deposits: map[common.Hash][]*types.DepositTx{
 		b.Hash(): {testDeposit(b, 0)},
@@ -126,6 +126,22 @@ func pos(height, minor, deposit uint64) types.XShardCursor {
 	return types.XShardCursor{RootBlockHeight: height, MinorBlockIndex: minor, XShardDepositIndex: deposit}
 }
 
+func TestConfiguredRootCoinbaseChain(t *testing.T) {
+	roots, _, _, _, _, _, _ := testRootChain()
+	id := new(big.Int).Lsh(big.NewInt(1), 128)
+	config := params.NewTestQuarkChainConfig(10002)
+	config.ChainID = new(big.Int).Set(id)
+	config.QuarkChain.RootCoinbaseChainID = new(big.Int).Set(id)
+	cursor := &xShardCursor{config: config, root: roots[1], depositIndex: 1}
+	if got := cursor.current(); !reflect.DeepEqual(got, rootCoinbaseDeposit(roots[1])) {
+		t.Fatalf("configured reward chain did not receive root coinbase: %v", got)
+	}
+	config.ChainID = big.NewInt(10001)
+	if got := cursor.current(); got != nil {
+		t.Fatal("root reward still assigned by the old default ID")
+	}
+}
+
 // depositAt is a deposit walked, with the cursor on it.
 type depositAt struct {
 	deposit *types.DepositTx
@@ -135,8 +151,8 @@ type depositAt struct {
 func TestXShardInboxDeposits(t *testing.T) {
 	roots, a, b, _, d, toShard0, toShard1 := testRootChain()
 	var (
-		shard0 = NewXShardInbox(&params.QuarkChainConfig{ChainID: 0, ChainIDs: []uint32{0, 1, 2}}, toShard0)
-		shard1 = NewXShardInbox(&params.QuarkChainConfig{ChainID: 1, ChainIDs: []uint32{0, 1, 2}}, toShard1)
+		shard0 = NewXShardInbox(params.NewTestQuarkChainConfig(10001, 10001, 10002, 10003), toShard0)
+		shard1 = NewXShardInbox(params.NewTestQuarkChainConfig(10002, 10001, 10002, 10003), toShard1)
 		eof    = pos(4, 0, 0)
 	)
 	for _, tt := range []struct {
@@ -221,7 +237,7 @@ func TestXShardInboxDeposits(t *testing.T) {
 
 func TestXShardInboxErrors(t *testing.T) {
 	roots, a, _, _, _, _, toShard1 := testRootChain()
-	shard1 := NewXShardInbox(&params.QuarkChainConfig{ChainID: 1, ChainIDs: []uint32{0, 1, 2}}, toShard1)
+	shard1 := NewXShardInbox(params.NewTestQuarkChainConfig(10002, 10001, 10002, 10003), toShard1)
 
 	if _, err := shard1.Deposits(cursorAt(1, 0, 0), common.Hash{0xff}); !errors.Is(err, ErrUnknownCursorRoot) {
 		t.Errorf("unknown previous root block: error %v, want %v", err, ErrUnknownCursorRoot)
@@ -256,7 +272,7 @@ func TestXShardInboxRootReference(t *testing.T) {
 	fork := newRoot(roots[0], 99)
 	forkChild := newRoot(fork, 100)
 	chain.roots[fork.Hash()], chain.roots[forkChild.Hash()] = fork, forkChild
-	inbox := NewXShardInbox(&params.QuarkChainConfig{ChainID: 1}, chain)
+	inbox := NewXShardInbox(params.NewTestQuarkChainConfig(10002), chain)
 	for _, tt := range []struct {
 		name       string
 		parentRoot common.Hash
@@ -298,14 +314,14 @@ func TestXShardInboxMissingRoot(t *testing.T) {
 	t.Run("at start", func(t *testing.T) {
 		roots, _, _, _, _, _, chain := testRootChain()
 		delete(chain.roots, roots[2].Hash())
-		inbox := NewXShardInbox(&params.QuarkChainConfig{ChainID: 1}, chain)
+		inbox := NewXShardInbox(params.NewTestQuarkChainConfig(10002), chain)
 		if _, err := inbox.Deposits(cursorAt(1, 0, 0), roots[3].Hash()); !errors.Is(err, ErrInconsistentClusterState) {
 			t.Errorf("deposits error %v, want %v", err, ErrInconsistentClusterState)
 		}
 	})
 	t.Run("while walking", func(t *testing.T) {
 		roots, _, _, _, _, _, chain := testRootChain()
-		inbox := NewXShardInbox(&params.QuarkChainConfig{ChainID: 1}, chain)
+		inbox := NewXShardInbox(params.NewTestQuarkChainConfig(10002), chain)
 		deposits, err := inbox.Deposits(cursorAt(1, 3, 0), roots[3].Hash())
 		if err != nil {
 			t.Fatal(err)

@@ -39,7 +39,7 @@ func testPoWMiner(t *testing.T, test func(*testing.T)) {
 
 func newPoWMinerEnv(t *testing.T, config PoWMinerConfig) (*testEnv, *PoWMiner) {
 	t.Helper()
-	env, _, _ := newMiningEnv(t, 1)
+	env, _, _ := newMiningEnv(t, 10002)
 	m := NewPoWMiner(NewShard(env.sc), config)
 	t.Cleanup(m.StopLocalMining)
 	return env, m
@@ -181,7 +181,7 @@ func (s *failingShard) InsertMinedBlock(block *types.Block) error {
 
 func TestPoWMinerSubmitWorkInsertFailure(t *testing.T) {
 	testPoWMiner(t, func(t *testing.T) {
-		env, _, _ := newMiningEnv(t, 1)
+		env, _, _ := newMiningEnv(t, 10002)
 		insertErr := errors.New("insert failed")
 		backend := &failingShard{Shard: NewShard(env.sc), err: insertErr}
 		m := NewPoWMiner(backend, PoWMinerConfig{})

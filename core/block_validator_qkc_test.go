@@ -96,10 +96,9 @@ func testCursor(walked int, ended bool) types.XShardCursor {
 // Move execution currently requires fixed gas. Synthetic receipts exercise the
 // inbox rules independently when declared and used gas differ.
 func TestValidateXShardDepositsGasAccounting(t *testing.T) {
-	config := *params.MergedTestChainConfig
-	config.QuarkChain = params.NewTestQuarkChainConfig(1, 0, 1)
+	config := *params.NewTestQuarkChainConfig(10002, 10001, 10002)
 	alloc := SystemContractAllocs()
-	maps.Copy(alloc, PoSWStakingContractAllocs(1))
+	maps.Copy(alloc, PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(10002)))
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), &Genesis{Config: &config, Alloc: alloc}, qkcTestEngine{beacon.New(ethash.NewFaker())}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -206,15 +205,14 @@ func TestValidateXShardDeposits(t *testing.T) {
 		{name: "unchecked without inbox", available: 2, deposits: deposits(1), noInbox: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			config := *params.MergedTestChainConfig
-			config.QuarkChain = params.NewTestQuarkChainConfig(1, 0, 1)
+			config := *params.NewTestQuarkChainConfig(10002, 10001, 10002)
 			gspec := &Genesis{
 				Config:    &config,
 				GasLimit:  gasLimit,
 				ExtraData: (&types.QKCExtra{}).Encode(),
 				Alloc:     withSystemContracts(types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}}),
 			}
-			maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(config.QuarkChain.ChainID))
+			maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(&config))
 			engine := qkcTestEngine{beacon.New(ethash.NewFaker())}
 			extra := types.QKCExtra{
 				PrevRootBlock:  prevRoot,
