@@ -51,6 +51,48 @@ import (
 // difficulty is put in MixDigest, and the header's own Difficulty and Nonce are
 // left at zero. There is no setter for any of those header fields, by design.
 
+// TestSanityCheckQKC checks QKC format, reserved PoW fields and gas bounds.
+// Fork-dependent fields are checked by the consensus engine.
+func TestSanityCheckQKC(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate func(*Header)
+		valid  bool
+	}{
+		{"valid", func(*Header) {}, true},
+		{"gas at limit", func(h *Header) {
+			h.GasUsed = h.GasLimit
+			e, _ := h.QKCExtra()
+			e.XShardGasUsed = e.XShardGasLimit
+			h.Extra = e.Encode()
+		}, true},
+		{"extra", func(h *Header) { h.Extra = nil }, false},
+		{"version", func(h *Header) { e, _ := h.QKCExtra(); e.Version = 1; h.Extra = e.Encode() }, false},
+		{"missing difficulty", func(h *Header) { h.Difficulty = nil }, false},
+		{"difficulty", func(h *Header) { h.Difficulty.SetInt64(1) }, false},
+		{"nonce", func(h *Header) { h.Nonce = EncodeNonce(1) }, false},
+		{"uncles", func(h *Header) { h.UncleHash = common.Hash{} }, false},
+		{"gas used", func(h *Header) { h.GasUsed = h.GasLimit + 1 }, false},
+		{"cross-shard gas used", func(h *Header) {
+			e, _ := h.QKCExtra()
+			e.XShardGasUsed = e.XShardGasLimit + 1
+			h.Extra = e.Encode()
+		}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			header := &Header{
+				Number: big.NewInt(1), Difficulty: new(big.Int), UncleHash: EmptyUncleHash,
+				GasLimit: 12_000_000,
+				Extra:    (&QKCExtra{ShardID: 3, XShardGasLimit: 6_000_000}).Encode(),
+			}
+			test.mutate(header)
+			if err := header.SanityCheckQKC(); (err == nil) != test.valid {
+				t.Fatalf("SanityCheckQKC: %v, want valid %v", err, test.valid)
+			}
+		})
+	}
+}
+
 func TestQKCExtraEncoding(t *testing.T) {
 	want := &QKCExtra{
 		Version:        1,

@@ -77,7 +77,7 @@ func (s *Shard) CreateBlockToMine(ctx context.Context, coinbase common.Address) 
 	if err != nil {
 		return nil, nil, err
 	}
-	diff, err := posw.AdjustedShardDifficulty(bc.Config().QuarkChain.PoSW, bc, bc, block.Header())
+	diff, err := posw.GetAdjustedDifficulty(bc.Config().QuarkChain.PoSW, bc, block.Header())
 	if err != nil {
 		return nil, nil, err
 	}

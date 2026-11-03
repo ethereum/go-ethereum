@@ -18,6 +18,7 @@ package types
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -45,10 +46,8 @@ import (
 // excluded from the seal hash, while everything before it is covered. See
 // Header.QKCSealHash.
 //
-// Note that 120 bytes exceeds the 32-byte cap stock geth puts on Header.Extra
-// (params.MaximumExtraDataSize, enforced on the block import path and on the
-// Engine API path), so this layout cannot reach a chain until that cap is
-// raised.
+// QKC uses this fixed size instead of stock geth's 32-byte extra-data limit.
+// The QKC consensus engine validates the format through Header.SanityCheckQKC.
 //
 // The extra data is laid out as:
 //
@@ -142,6 +141,35 @@ func (e *QKCExtra) Encode() []byte {
 // QKCExtra decodes the QuarkChain fields from the header's extra data.
 func (h *Header) QKCExtra() (*QKCExtra, error) {
 	return DecodeQKCExtra(h.Extra)
+}
+
+// SanityCheckQKC checks a QKC header's field constraints without reading
+// configuration, parents or state. Callers validate fork-dependent fields,
+// protocol gas limits, height, shard identity, difficulty, timestamps and the seal.
+func (h *Header) SanityCheckQKC() error {
+	extra, err := h.QKCExtra()
+	if err != nil {
+		return err
+	}
+	if extra.Version != 0 {
+		return fmt.Errorf("unsupported qkc version: %d", extra.Version)
+	}
+	// Preserve geth's post-Merge execution semantics. The base PoW difficulty
+	// is in MixDigest; QKCExtra carries the actual nonce and mix hash.
+	if h.Difficulty == nil || h.Difficulty.Sign() != 0 || h.Nonce != (BlockNonce{}) {
+		return errors.New("shard header difficulty and nonce must be zero")
+	}
+	if h.UncleHash != EmptyUncleHash {
+		return errors.New("invalid uncle hash")
+	}
+	if h.GasUsed > h.GasLimit {
+		return fmt.Errorf("gas used exceeds limit: used %d, limit %d", h.GasUsed, h.GasLimit)
+	}
+	// Execution validation also checks the gas actually consumed by deposits.
+	if extra.XShardGasUsed > extra.XShardGasLimit {
+		return fmt.Errorf("cross-shard gas used exceeds limit: used %d, limit %d", extra.XShardGasUsed, extra.XShardGasLimit)
+	}
+	return nil
 }
 
 // QKCDifficulty returns the PoW difficulty of a QuarkChain shard block. It is

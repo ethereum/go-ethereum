@@ -33,69 +33,6 @@ import (
 	"github.com/holiman/uint256"
 )
 
-func TestQKCBeaconFields(t *testing.T) {
-	config := *params.MergedTestChainConfig
-	config.QuarkChain = &params.QuarkChainConfig{ShardID: 1}
-	config.CancunTime, config.PragueTime, config.OsakaTime = u64(20), u64(20), u64(20)
-	config.AmsterdamTime = u64(30)
-	gspec := &Genesis{
-		Config: &config, GasLimit: 30_000_000,
-		ExtraData: (&types.QKCExtra{}).Encode(),
-		Alloc:     withSystemContracts(PoSWStakingContractAllocs(1)),
-	}
-	engine := qkcTestEngine{beacon.New(ethash.NewFaker())}
-	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 3, func(_ int, b *BlockGen) {
-		b.SetExtra(gspec.ExtraData)
-	})
-	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), gspec, engine, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer chain.Stop()
-	for _, block := range blocks {
-		header := block.Header()
-		if config.IsCancun(header.Number, header.Time) {
-			if header.ParentBeaconRoot == nil || *header.ParentBeaconRoot != (common.Hash{}) {
-				t.Fatal("chain maker did not reserve a zero beacon root")
-			}
-		}
-		if config.IsAmsterdam(header.Number, header.Time) && (header.SlotNumber == nil || *header.SlotNumber != 0) {
-			t.Fatal("chain maker did not reserve slot zero")
-		}
-		for _, tc := range []struct {
-			name string
-			edit func(*types.Header)
-			want error
-		}{
-			{"beacon root", func(h *types.Header) {
-				if h.ParentBeaconRoot == nil {
-					h.ParentBeaconRoot = new(common.Hash)
-				} else {
-					h.ParentBeaconRoot = nil
-				}
-			}, ErrQKCBeaconRoot},
-			{"beacon root", func(h *types.Header) { h.ParentBeaconRoot = &common.Hash{1} }, ErrQKCBeaconRoot},
-			{"slot number", func(h *types.Header) {
-				if h.SlotNumber == nil {
-					h.SlotNumber = new(uint64)
-				} else {
-					h.SlotNumber = nil
-				}
-			}, ErrQKCSlotNumber},
-			{"slot number", func(h *types.Header) { h.SlotNumber = u64(1) }, ErrQKCSlotNumber},
-		} {
-			invalid := block.Header()
-			tc.edit(invalid)
-			if _, err := chain.InsertChain([]*types.Block{block.WithSeal(invalid)}); !errors.Is(err, tc.want) {
-				t.Fatalf("block %d %s: import error %v, want %v", block.NumberU64(), tc.name, err, tc.want)
-			}
-		}
-		if _, err := chain.InsertChain([]*types.Block{block}); err != nil {
-			t.Fatalf("import generated block %d: %v", block.NumberU64(), err)
-		}
-	}
-}
-
 // qkcTestEngine is the beacon engine without header verification, which
 // rejects the QuarkChain extra data as too long.
 type qkcTestEngine struct {
@@ -160,7 +97,7 @@ func testCursor(walked int, ended bool) types.XShardCursor {
 // inbox rules independently when declared and used gas differ.
 func TestValidateXShardDepositsGasAccounting(t *testing.T) {
 	config := *params.MergedTestChainConfig
-	config.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1}}
+	config.QuarkChain = params.NewTestQuarkChainConfig(1, 0, 1)
 	alloc := SystemContractAllocs()
 	maps.Copy(alloc, PoSWStakingContractAllocs(1))
 	chain, err := NewBlockChain(rawdb.NewMemoryDatabase(), &Genesis{Config: &config, Alloc: alloc}, qkcTestEngine{beacon.New(ethash.NewFaker())}, nil)

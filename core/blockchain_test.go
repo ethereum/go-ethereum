@@ -2558,6 +2558,86 @@ func testSideImportPrunedBlocks(t *testing.T, scheme string) {
 	}
 }
 
+type sealVerifierTestEngine struct {
+	consensus.Engine
+	verifySeal func(consensus.ChainHeaderReader, *types.Header) error
+}
+
+func (e *sealVerifierTestEngine) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
+	return e.verifySeal(chain, header)
+}
+
+// A candidate claiming an available root still needs seal and execution checks
+// after its actual parent state has been recovered.
+func TestInsertBlockWithoutSetHeadPrunedParent(t *testing.T) {
+	engine := ethash.NewFaker()
+	genesis := &Genesis{Config: params.TestChainConfig, BaseFee: big.NewInt(params.InitialBaseFee)}
+	genDB, blocks, _ := GenerateChainWithGenesis(genesis, engine, 2, nil)
+	defer genDB.Close()
+	parent := blocks[0]
+	header := blocks[1].Header()
+	header.Root = genesis.ToBlock().Root()
+	block := blocks[1].WithSeal(header)
+	sealErr := errors.New("invalid test seal")
+
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		for _, test := range []struct {
+			name    string
+			sealErr error
+		}{
+			{name: "invalid state root"},
+			{name: "invalid seal", sealErr: sealErr},
+		} {
+			t.Run(scheme+"/"+test.name, func(t *testing.T) {
+				db := rawdb.NewMemoryDatabase()
+				defer db.Close()
+				sealChecked := false
+				wrapped := &sealVerifierTestEngine{Engine: engine}
+				chain, err := NewBlockChain(db, genesis, wrapped, DefaultConfig().WithStateScheme(scheme))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer chain.Stop()
+				wrapped.verifySeal = func(reader consensus.ChainHeaderReader, candidate *types.Header) error {
+					if candidate.Hash() != block.Hash() {
+						return nil
+					}
+					if reader != chain || !chain.HasBlockAndState(parent.Hash(), parent.NumberU64()) {
+						t.Fatal("candidate seal checked before actual parent state recovery")
+					}
+					sealChecked = true
+					return test.sealErr
+				}
+				// Retain the parent block without its state, as after pruning.
+				rawdb.WriteBlock(db, parent)
+				if !chain.HasState(block.Root()) {
+					t.Fatal("candidate must claim an available state root")
+				}
+				if err := chain.validator.ValidateBody(block); !errors.Is(err, consensus.ErrPrunedAncestor) {
+					t.Fatalf("body validation: have %v, want ErrPrunedAncestor", err)
+				}
+				_, err = chain.InsertBlockWithoutSetHead(context.Background(), block, false)
+				if !sealChecked {
+					t.Fatal("candidate seal was not checked")
+				}
+				if test.sealErr != nil {
+					if !errors.Is(err, test.sealErr) {
+						t.Fatalf("import error: have %v, want %v", err, test.sealErr)
+					}
+				} else if err == nil || !strings.Contains(err.Error(), "invalid merkle root") {
+					t.Fatalf("import error: have %v, want invalid merkle root", err)
+				}
+				if chain.HasBlock(block.Hash(), block.NumberU64()) {
+					t.Fatal("invalid candidate was persisted")
+				}
+				if chain.CurrentBlock().Hash() != chain.Genesis().Hash() {
+					t.Fatal("rejected candidate changed the canonical head")
+				}
+			})
+		}
+	}
+}
+
 // TestDeleteCreateRevert tests a weird state transition corner case that we hit
 // while changing the internals of statedb. The workflow is that a contract is
 // self destructed, then in a followup transaction (but same block) it's created
