@@ -38,8 +38,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// noVerifyEngine is the beacon engine without header verification, as the
-// beacon engine rejects the QuarkChain extra data.
+// noVerifyEngine skips header verification, as the beacon engine rejects the
+// QuarkChain extra data. It hides consensus.SealVerifier, so imports of blocks
+// built with the PoSW engine skip seal verification too.
 type noVerifyEngine struct {
 	consensus.Engine
 }
@@ -105,7 +106,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		Difficulty:      *uint256.NewInt(1),
 		TotalDifficulty: *uint256.NewInt(1),
 	}, qkctypes.ShardBlockHeaders{env.genesis.Header()}, nil)
-	env.sc = NewShardChain(env.db, chain)
+	env.sc = NewShardChain(env.db, chain, nil)
 	if err := env.sc.Init(env.rootGenesis); err != nil {
 		t.Fatalf("failed to initialize shard chain: %v", err)
 	}
@@ -282,7 +283,7 @@ func TestShardChainInitGenesis(t *testing.T) {
 	remote := makeShardHeaders(1, 99, env.rootGenesis)[0]
 	qkcrawdb.WriteXShardDeposits(rootDB, remote.Hash(), nil)
 	root := qkctypes.NewRootBlock(env.rootGenesis.Header(), qkctypes.ShardBlockHeaders{remote, env.genesis.Header()}, nil)
-	env.sc = NewShardChain(rootDB, env.chain)
+	env.sc = NewShardChain(rootDB, env.chain, nil)
 	if err := env.sc.Init(root); err != nil {
 		t.Fatalf("bootstrap genesis: %v", err)
 	}
@@ -318,7 +319,7 @@ func TestShardChainInitGenesisValidation(t *testing.T) {
 	env := newTestEnv(t)
 	rootDB := rawdb.NewMemoryDatabase()
 	t.Cleanup(func() { rootDB.Close() })
-	env.sc = NewShardChain(rootDB, env.chain)
+	env.sc = NewShardChain(rootDB, env.chain, nil)
 	for _, name := range []string{"missing local", "duplicate local", "non-genesis local", "hash mismatch", "nonempty previous root", "body commitment", "root parent"} {
 		t.Run(name, func(t *testing.T) {
 			header := env.genesis.Header()
@@ -384,7 +385,7 @@ func TestShardChainInitGenesisRetry(t *testing.T) {
 			} else {
 				env.chain.Stop()
 			}
-			env.sc = NewShardChain(store, env.chain)
+			env.sc = NewShardChain(store, env.chain, nil)
 			err := env.sc.Init(env.rootGenesis)
 			if err == nil || (!stopChain && !errors.Is(err, writeErr)) {
 				t.Fatalf("expected initialization failure: %v", err)
@@ -465,7 +466,7 @@ func TestShardChainInitHead(t *testing.T) {
 
 			// Simulate reconnect/restart with the same local DB and blockchain.
 			// Initialization must use the stored checkpoint, not this input body.
-			env.sc = NewShardChain(env.db, env.chain)
+			env.sc = NewShardChain(env.db, env.chain, nil)
 			input := root.WithBody(nil, []byte("master tracking data"))
 			if err := env.sc.Init(input); err != nil {
 				t.Fatalf("initialize: %v", err)
@@ -486,7 +487,7 @@ func TestShardChainInitUnknownRoot(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			env := newTestEnv(t)
-			env.sc = NewShardChain(env.db, env.chain)
+			env.sc = NewShardChain(env.db, env.chain, nil)
 			root := newRoot(env.rootGenesis, 1)
 			input := root
 			if nilInput {
@@ -518,7 +519,7 @@ func TestShardChainInitMissingConfirmation(t *testing.T) {
 	}
 	root := newRoot(env.rootGenesis, 1, blocks[0].Header())
 	qkcrawdb.WriteRootBlock(env.db, root) // The confirmation record is missing.
-	env.sc = NewShardChain(env.db, env.chain)
+	env.sc = NewShardChain(env.db, env.chain, nil)
 	if err := env.sc.Init(root); !errors.Is(err, ErrInvalidRootBlock) || errors.Is(err, ErrUnknownConfirmedBlock) || errors.Is(err, ErrShardStateInconsistency) {
 		t.Fatalf("missing confirmation: %v", err)
 	}
@@ -567,7 +568,7 @@ func TestShardChainInitMissingConfirmedBlock(t *testing.T) {
 			if headerOnly {
 				rawdb.WriteHeader(env.db, block.Header())
 			}
-			env.sc = NewShardChain(env.db, env.chain)
+			env.sc = NewShardChain(env.db, env.chain, nil)
 			want := ErrUnknownConfirmedBlock
 			if headerOnly {
 				want = consensus.ErrUnknownAncestor
@@ -604,7 +605,7 @@ func TestShardChainInitHeadFailure(t *testing.T) {
 	env.insert(block)
 	root := newRoot(env.rootGenesis, 1) // The stored genesis confirmation rewinds to g.
 	env.addRoot(root, env.genesis)
-	env.sc = NewShardChain(env.db, env.chain)
+	env.sc = NewShardChain(env.db, env.chain, nil)
 	env.chain.Stop()
 	if err := env.sc.Init(root); err == nil {
 		t.Fatal("initialization succeeded despite stopped blockchain")
@@ -626,7 +627,7 @@ func TestShardChainInitHeadFailure(t *testing.T) {
 // pass the uninitialized check: the entire initialization runs under c.mu.
 func TestShardChainInitConcurrent(t *testing.T) {
 	env := newTestEnv(t)
-	env.sc = NewShardChain(env.db, env.chain)
+	env.sc = NewShardChain(env.db, env.chain, nil)
 	root := env.rootGenesis
 	start := make(chan struct{})
 	results := make(chan error, 2)
@@ -1448,7 +1449,7 @@ func TestInsertRootBlockFailureRecovery(t *testing.T) {
 			if test.restart {
 				env.chain.Stop()
 				env.reopenChain()
-				env.sc = NewShardChain(env.sc.db, env.chain)
+				env.sc = NewShardChain(env.sc.db, env.chain, nil)
 				// r2 was never stored, so recovery uses the valid r1 checkpoint.
 				if err := env.sc.Init(r1); err != nil {
 					t.Fatalf("failed to initialize restarted shard chain: %v", err)

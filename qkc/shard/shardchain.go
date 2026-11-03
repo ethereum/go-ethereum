@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/qkc/rawdb"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
@@ -114,8 +115,9 @@ var (
 // canonical hash mappings. Callers must not independently change the head or
 // import canonical headers through core.BlockChain.
 type ShardChain struct {
-	db    ethdb.KeyValueStore // Database of the root blocks seen by the shard
-	chain *core.BlockChain
+	db      ethdb.KeyValueStore // Database of the root blocks seen by the shard
+	chain   *core.BlockChain
+	builder *miner.Miner // The node's shared builder; nil for an import-only shard
 
 	// NewShardChain creates a shard chain on top of the given chain, reading the
 	// root blocks and incoming deposits from db. For a QuarkChain configuration,
@@ -124,10 +126,11 @@ type ShardChain struct {
 	mu      sync.Mutex                // Serializes block imports and shard/root tip selection and updates
 }
 
-// NewShardChain creates a shard chain on top of the given chain, reading root
-// blocks from db. Call Init before importing blocks.
-func NewShardChain(db ethdb.KeyValueStore, chain *core.BlockChain) *ShardChain {
-	c := &ShardChain{db: db, chain: chain}
+// NewShardChain binds the node's existing blockchain and builder, reading root
+// blocks and incoming deposits from db. The builder must use this blockchain
+// and its engine; nil supports import-only shards. Call Init before use.
+func NewShardChain(db ethdb.KeyValueStore, chain *core.BlockChain, builder *miner.Miner) *ShardChain {
+	c := &ShardChain{db: db, chain: chain, builder: builder}
 	if config := chain.Config().QuarkChain; config != nil {
 		chain.SetXShardInbox(NewXShardInbox(config, c))
 	}
@@ -204,6 +207,14 @@ func (c *ShardChain) Init(root *qkctypes.RootBlock) error {
 	// TODO: wire Init into the shard service's master handshake, data sync and
 	// mining startup. Genesis construction/state setup stays in that service.
 	return nil
+}
+
+// RootTip returns the root tip, or nil before Init. It waits for an import in
+// progress.
+func (c *ShardChain) RootTip() *qkctypes.RootBlockHeader {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rootTip
 }
 
 // validateGenesisRoot verifies the body commitment and this shard's sole
