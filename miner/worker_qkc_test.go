@@ -143,7 +143,7 @@ func TestBuildXShardDeposits(t *testing.T) {
 			} {
 				t.Run(tt.name, func(t *testing.T) {
 					config := *params.MergedTestChainConfig
-					config.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1}}
+					config.QuarkChain = params.NewTestQuarkChainConfig(1, 0, 1)
 					if amsterdam {
 						config.AmsterdamTime = new(uint64)
 					}

@@ -47,7 +47,8 @@ func NewBlockValidator(config *params.ChainConfig, blockchain *BlockChain) *Bloc
 
 // ValidateBody validates the given block's uncles and verifies the block
 // header's transaction and uncle roots. The headers are assumed to be already
-// validated at this point.
+// validated at this point. Engines with state-dependent seals verify them here,
+// after the parent block and its state are available and before block execution.
 func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// check EIP 7934 RLP-encoded block size cap
 	if v.config.IsOsaka(block.Number(), block.Time()) && block.Size() > params.MaxBlockSize {
@@ -61,11 +62,6 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 	// Header validity is known at this point. Here we verify that uncles, transactions
 	// and withdrawals given in the block body match the header.
 	header := block.Header()
-	if v.config.QuarkChain != nil {
-		if err := v.validateQKCBeaconFields(header); err != nil {
-			return err
-		}
-	}
 	if err := v.bc.engine.VerifyUncles(v.bc, block); err != nil {
 		return err
 	}
@@ -144,6 +140,13 @@ func (v *BlockValidator) ValidateBody(block *types.Block) error {
 			return consensus.ErrUnknownAncestor
 		}
 		return consensus.ErrPrunedAncestor
+	}
+	// State-dependent engines defer seal verification until the parent has been
+	// executed. In particular, a PoSW target depends on the parent's locked stakes.
+	if verifier, ok := v.bc.engine.(consensus.SealVerifier); ok {
+		if err := verifier.VerifySeal(v.bc, header); err != nil {
+			return err
+		}
 	}
 	return nil
 }

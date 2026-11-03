@@ -58,7 +58,7 @@ func TestAdjustedDifficulty(t *testing.T) {
 		{uint256.NewInt(99), 0, 100}, {uint256.NewInt(100), 0, 1}, {uint256.NewInt(100), 1, 100},
 		{uint256.NewInt(300), 2, 1}, {uint256.MustFromDecimal("1844674407370955161700"), 2, 1},
 	} {
-		if got := GetAdjustedDifficulty(c, big.NewInt(1), base, test.stakes, test.mined); got.Int64() != test.want {
+		if got := CalcAdjustedDifficulty(c, big.NewInt(1), base, test.stakes, test.mined); got.Int64() != test.want {
 			t.Fatalf("stakes %s, mined %d: %v", test.stakes, test.mined, got)
 		}
 	}
@@ -66,7 +66,7 @@ func TestAdjustedDifficulty(t *testing.T) {
 		t.Fatal("modified base difficulty")
 	}
 	c.StakingEnabled = false
-	if got := GetAdjustedDifficulty(c, big.NewInt(1), base, uint256.NewInt(100), 0); got.Int64() != 100 {
+	if got := CalcAdjustedDifficulty(c, big.NewInt(1), base, uint256.NewInt(100), 0); got.Int64() != 100 {
 		t.Fatal(got)
 	}
 }
@@ -97,13 +97,13 @@ func TestShardStakingDecay(t *testing.T) {
 			}
 			number, base := new(big.Int).SetUint64(test.number), big.NewInt(100)
 			stakes := uint256.NewInt(test.stakes)
-			if got := GetAdjustedDifficulty(config, number, base, stakes, test.mined); got.Int64() != test.want {
+			if got := CalcAdjustedDifficulty(config, number, base, stakes, test.mined); got.Int64() != test.want {
 				t.Fatalf("shard difficulty %s, want %d", got, test.want)
 			}
 			// The root path uses the configured, fixed requirement at every epoch.
 			rootConfig := *config
 			rootConfig.PoSWStakingDecayEnabled = false
-			if got := GetAdjustedDifficulty(&rootConfig, number, base, uint256.NewInt(99), 0); got.Int64() != 100 {
+			if got := CalcAdjustedDifficulty(&rootConfig, number, base, uint256.NewInt(99), 0); got.Int64() != 100 {
 				t.Fatalf("root stake requirement decayed: difficulty %s", got)
 			}
 			if config.StakePerBlock.Uint64() != 100 || config.DecayFactor.Cmp(big.NewRat(22, 25)) != 0 ||
@@ -114,7 +114,7 @@ func TestShardStakingDecay(t *testing.T) {
 	}
 	// Disabled staking leaves the base difficulty unchanged.
 	for _, config := range []*params.PoSWConfig{nil, {StakingEnabled: false}} {
-		if got := GetAdjustedDifficulty(config, big.NewInt(1), big.NewInt(100), nil, 0); got.Int64() != 100 {
+		if got := CalcAdjustedDifficulty(config, big.NewInt(1), big.NewInt(100), nil, 0); got.Int64() != 100 {
 			t.Fatal(got)
 		}
 	}
