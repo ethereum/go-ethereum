@@ -299,7 +299,7 @@ func (m *PoWMiner) mine(ctx context.Context, changed <-chan struct{}) {
 			if ctx.Err() == nil {
 				log.Warn("Failed to get shard mining work", "err", err)
 			}
-			retryMining(ctx)
+			waitForMiningRetry(ctx)
 			continue
 		}
 		nonce, mixHash, ok := m.search(ctx, w, changed)
@@ -313,13 +313,13 @@ func (m *PoWMiner) mine(ctx context.Context, changed <-chan struct{}) {
 			log.Debug("Discarded stale shard block", "number", w.Number, "sealhash", w.SealHash)
 		default:
 			log.Warn("Failed to import mined shard block", "number", w.Number, "err", err)
-			retryMining(ctx)
+			waitForMiningRetry(ctx)
 		}
 	}
 }
 
-// retryMining waits before local mining retries a failed step.
-func retryMining(ctx context.Context) {
+// waitForMiningRetry waits before local mining retries a failed step.
+func waitForMiningRetry(ctx context.Context) {
 	select {
 	case <-time.After(miningRetryInterval):
 	case <-ctx.Done():
