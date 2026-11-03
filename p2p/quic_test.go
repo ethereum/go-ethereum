@@ -293,3 +293,76 @@ func TestPenalizeBrowser(t *testing.T) {
 		}
 	}
 }
+
+// drainProtocol returns a subprotocol which reads and discards all messages.
+func drainProtocol(name string, browser bool) Protocol {
+	return Protocol{
+		Name:         name,
+		Version:      1,
+		Length:       2,
+		AllowBrowser: browser,
+		Run: func(p *Peer, rw MsgReadWriter) error {
+			for {
+				if _, err := rw.ReadMsg(); err != nil {
+					return err
+				}
+			}
+		},
+	}
+}
+
+// This test checks that a browser connection can negotiate the capabilities of
+// browser protocols. The protocol list is needed before the peer identity is
+// known, i.e. before the encryption handshake, because the chosen capabilities
+// are reported to the browser in it.
+func TestServerQUICBrowserCaps(t *testing.T) {
+	srv := &Server{
+		Config: Config{
+			PrivateKey:      newkey(),
+			MaxPeers:        10,
+			MaxBrowserPeers: 4,
+			NoDial:          true,
+			NoDiscovery:     true,
+			ListenQUICAddr:  "127.0.0.1:0",
+			Protocols: []Protocol{
+				drainProtocol("nodeproto", false),
+				drainProtocol("browserproto", true),
+			},
+			Logger: testlog.Logger(t, log.LevelError),
+		},
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	nonce := make([]byte, quicNonceLen)
+	rand.Read(nonce)
+
+	conn, err := dialQUICBrowser(ctx, srv.quicListener, nonce, "browserproto/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	// The server announces the capabilities it chose in the encryption handshake.
+	var hs struct {
+		Proof []byte
+		Caps  []string
+	}
+	if err := rlp.NewStream(conn, 0).Decode(&hs); err != nil {
+		t.Fatal(err)
+	}
+	if len(hs.Caps) != 1 || hs.Caps[0] != "browserproto/1" {
+		t.Fatalf("chosen caps = %v, want [browserproto/1]", hs.Caps)
+	}
+	for i := 0; i < 500 && srv.PeerCount() == 0; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if c := srv.PeerCount(); c != 1 {
+		t.Fatalf("peer count = %d, want 1", c)
+	}
+}

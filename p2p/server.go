@@ -998,7 +998,12 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		dialPub = dialDest.Pubkey()
 	}
 	if qc, ok := fd.(*quic.Conn); ok {
-		c.transport = newQUICTransport(qc, srv.protocolsFor(c))
+		// QUIC connections are only served to browsers (see quicListener), but
+		// the peer identity is not known before the encryption handshake, and the
+		// transport needs the protocol list to report the chosen capabilities in
+		// it. Select the browser protocols up front, which is what protocolsFor
+		// returns for this connection once the handshake has completed.
+		c.transport = newQUICTransport(qc, filterProtocols(srv.Protocols, true))
 	} else {
 		c.transport = srv.newTransport(fd, dialPub)
 	}
