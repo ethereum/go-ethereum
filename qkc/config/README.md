@@ -59,11 +59,10 @@ chain IDs `100001` and `100002`, with `Root.CoinbaseChainID = 100001`.
 
 The shard count is derived from the `[[Shards]]` entries. Their order does not
 matter, and chain IDs may have gaps. The loader fills the existing internal
-`QuarkChain.ShardID` field with the EVM `ChainID`, and `QuarkChain.ShardIDs` with
+`QuarkChain.ChainID` field with the EVM `ChainID`, and `QuarkChain.ChainIDs` with
 all configured chain IDs in ascending order, including itself. Both lists in the
-example are `[100001, 100002]`. These fields retain their existing names for
-runtime compatibility and cannot be supplied in TOML. There is no separate
-routing ID.
+example are `[100001, 100002]`. These internal fields cannot be supplied in TOML.
+There is no separate routing ID.
 
 `Root.CoinbaseChainID` is parsed and validated here. Runtime root reward delivery
 and staking still use the existing shard-zero rules; applying this setting to

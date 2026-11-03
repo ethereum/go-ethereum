@@ -39,14 +39,6 @@ var (
 	// ErrXShardGas is returned when the cross-shard gas of a block of a
 	// QuarkChain shard is invalid.
 	ErrXShardGas = errors.New("invalid cross-shard gas")
-
-	// ErrQKCBeaconRoot is returned when a shard block has an invalid reserved
-	// parent beacon root.
-	ErrQKCBeaconRoot = errors.New("invalid qkc beacon root")
-
-	// ErrQKCSlotNumber is returned when a shard block has an invalid reserved
-	// slot number.
-	ErrQKCSlotNumber = errors.New("invalid qkc slot number")
 )
 
 // XShardInbox provides a QuarkChain shard with the cross-shard deposits its
@@ -178,34 +170,6 @@ func (v *BlockValidator) validateXShardDeposits(block *types.Block, receipts typ
 	}
 	if cursor != extra.Cursor {
 		return fmt.Errorf("%w: have %+v, want %+v", ErrXShardCursorMismatch, extra.Cursor, cursor)
-	}
-	return nil
-}
-
-// validateQKCBeaconFields enforces the reserved values in imported shard blocks.
-// The fields retain geth's fork-dependent presence and RLP encoding.
-// TODO: Move this validation into the QKC engine's VerifyHeader when implemented
-// so header-only and snap sync also enforce these fields.
-func (v *BlockValidator) validateQKCBeaconFields(header *types.Header) error {
-	if v.config.IsCancun(header.Number, header.Time) {
-		if header.ParentBeaconRoot == nil {
-			return fmt.Errorf("%w: missing after cancun", ErrQKCBeaconRoot)
-		}
-		if *header.ParentBeaconRoot != (common.Hash{}) {
-			return fmt.Errorf("%w: have %x, want zero after cancun", ErrQKCBeaconRoot, *header.ParentBeaconRoot)
-		}
-	} else if header.ParentBeaconRoot != nil {
-		return fmt.Errorf("%w: have %x before cancun", ErrQKCBeaconRoot, *header.ParentBeaconRoot)
-	}
-	if v.config.IsAmsterdam(header.Number, header.Time) {
-		if header.SlotNumber == nil {
-			return fmt.Errorf("%w: missing after amsterdam", ErrQKCSlotNumber)
-		}
-		if *header.SlotNumber != 0 {
-			return fmt.Errorf("%w: have %d, want zero after amsterdam", ErrQKCSlotNumber, *header.SlotNumber)
-		}
-	} else if header.SlotNumber != nil {
-		return fmt.Errorf("%w: have %d before amsterdam", ErrQKCSlotNumber, *header.SlotNumber)
 	}
 	return nil
 }

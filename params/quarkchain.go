@@ -41,8 +41,8 @@ const (
 	// gas reserved for its deposits, to its gas limit over this divisor.
 	XShardGasLimitDivisor uint64 = 2
 
-	// RootCoinbaseShardID is the shard the root chain pays its coinbase to.
-	RootCoinbaseShardID uint32 = 0
+	// RootCoinbaseChainID is the shard the root chain pays its coinbase to.
+	RootCoinbaseChainID uint32 = 0
 )
 
 // ConsensusType identifies the PoW algorithm selected for a QKC root or shard chain.
@@ -68,8 +68,8 @@ func (c ConsensusType) Check() error {
 type QuarkChainConfig struct {
 	// These existing routing fields carry the EVM chain IDs. Network loading
 	// derives them from ChainConfig.ChainID; they cannot be configured separately.
-	ShardID  uint32   `json:"shardId" toml:"-"`
-	ShardIDs []uint32 `json:"shardIds" toml:"-"`
+	ChainID  uint32   `json:"chainId" toml:"-"`
+	ChainIDs []uint32 `json:"chainIds" toml:"-"`
 
 	ConsensusType ConsensusType `json:"consensusType,omitempty"`
 	PoSW          *PoSWConfig   `json:"posw"` // Required consensus configuration for this shard.
@@ -84,8 +84,8 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 	if c == nil || other == nil {
 		return c == other
 	}
-	return c.ShardID == other.ShardID &&
-		slices.Equal(c.ShardIDs, other.ShardIDs) &&
+	return c.ChainID == other.ChainID &&
+		slices.Equal(c.ChainIDs, other.ChainIDs) &&
 		c.ConsensusType == other.ConsensusType &&
 		c.PoSW.Equal(other.PoSW) &&
 		c.MaxBlocksPerRootBlock == other.MaxBlocksPerRootBlock
@@ -93,11 +93,11 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 
 // String implements the stringer interface.
 func (c QuarkChainConfig) String() string {
-	return fmt.Sprintf("quarkchain(shard: %d, shards: %v)", c.ShardID, c.ShardIDs)
+	return fmt.Sprintf("quarkchain(shard: %d, shards: %v)", c.ChainID, c.ChainIDs)
 }
 
 // IsXShardDestination reports whether this shard can send a cross-shard
 // message to the given shard.
-func (c *QuarkChainConfig) IsXShardDestination(shardID uint32) bool {
-	return c != nil && shardID != c.ShardID && slices.Contains(c.ShardIDs, shardID)
+func (c *QuarkChainConfig) IsXShardDestination(chainID uint32) bool {
+	return c != nil && chainID != c.ChainID && slices.Contains(c.ChainIDs, chainID)
 }

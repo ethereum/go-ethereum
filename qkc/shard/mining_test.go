@@ -46,16 +46,16 @@ type miningBackend struct {
 func (b miningBackend) BlockChain() *core.BlockChain { return b.chain }
 func (b miningBackend) TxPool() *txpool.TxPool       { return b.pool }
 
-func newMiningEnv(t *testing.T, shardID uint32) (*testEnv, *txpool.TxPool, *miner.Miner) {
+func newMiningEnv(t *testing.T, chainID uint32) (*testEnv, *txpool.TxPool, *miner.Miner) {
 	roots, _, _, _, _, shard0, shard1 := testRootChain()
 	config := *params.MergedTestChainConfig
-	config.QuarkChain = params.NewTestQuarkChainConfig(shardID, 0, 1, 2)
+	config.QuarkChain = params.NewTestQuarkChainConfig(chainID, 0, 1, 2)
 	env := &testEnv{
 		t: t, db: rawdb.NewMemoryDatabase(), config: &config,
 		engine: noVerifyEngine{beacon.New(ethash.NewFaker())}, rootGenesis: roots[0],
 	}
 	incoming := shard1
-	if shardID == 0 {
+	if chainID == 0 {
 		incoming = shard0
 	}
 	for hash, deposits := range incoming.deposits {
@@ -63,11 +63,11 @@ func newMiningEnv(t *testing.T, shardID uint32) (*testEnv, *txpool.TxPool, *mine
 	}
 	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	alloc := core.SystemContractAllocs()
-	maps.Copy(alloc, core.PoSWStakingContractAllocs(shardID))
+	maps.Copy(alloc, core.PoSWStakingContractAllocs(chainID))
 	alloc[crypto.PubkeyToAddress(key.PublicKey)] = types.Account{Balance: big.NewInt(params.Ether)}
 	genesis := &core.Genesis{
 		Config: &config, GasLimit: 54000, Alloc: alloc,
-		ExtraData: (&types.QKCExtra{ShardID: shardID, Cursor: pos(1, 0, 0)}).Encode(),
+		ExtraData: (&types.QKCExtra{ChainID: chainID, Cursor: pos(1, 0, 0)}).Encode(),
 	}
 	chain, err := core.NewBlockChain(env.db, genesis, env.engine, nil)
 	if err != nil {
@@ -95,9 +95,9 @@ func newMiningEnv(t *testing.T, shardID uint32) (*testEnv, *txpool.TxPool, *mine
 }
 
 func TestBuildShardBlock(t *testing.T) {
-	for _, shardID := range []uint32{0, 1} {
-		t.Run(string(rune('0'+shardID)), func(t *testing.T) {
-			env, pool, builder := newMiningEnv(t, shardID)
+	for _, chainID := range []uint32{0, 1} {
+		t.Run(string(rune('0'+chainID)), func(t *testing.T) {
+			env, pool, builder := newMiningEnv(t, chainID)
 			key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 			userTx := types.MustSignNewTx(key, types.LatestSigner(env.config), &types.DynamicFeeTx{
 				ChainID: env.config.ChainID, Gas: params.TxGas, To: &common.Address{0xee},
@@ -115,16 +115,16 @@ func TestBuildShardBlock(t *testing.T) {
 			env.checkHead(env.genesis)
 			extra, _ := block.Header().QKCExtra()
 			cursor := pos(4, 0, 0)
-			if shardID == 0 {
+			if chainID == 0 {
 				cursor = pos(2, 0, 1)
 			}
-			if extra.PrevRootBlock != root || extra.ShardID != shardID || extra.Cursor != cursor || extra.XShardGasUsed != 27000 {
+			if extra.PrevRootBlock != root || extra.ChainID != chainID || extra.Cursor != cursor || extra.XShardGasUsed != 27000 {
 				t.Fatalf("unexpected extra: %+v", extra)
 			}
 			if txs := block.Transactions(); len(txs) != 4 || txs[3].Hash() != userTx.Hash() {
 				t.Fatalf("expected three deposits followed by the pool transaction, got %d transactions", len(txs))
 			}
-			if shardID == 0 {
+			if chainID == 0 {
 				root1 := env.sc.RootBlockByNumber(root, 1)
 				if block.Transactions()[0].Hash() != types.NewTx(rootCoinbaseDeposit(root1)).Hash() {
 					t.Fatal("root reward not first")
@@ -140,7 +140,7 @@ func TestBuildShardBlock(t *testing.T) {
 			}
 			nextExtra, _ := next.Header().QKCExtra()
 			count := 0
-			if shardID == 0 {
+			if chainID == 0 {
 				count = 2
 			}
 			if next.ParentHash() != block.Hash() || nextExtra.Cursor != pos(4, 0, 0) || len(next.Transactions()) != count {

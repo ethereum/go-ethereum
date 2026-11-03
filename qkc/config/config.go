@@ -347,8 +347,8 @@ func LoadNetwork(file string) (*NetworkConfig, error) {
 		if shard.QuarkChain == nil {
 			continue
 		}
-		shard.QuarkChain.ShardID = uint32(shard.ChainID.Uint64())
-		shard.QuarkChain.ShardIDs = slices.Clone(ids)
+		shard.QuarkChain.ChainID = uint32(shard.ChainID.Uint64())
+		shard.QuarkChain.ChainIDs = slices.Clone(ids)
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
@@ -410,8 +410,8 @@ func (c *NetworkConfig) Validate() error {
 			return fmt.Errorf("duplicate ChainID %d", id)
 		}
 		ids[id] = true
-		if shard.QuarkChain.ShardID != id {
-			return fmt.Errorf("chain %d: QuarkChain.ShardID must match the EVM ChainID", id)
+		if shard.QuarkChain.ChainID != id {
+			return fmt.Errorf("chain %d: QuarkChain.ChainID must match the EVM ChainID", id)
 		}
 		if err := shard.CheckConfigForkOrder(); err != nil {
 			return fmt.Errorf("chain %d: %w", id, err)
@@ -422,15 +422,15 @@ func (c *NetworkConfig) Validate() error {
 	}
 	for _, shard := range c.Shards {
 		qkc := shard.QuarkChain
-		seen := make(map[uint32]bool, len(qkc.ShardIDs))
-		for _, id := range qkc.ShardIDs {
+		seen := make(map[uint32]bool, len(qkc.ChainIDs))
+		for _, id := range qkc.ChainIDs {
 			if !ids[id] || seen[id] {
-				return fmt.Errorf("chain %d: routing chain IDs contain unknown or duplicate chain %d", qkc.ShardID, id)
+				return fmt.Errorf("chain %d: routing chain IDs contain unknown or duplicate chain %d", qkc.ChainID, id)
 			}
 			seen[id] = true
 		}
 		if len(seen) != len(ids) {
-			return fmt.Errorf("chain %d: routing chain IDs must contain every network chain", qkc.ShardID)
+			return fmt.Errorf("chain %d: routing chain IDs must contain every network chain", qkc.ChainID)
 		}
 	}
 	return nil

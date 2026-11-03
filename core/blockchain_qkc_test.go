@@ -125,7 +125,7 @@ func TestLockedStakesParentState(t *testing.T) {
 }
 
 func TestRootChainStakesShard0Only(t *testing.T) {
-	for _, config := range []*params.QuarkChainConfig{nil, {ShardID: 1}} {
+	for _, config := range []*params.QuarkChainConfig{nil, {ChainID: 1}} {
 		chain := &BlockChain{chainConfig: &params.ChainConfig{QuarkChain: config}}
 		if _, _, err := chain.GetRootChainStakes(&types.Header{}, common.Address{}); err == nil {
 			t.Fatal("accepted root-chain stakes query outside shard 0")

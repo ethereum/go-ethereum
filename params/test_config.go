@@ -22,14 +22,14 @@ import (
 )
 
 // NewTestQuarkChainConfig returns a fresh shard configuration for tests using
-// fake consensus, with staking disabled and zero subsidy. If shardIDs is omitted,
+// fake consensus, with staking disabled and zero subsidy. If chainIDs is omitted,
 // only the local shard is configured. Callers may customize the returned config.
-func NewTestQuarkChainConfig(shardID uint32, shardIDs ...uint32) *QuarkChainConfig {
-	if len(shardIDs) == 0 {
-		shardIDs = []uint32{shardID}
+func NewTestQuarkChainConfig(chainID uint32, chainIDs ...uint32) *QuarkChainConfig {
+	if len(chainIDs) == 0 {
+		chainIDs = []uint32{chainID}
 	}
 	return &QuarkChainConfig{
-		ShardID: shardID, ShardIDs: slices.Clone(shardIDs),
+		ChainID: chainID, ChainIDs: slices.Clone(chainIDs),
 		PoSW: &PoSWConfig{
 			AdjustmentCutoff: 7, AdjustmentFactor: 512, MinimumDifficulty: big.NewInt(1),
 			CoinbaseAmount: big.NewInt(0), EpochInterval: 3153600, DecayFactor: big.NewRat(22, 25), RewardTaxRate: big.NewRat(1, 2),

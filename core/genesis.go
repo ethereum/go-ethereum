@@ -582,9 +582,9 @@ func (g *Genesis) toBlockWithRoot(root common.Hash) *types.Block {
 // PoSWStakingContractAllocs returns staking accounts for use when generating a shard's
 // genesis configuration. The returned allocation must be written to genesis.json;
 // neither chain startup nor core.Genesis injects these accounts.
-func PoSWStakingContractAllocs(shardID uint32) types.GenesisAlloc {
+func PoSWStakingContractAllocs(chainID uint32) types.GenesisAlloc {
 	alloc := make(types.GenesisAlloc)
-	for _, address := range poswStakingContractAddresses(shardID) {
+	for _, address := range poswStakingContractAddresses(chainID) {
 		alloc[address] = types.Account{
 			Nonce:   1,
 			Code:    bytes.Clone(params.PoSWStakingRuntimeCode),
@@ -604,21 +604,21 @@ func (g *Genesis) ValidatePoSWStakingContracts() error {
 	if !g.Config.IsConstantinople(common.Big0) {
 		return fmt.Errorf("staking contracts require Constantinople at genesis")
 	}
-	shardID := g.Config.QuarkChain.ShardID
-	for _, address := range poswStakingContractAddresses(shardID) {
+	chainID := g.Config.QuarkChain.ChainID
+	for _, address := range poswStakingContractAddresses(chainID) {
 		if crypto.Keccak256Hash(g.Alloc[address].Code) != params.PoSWStakingRuntimeCodeHash {
 			return fmt.Errorf("staking contract %s has unexpected genesis code hash", address)
 		}
 	}
-	if shardID != 0 && len(g.Alloc[params.RootStakingContractAddress].Code) != 0 {
+	if chainID != 0 && len(g.Alloc[params.RootStakingContractAddress].Code) != 0 {
 		return fmt.Errorf("root staking contract must only be deployed on shard 0")
 	}
 	return nil
 }
 
-func poswStakingContractAddresses(shardID uint32) []common.Address {
+func poswStakingContractAddresses(chainID uint32) []common.Address {
 	addresses := []common.Address{params.ShardStakingContractAddress}
-	if shardID == 0 {
+	if chainID == 0 {
 		addresses = append(addresses, params.RootStakingContractAddress)
 	}
 	return addresses

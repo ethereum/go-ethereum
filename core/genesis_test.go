@@ -54,8 +54,8 @@ func TestSetupGenesisQuarkChainConfig(t *testing.T) {
 			}{
 				{"unchanged", func(c *params.ChainConfig) {}, false, false},
 				{"coinbaseAmount", func(c *params.ChainConfig) { c.QuarkChain.PoSW.CoinbaseAmount.SetInt64(200) }, false, true},
-				{"shardId", func(c *params.ChainConfig) { c.QuarkChain.ShardID = 1 }, false, true},
-				{"shardIds", func(c *params.ChainConfig) { c.QuarkChain.ShardIDs = []uint32{0, 1} }, false, true},
+				{"chainId", func(c *params.ChainConfig) { c.QuarkChain.ChainID = 1 }, false, true},
+				{"chainIds", func(c *params.ChainConfig) { c.QuarkChain.ChainIDs = []uint32{0, 1} }, false, true},
 				{"consensusType", func(c *params.ChainConfig) { c.QuarkChain.ConsensusType = params.ConsensusSimulate }, false, true},
 				{"maxBlocksPerRootBlock", func(c *params.ChainConfig) { c.QuarkChain.MaxBlocksPerRootBlock = 12 }, false, true},
 				{"remove config", func(c *params.ChainConfig) { c.QuarkChain = nil }, false, true},
@@ -443,9 +443,9 @@ func TestBinaryGenesisCommit(t *testing.T) {
 	}
 }
 
-func genesisConfig(shardID uint32) *params.ChainConfig {
+func genesisConfig(chainID uint32) *params.ChainConfig {
 	config := *params.AllEthashProtocolChanges
-	config.QuarkChain = params.NewTestQuarkChainConfig(shardID)
+	config.QuarkChain = params.NewTestQuarkChainConfig(chainID)
 	return &config
 }
 
@@ -470,19 +470,19 @@ func TestGenesisQKCSlotNumber(t *testing.T) {
 func TestStakingGenesisAlloc(t *testing.T) {
 	root := common.HexToAddress("0x514b430000000000000000000000000000000001")
 	shard := common.HexToAddress("0x514b430000000000000000000000000000000002")
-	for _, shardID := range []uint32{0, 1, 9} {
-		alloc := PoSWStakingContractAllocs(shardID)
+	for _, chainID := range []uint32{0, 1, 9} {
+		alloc := PoSWStakingContractAllocs(chainID)
 		want := []common.Address{shard}
-		if shardID == 0 {
+		if chainID == 0 {
 			want = append(want, root)
 		}
 		if len(alloc) != len(want) {
-			t.Fatalf("shard %d: %d contracts, want %d", shardID, len(alloc), len(want))
+			t.Fatalf("shard %d: %d contracts, want %d", chainID, len(alloc), len(want))
 		}
 		for _, address := range want {
 			account := alloc[address]
 			if account.Nonce != 1 || account.Balance == nil || account.Balance.Sign() != 0 || len(account.Storage) != 0 || !bytes.Equal(account.Code, params.PoSWStakingRuntimeCode) {
-				t.Fatalf("shard %d: invalid staking account at %s", shardID, address)
+				t.Fatalf("shard %d: invalid staking account at %s", chainID, address)
 			}
 		}
 	}
@@ -495,15 +495,15 @@ func TestStakingGenesisAlloc(t *testing.T) {
 
 func TestStakingGenesisFromConfig(t *testing.T) {
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
-		for _, shardID := range []uint32{0, 1} {
-			t.Run(scheme+"/"+strconv.FormatUint(uint64(shardID), 10), func(t *testing.T) {
+		for _, chainID := range []uint32{0, 1} {
+			t.Run(scheme+"/"+strconv.FormatUint(uint64(chainID), 10), func(t *testing.T) {
 				for _, stakingEnabled := range []bool{false, true} {
-					config := genesisConfig(shardID)
+					config := genesisConfig(chainID)
 					config.QuarkChain.PoSW.StakingEnabled = stakingEnabled
 					config.QuarkChain.PoSW.WindowSize = 256
 					config.QuarkChain.PoSW.StakePerBlock = big.NewInt(100)
 					config.QuarkChain.PoSW.DiffDivider = 20
-					alloc := PoSWStakingContractAllocs(shardID)
+					alloc := PoSWStakingContractAllocs(chainID)
 					funded := common.HexToAddress("0xabcd")
 					alloc[funded] = types.Account{Balance: big.NewInt(42)}
 					// These fields belong to genesis.json. Startup must preserve
@@ -550,12 +550,12 @@ func TestStakingGenesisFromConfig(t *testing.T) {
 					if statedb.GetNonce(address) != 7 || statedb.GetBalance(address).Uint64() != 123 || statedb.GetState(address, common.Hash{1}) != (common.Hash{2}) || statedb.GetBalance(funded).Uint64() != 42 {
 						t.Fatal("configured account state was overwritten")
 					}
-					for expectedAddress, expected := range PoSWStakingContractAllocs(shardID) {
+					for expectedAddress, expected := range PoSWStakingContractAllocs(chainID) {
 						if !bytes.Equal(statedb.GetCode(expectedAddress), expected.Code) {
 							t.Fatalf("configured runtime missing at %s", expectedAddress)
 						}
 					}
-					if shardID != 0 && len(statedb.GetCode(params.RootStakingContractAddress)) != 0 {
+					if chainID != 0 && len(statedb.GetCode(params.RootStakingContractAddress)) != 0 {
 						t.Fatal("root staking deployed outside shard zero")
 					}
 					stored, err := ReadGenesis(db)
@@ -585,7 +585,7 @@ func TestStakingGenesisValidation(t *testing.T) {
 		{"unexpected code", func(_ *params.ChainConfig, a types.GenesisAlloc) {
 			a[params.ShardStakingContractAddress] = types.Account{Code: []byte{0}, Balance: new(big.Int)}
 		}, "unexpected genesis code hash"},
-		{"wrong shard", func(c *params.ChainConfig, _ types.GenesisAlloc) { c.QuarkChain.ShardID = 1 }, "only be deployed on shard 0"},
+		{"wrong shard", func(c *params.ChainConfig, _ types.GenesisAlloc) { c.QuarkChain.ChainID = 1 }, "only be deployed on shard 0"},
 		{"unsupported EVM", func(c *params.ChainConfig, _ types.GenesisAlloc) { c.ConstantinopleBlock = nil }, "Constantinople at genesis"},
 	} {
 		t.Run(test.name, func(t *testing.T) {

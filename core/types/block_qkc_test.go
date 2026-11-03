@@ -51,10 +51,52 @@ import (
 // difficulty is put in MixDigest, and the header's own Difficulty and Nonce are
 // left at zero. There is no setter for any of those header fields, by design.
 
+// TestSanityCheckQKC checks QKC format, reserved PoW fields and gas bounds.
+// Fork-dependent fields are checked by the consensus engine.
+func TestSanityCheckQKC(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		mutate func(*Header)
+		valid  bool
+	}{
+		{"valid", func(*Header) {}, true},
+		{"gas at limit", func(h *Header) {
+			h.GasUsed = h.GasLimit
+			e, _ := h.QKCExtra()
+			e.XShardGasUsed = e.XShardGasLimit
+			h.Extra = e.Encode()
+		}, true},
+		{"extra", func(h *Header) { h.Extra = nil }, false},
+		{"version", func(h *Header) { e, _ := h.QKCExtra(); e.Version = 1; h.Extra = e.Encode() }, false},
+		{"missing difficulty", func(h *Header) { h.Difficulty = nil }, false},
+		{"difficulty", func(h *Header) { h.Difficulty.SetInt64(1) }, false},
+		{"nonce", func(h *Header) { h.Nonce = EncodeNonce(1) }, false},
+		{"uncles", func(h *Header) { h.UncleHash = common.Hash{} }, false},
+		{"gas used", func(h *Header) { h.GasUsed = h.GasLimit + 1 }, false},
+		{"cross-shard gas used", func(h *Header) {
+			e, _ := h.QKCExtra()
+			e.XShardGasUsed = e.XShardGasLimit + 1
+			h.Extra = e.Encode()
+		}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			header := &Header{
+				Number: big.NewInt(1), Difficulty: new(big.Int), UncleHash: EmptyUncleHash,
+				GasLimit: 12_000_000,
+				Extra:    (&QKCExtra{ChainID: 3, XShardGasLimit: 6_000_000}).Encode(),
+			}
+			test.mutate(header)
+			if err := header.SanityCheckQKC(); (err == nil) != test.valid {
+				t.Fatalf("SanityCheckQKC: %v, want valid %v", err, test.valid)
+			}
+		})
+	}
+}
+
 func TestQKCExtraEncoding(t *testing.T) {
 	want := &QKCExtra{
 		Version:        1,
-		ShardID:        0x00010003,
+		ChainID:        0x00010003,
 		PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0xaa}, 32)),
 		Cursor:         XShardCursor{RootBlockHeight: 1, MinorBlockIndex: 2, XShardDepositIndex: 3},
 		XShardGasUsed:  21000,
@@ -64,7 +106,7 @@ func TestQKCExtraEncoding(t *testing.T) {
 	}
 	wantExtra := common.FromHex("0x" +
 		"00000001" + // version, offset 0
-		"00010003" + // shardId, offset 4
+		"00010003" + // chainId, offset 4
 		strings.Repeat("aa", 32) + // prevRootBlock, offset 8
 		"0000000000000001" + "0000000000000002" + "0000000000000003" + // cursor, offset 40
 		"0000000000005208" + // xShardGasUsed, offset 64
@@ -102,7 +144,7 @@ func TestQKCExtraRoundTrip(t *testing.T) {
 		{},
 		{
 			Version:        1,
-			ShardID:        0x00010003,
+			ChainID:        0x00010003,
 			PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0xaa}, 32)),
 			Cursor:         XShardCursor{RootBlockHeight: 1, MinorBlockIndex: 2, XShardDepositIndex: 3},
 			XShardGasUsed:  21000,
@@ -112,7 +154,7 @@ func TestQKCExtraRoundTrip(t *testing.T) {
 		},
 		{
 			Version:        ^uint32(0),
-			ShardID:        ^uint32(0),
+			ChainID:        ^uint32(0),
 			PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0xff}, 32)),
 			Cursor:         XShardCursor{RootBlockHeight: ^uint64(0), MinorBlockIndex: ^uint64(0), XShardDepositIndex: ^uint64(0)},
 			XShardGasUsed:  ^uint64(0),
@@ -248,7 +290,7 @@ func TestQKCSealHashSensitivity(t *testing.T) {
 	}
 	// The QKC fields outside the seal region participate as well.
 	other := qkcBaseExtra(nonce, mix)
-	other.ShardID = 4
+	other.ChainID = 4
 	otherShard := qkcShardHeader(other, big.NewInt(1000))
 	if qkcSealHash(t, otherShard) == baseSeal {
 		t.Error("seal hash ignores the QuarkChain fields outside the seal")
@@ -411,11 +453,11 @@ func qkcSealHash(t *testing.T, h *Header) common.Hash {
 }
 
 // qkcBaseExtra returns a QKC extra with the given seal, plus a version and a
-// shard id so that the region in front of the seal is non-zero too.
+// chain id so that the region in front of the seal is non-zero too.
 func qkcBaseExtra(nonce BlockNonce, mixHash common.Hash) *QKCExtra {
 	return &QKCExtra{
 		Version: 1,
-		ShardID: 3,
+		ChainID: 3,
 		Nonce:   nonce,
 		MixHash: mixHash,
 	}
@@ -456,7 +498,7 @@ func qkcReferenceHeader() *Header {
 		Time:        1_600_000_000,
 		Extra: (&QKCExtra{
 			Version:        1,
-			ShardID:        0x00010003,
+			ChainID:        0x00010003,
 			PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0x88}, 32)),
 			Cursor:         XShardCursor{RootBlockHeight: 1, MinorBlockIndex: 2, XShardDepositIndex: 3},
 			XShardGasUsed:  21_000,

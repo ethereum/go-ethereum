@@ -72,7 +72,7 @@ const (
 
 func xShardChainConfig() *params.ChainConfig {
 	cfg := *params.MergedTestChainConfig
-	cfg.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1, 2}}
+	cfg.QuarkChain = &params.QuarkChainConfig{ChainID: 1, ChainIDs: []uint32{0, 1, 2}}
 	return &cfg
 }
 

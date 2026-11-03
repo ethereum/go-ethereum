@@ -175,11 +175,11 @@ func (c *xShardCursor) Next() (*types.DepositTx, error) {
 			if err != nil {
 				return nil, fmt.Errorf("source block %x: %w", header.Hash(), err)
 			}
-			if extra.ShardID == c.config.ShardID {
+			if extra.ChainID == c.config.ChainID {
 				continue
 			}
 			if c.deposits = c.chain.XShardDeposits(header.Hash()); c.deposits == nil {
-				return nil, fmt.Errorf("%w: block %x of shard %d", ErrXShardDepositsMissing, header.Hash(), extra.ShardID)
+				return nil, fmt.Errorf("%w: block %x of shard %d", ErrXShardDepositsMissing, header.Hash(), extra.ChainID)
 			}
 			continue
 		}
@@ -202,7 +202,7 @@ func (c *xShardCursor) Next() (*types.DepositTx, error) {
 // is none.
 func (c *xShardCursor) current() *types.DepositTx {
 	if c.minorIndex == 0 {
-		if c.depositIndex == 1 && c.config.ShardID == params.RootCoinbaseShardID {
+		if c.depositIndex == 1 && c.config.ChainID == params.RootCoinbaseChainID {
 			return rootCoinbaseDeposit(c.root)
 		}
 		return nil
@@ -214,7 +214,7 @@ func (c *xShardCursor) current() *types.DepositTx {
 }
 
 // rootCoinbaseDeposit returns the deposit paying the coinbase of a root block to
-// its miner, on shard params.RootCoinbaseShardID. It is a move, with no gas cost.
+// its miner, on shard params.RootCoinbaseChainID. It is a move, with no gas cost.
 func rootCoinbaseDeposit(root *qkctypes.RootBlock) *types.DepositTx {
 	coinbase := root.Coinbase()
 	return &types.DepositTx{

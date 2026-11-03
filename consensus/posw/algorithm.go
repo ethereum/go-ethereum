@@ -19,7 +19,7 @@ package posw
 // Copied from go-ethereum commit 3768b0074791169441ca5eb3a7c73c7b9e74c24a:
 // https://github.com/ethereum/go-ethereum/blob/3768b0074791169441ca5eb3a7c73c7b9e74c24a/consensus/ethash/algorithm.go
 // Adaptations: package name, current Keccak APIs, and isLittleEndian copied
-// from ethash.go at the same commit. PoSW integration is in posw.go.
+// from ethash.go at the same commit. PoSW integration is in consensus.go.
 // Keep the algorithm and lookup tables aligned with this pinned upstream version.
 // This file implements Ethash hashing only and contains no difficulty bomb;
 // PoSW's bomb-free difficulty adjustment is implemented in difficulty.go.
