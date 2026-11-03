@@ -105,3 +105,80 @@ func createEmptyBlobTxInner(withSidecar bool) *BlobTx {
 	}
 	return blobtx
 }
+
+func TestBlobTxSidecarToV1(t *testing.T) {
+
+	// Standard case, converting from v0 to v1
+	t.Run("V0ToV1", func(t *testing.T) {
+		sidecar := NewBlobTxSidecar(
+			BlobSidecarVersion0,
+			[]kzg4844.Blob{*emptyBlob},
+			[]kzg4844.Commitment{emptyBlobCommit},
+			[]kzg4844.Proof{emptyBlobProof},
+		)
+
+		if err := sidecar.ToV1(); err != nil {
+			t.Fatalf("failed: %v", err)
+		}
+
+		if sidecar.Version != BlobSidecarVersion1 {
+			t.Errorf("expected version %d, got %d", BlobSidecarVersion1, sidecar.Version)
+		}
+
+		// Version 1 should have 128 cell proofs per blob
+		expectedProofs := len(sidecar.Blobs) * kzg4844.CellProofsPerBlob
+		if len(sidecar.Proofs) != expectedProofs {
+			t.Errorf("expected %d proofs, got %d", expectedProofs, len(sidecar.Proofs))
+		}
+	})
+
+	// Already v1 so its a noop
+	t.Run("AlreadyV1", func(t *testing.T) {
+		cellProofs, err := kzg4844.ComputeCellProofs(emptyBlob)
+		if err != nil {
+			t.Fatalf("ComputeCellProofs failed: %v", err)
+		}
+
+		sidecar := NewBlobTxSidecar(
+			BlobSidecarVersion1,
+			[]kzg4844.Blob{*emptyBlob},
+			[]kzg4844.Commitment{emptyBlobCommit},
+			cellProofs,
+		)
+
+		originalProofs := len(sidecar.Proofs)
+
+		if err := sidecar.ToV1(); err != nil {
+			t.Fatalf("failed: %v", err)
+		}
+
+		if sidecar.Version != BlobSidecarVersion1 {
+			t.Errorf("expected version %d, got %d", BlobSidecarVersion1, sidecar.Version)
+		}
+
+		if len(sidecar.Proofs) != originalProofs {
+			t.Errorf("proofs were modified: expected %d, got %d", originalProofs, len(sidecar.Proofs))
+		}
+	})
+
+	// Invalid version should return error
+	t.Run("InvalidVersion", func(t *testing.T) {
+		invalidVersion := byte(2)
+		sidecar := NewBlobTxSidecar(
+			invalidVersion,
+			[]kzg4844.Blob{*emptyBlob},
+			[]kzg4844.Commitment{emptyBlobCommit},
+			[]kzg4844.Proof{emptyBlobProof},
+		)
+
+		err := sidecar.ToV1()
+		if err == nil {
+			t.Errorf("Invalid version %d should return error, but got nil", invalidVersion)
+		}
+
+		// The version shouldn't change on error
+		if sidecar.Version != invalidVersion {
+			t.Errorf("version changed from %d to %d on error", invalidVersion, sidecar.Version)
+		}
+	})
+}
