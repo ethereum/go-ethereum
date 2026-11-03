@@ -17,9 +17,9 @@ type Config struct {
 	// Serializers maps locally supported request opcodes to their serializers.
 	// It may include outbound-only requests which have no entry in Handlers.
 	// RPC response opcodes are kept in a separate internal table;
-	// non-RPC serializers (see NonRPCOps) have no response opcode.
+	// non-RPC serializers (see NonRPCOps) do not register a response opcode.
 	// A response must match both the pending RPC ID and its ResponseOpCode.
-	// All serializer callbacks are required.
+	// Both NewRequest and NewResponse are required for every opcode.
 	Serializers map[byte]*OpSerializer
 
 	// Handlers maps inbound request opcodes to their handlers. Its keys define
@@ -34,6 +34,7 @@ type Config struct {
 
 	// NonRPCOps marks fire-and-forget opcodes that must use rpc_id=0.
 	// Each opcode must have a request serializer in Serializers.
+	// Response fields are unused and may refer to the command itself.
 	NonRPCOps map[byte]struct{}
 
 	// Forwarder optionally routes inbound frames before normal dispatch.
@@ -64,32 +65,17 @@ func (cfg *Config) validate() {
 	if cfg.Transport == nil {
 		panic("conn.Config: Transport must not be nil")
 	}
-	for op := range cfg.NonRPCOps {
-		if _, ok := cfg.Serializers[op]; !ok {
-			panic(fmt.Sprintf("conn.Config: serializer for non-RPC opcode 0x%x must be configured", op))
-		}
-	}
-
-	// Every configured opcode is a request opcode, whether sent or handled by
-	// this endpoint. Response opcodes must stay disjoint from them and unique:
-	// otherwise request/response classification would be ambiguous or a
-	// response serializer would depend on map-iteration order.
-	requestOps := make(map[byte]struct{}, len(cfg.Serializers))
+	// RPC response opcodes must be unique and disjoint from request opcodes.
+	responseOwners := make(map[byte]byte)
 	for op, ser := range cfg.Serializers {
 		if ser == nil {
 			panic(fmt.Sprintf("conn.Config: serializer for opcode 0x%x must not be nil", op))
 		}
-		// Missing callbacks would panic at runtime on the reader goroutine.
-		if ser.NewRequest == nil || ser.NewResponse == nil || ser.Deserialize == nil || ser.Serialize == nil {
+		if ser.NewRequest == nil || ser.NewResponse == nil {
 			panic(fmt.Sprintf("conn.Config: serializer for opcode 0x%x has missing callback", op))
 		}
-		requestOps[op] = struct{}{}
-	}
-
-	responseOwners := make(map[byte]byte)
-	for op, ser := range cfg.Serializers {
-		// Non-RPC commands do not have responses. Their ResponseOpCode is ignored
-		// and is not registered as a response serializer.
+		// Non-RPC commands do not register responses. Their response fields may
+		// refer to the command itself and must not participate in these checks.
 		if _, ok := cfg.NonRPCOps[op]; ok {
 			continue
 		}
@@ -97,7 +83,7 @@ func (cfg *Config) validate() {
 		if ser.ResponseOpCode == 0 {
 			panic(fmt.Sprintf("conn.Config: serializer ResponseOpCode for opcode 0x%x must not be zero", op))
 		}
-		if _, conflict := requestOps[ser.ResponseOpCode]; conflict {
+		if _, conflict := cfg.Serializers[ser.ResponseOpCode]; conflict {
 			panic(fmt.Sprintf("conn.Config: response opcode 0x%x conflicts with a request opcode", ser.ResponseOpCode))
 		}
 		if owner, exists := responseOwners[ser.ResponseOpCode]; exists {
@@ -113,6 +99,11 @@ func (cfg *Config) validate() {
 		}
 		if _, ok := cfg.Serializers[op]; !ok {
 			panic(fmt.Sprintf("conn.Config: serializer for handler opcode 0x%x must be configured", op))
+		}
+	}
+	for op := range cfg.NonRPCOps {
+		if _, ok := cfg.Serializers[op]; !ok {
+			panic(fmt.Sprintf("conn.Config: serializer for non-RPC opcode 0x%x must be configured", op))
 		}
 	}
 }

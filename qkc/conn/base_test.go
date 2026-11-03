@@ -171,8 +171,8 @@ func (t *staticReaderTransport) RemoteAddr() string { return "static" }
 
 // NonRPCSerializerFor creates a serializer for a message without a response.
 // Its opcode must be included in Config.NonRPCOps.
-func NonRPCSerializerFor[R any]() *OpSerializer {
-	return OpSerializerFor[R, R](0)
+func NonRPCSerializerFor[R any, RP sszPointer[R]]() *OpSerializer {
+	return OpSerializerFor[R, R, RP, RP](0)
 }
 
 var pingSer = OpSerializerFor[wire.PingRequest, wire.PongResponse](byte(wire.ClusterOpPong))
@@ -182,7 +182,7 @@ var pingSerializers = map[byte]*OpSerializer{
 }
 
 func pongHandler() TypedHandler {
-	return func(req any) (any, error) {
+	return func(req wire.SSZMessage) (wire.SSZMessage, error) {
 		return &wire.PongResponse{}, nil
 	}
 }
@@ -310,10 +310,6 @@ func serializerMissingCallback(missing string) *OpSerializer {
 		ser.NewRequest = nil
 	case "NewResponse":
 		ser.NewResponse = nil
-	case "Deserialize":
-		ser.Deserialize = nil
-	case "Serialize":
-		ser.Serialize = nil
 	default:
 		panic("unknown callback: " + missing)
 	}
@@ -379,9 +375,8 @@ func TestConfig_ValidationPanics(t *testing.T) {
 		{"response opcode marked as non-RPC", Config{Transport: newFakeFrameTransport(), Serializers: pingSerializers, NonRPCOps: map[byte]struct{}{byte(wire.ClusterOpPong): {}}}, "serializer for non-RPC opcode"},
 		{"missing NewRequest callback", Config{Transport: newFakeFrameTransport(), Serializers: map[byte]*OpSerializer{0x01: serializerMissingCallback("NewRequest")}}, "missing callback"},
 		{"missing NewResponse callback", Config{Transport: newFakeFrameTransport(), Serializers: map[byte]*OpSerializer{0x01: serializerMissingCallback("NewResponse")}}, "missing callback"},
+		{"non-RPC missing NewRequest callback", Config{Transport: newFakeFrameTransport(), Serializers: map[byte]*OpSerializer{0x01: serializerMissingCallback("NewRequest")}, NonRPCOps: map[byte]struct{}{0x01: {}}}, "missing callback"},
 		{"non-RPC missing NewResponse callback", Config{Transport: newFakeFrameTransport(), Serializers: map[byte]*OpSerializer{0x01: serializerMissingCallback("NewResponse")}, NonRPCOps: map[byte]struct{}{0x01: {}}}, "missing callback"},
-		{"missing Deserialize callback", Config{Transport: newFakeFrameTransport(), Serializers: map[byte]*OpSerializer{0x01: serializerMissingCallback("Deserialize")}}, "missing callback"},
-		{"missing Serialize callback", Config{Transport: newFakeFrameTransport(), Serializers: map[byte]*OpSerializer{0x01: serializerMissingCallback("Serialize")}}, "missing callback"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -427,7 +422,7 @@ func TestConfig_ResponseOpcodePanics(t *testing.T) {
 			name: "response opcode conflicts with non-rpc request opcode",
 			serializers: map[byte]*OpSerializer{
 				0x81: OpSerializerFor[wire.PingRequest, wire.PongResponse](0x90),
-				0x90: OpSerializerFor[wire.PingRequest, wire.PongResponse](0x90),
+				0x90: OpSerializerFor[wire.PingRequest, wire.PingRequest](0x90),
 			},
 			nonRPC: map[byte]struct{}{0x90: {}},
 		},
@@ -578,7 +573,7 @@ func TestBaseConn_ClosedConnectionDropsBufferedFrame(t *testing.T) {
 		Transport:   newStaticReaderTransport(reader),
 		Serializers: pingSerializers,
 		Handlers: map[byte]TypedHandler{
-			byte(wire.ClusterOpPing): func(any) (any, error) {
+			byte(wire.ClusterOpPing): func(wire.SSZMessage) (wire.SSZMessage, error) {
 				handled <- struct{}{}
 				return &wire.PongResponse{}, nil
 			},
@@ -913,7 +908,7 @@ func TestBaseConn_InvalidResponseOpcodeClosesConnection(t *testing.T) {
 			defer cancel()
 			result := make(chan rpcResult, 1)
 			ser := tc.serializers[tc.requestOp]
-			requestPayload, err := ser.Serialize(ser.NewRequest())
+			requestPayload, err := ser.NewRequest().MarshalSSZ()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1200,7 +1195,7 @@ func TestBaseConn_HandlerPanicShutsDownConnection(t *testing.T) {
 			byte(wire.ClusterOpPing): pingSer,
 		},
 		Handlers: map[byte]TypedHandler{
-			byte(wire.ClusterOpPing): func(req any) (any, error) {
+			byte(wire.ClusterOpPing): func(req wire.SSZMessage) (wire.SSZMessage, error) {
 				panic("handler panic test")
 			},
 		},
@@ -1501,7 +1496,7 @@ func TestBaseConn_LateHandlerCompletedAfterClose(t *testing.T) {
 		Transport:   tr,
 		Serializers: pingSerializers,
 		Handlers: map[byte]TypedHandler{
-			op: func(req any) (any, error) {
+			op: func(req wire.SSZMessage) (wire.SSZMessage, error) {
 				close(handlerStarted)
 				<-releaseHandler
 				return &wire.PongResponse{}, nil
@@ -1738,10 +1733,12 @@ func TestBaseConn_SendRPCZeroPeerID(t *testing.T) {
 // the handler without a response, and fail on a closed connection.
 func TestBaseConn_SendCommand(t *testing.T) {
 	for _, tt := range []struct {
-		name   string
-		peerID uint64
+		name       string
+		peerID     uint64
+		serializer *OpSerializer
 	}{
-		{name: "without peer ID"},
+		{name: "zero response opcode", serializer: NonRPCSerializerFor[wire.HelloCommand]()},
+		{name: "self-referencing response", serializer: OpSerializerFor[wire.HelloCommand, wire.HelloCommand](byte(wire.CommandOpHello))},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			tr := newFakeFrameTransport()
@@ -1749,10 +1746,10 @@ func TestBaseConn_SendCommand(t *testing.T) {
 			conn := NewBaseConn(Config{
 				Transport: tr,
 				Serializers: map[byte]*OpSerializer{
-					byte(wire.CommandOpHello): NonRPCSerializerFor[wire.HelloCommand](),
+					byte(wire.CommandOpHello): tt.serializer,
 				},
 				Handlers: map[byte]TypedHandler{
-					byte(wire.CommandOpHello): func(req any) (any, error) {
+					byte(wire.CommandOpHello): func(req wire.SSZMessage) (wire.SSZMessage, error) {
 						handled <- req
 						return nil, nil
 					},
@@ -1965,7 +1962,7 @@ func TestBaseConn_HandlerErrorShutsDownConnection(t *testing.T) {
 		Transport:   tr,
 		Serializers: pingSerializers,
 		Handlers: map[byte]TypedHandler{
-			byte(wire.ClusterOpPing): func(any) (any, error) { return nil, handlerErr },
+			byte(wire.ClusterOpPing): func(wire.SSZMessage) (wire.SSZMessage, error) { return nil, handlerErr },
 		},
 		Logger: log.New(),
 	})
@@ -1989,7 +1986,7 @@ func TestBaseConn_BusinessRejectionKeepsConnectionActive(t *testing.T) {
 		Transport:   tr,
 		Serializers: map[byte]*OpSerializer{requestOp: OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](responseOp)},
 		Handlers: map[byte]TypedHandler{
-			requestOp: func(any) (any, error) { return &wire.AddRootBlockResponse{ErrorCode: 7}, nil },
+			requestOp: func(wire.SSZMessage) (wire.SSZMessage, error) { return &wire.AddRootBlockResponse{ErrorCode: 7}, nil },
 		},
 	})
 	conn.Start()
@@ -2005,19 +2002,23 @@ func TestBaseConn_BusinessRejectionKeepsConnectionActive(t *testing.T) {
 	}
 }
 
-// TestBaseConn_ResponseSerializationFailureShutsDown: the handler succeeds but
-// serializing its response fails -> connection shutdown, nothing written.
+type failingSSZResponse struct{ wire.PongResponse }
+
+func (*failingSSZResponse) MarshalSSZ() ([]byte, error) {
+	return nil, errors.New("serialize boom")
+}
+
+// TestBaseConn_ResponseSerializationFailureShutsDown checks a serialization
+// failure closes the connection without writing a response.
 func TestBaseConn_ResponseSerializationFailureShutsDown(t *testing.T) {
 	tr := newFakeFrameTransport()
-	broken := *pingSer // same codec, response Serialize always fails
-	broken.Serialize = func(any) ([]byte, error) { return nil, errors.New("serialize boom") }
 	conn := NewBaseConn(Config{
 		Transport: tr,
 		Serializers: map[byte]*OpSerializer{
-			byte(wire.ClusterOpPing): &broken,
+			byte(wire.ClusterOpPing): pingSer,
 		},
 		Handlers: map[byte]TypedHandler{
-			byte(wire.ClusterOpPing): pongHandler(),
+			byte(wire.ClusterOpPing): func(wire.SSZMessage) (wire.SSZMessage, error) { return &failingSSZResponse{}, nil },
 		},
 		Logger: log.New(),
 	})
@@ -2248,7 +2249,7 @@ func TestNonRPC(t *testing.T) {
 			Transport:   tr,
 			Serializers: map[byte]*OpSerializer{byte(wire.CommandOpHello): NonRPCSerializerFor[wire.HelloCommand]()},
 			Handlers: map[byte]TypedHandler{
-				byte(wire.CommandOpHello): func(req any) (any, error) {
+				byte(wire.CommandOpHello): func(req wire.SSZMessage) (wire.SSZMessage, error) {
 					close(done)
 					return nil, nil
 				},
@@ -2285,7 +2286,7 @@ func TestNonRPC(t *testing.T) {
 			Transport:   tr,
 			Serializers: map[byte]*OpSerializer{byte(wire.CommandOpHello): NonRPCSerializerFor[wire.HelloCommand]()},
 			Handlers: map[byte]TypedHandler{
-				byte(wire.CommandOpHello): func(any) (any, error) { return nil, nil },
+				byte(wire.CommandOpHello): func(wire.SSZMessage) (wire.SSZMessage, error) { return nil, nil },
 			},
 			NonRPCOps: map[byte]struct{}{
 				byte(wire.CommandOpHello): {},
@@ -2351,7 +2352,7 @@ func TestBaseConn_NonRPCFrameDoesNotMatchPendingResponse(t *testing.T) {
 			cmdOp:                    NonRPCSerializerFor[wire.HelloCommand](),
 		},
 		Handlers: map[byte]TypedHandler{
-			cmdOp: func(req any) (any, error) {
+			cmdOp: func(req wire.SSZMessage) (wire.SSZMessage, error) {
 				close(handlerCalled)
 				return nil, nil
 			},
@@ -2464,7 +2465,7 @@ func TestSimulation_ClusterFrameGoldenBytes(t *testing.T) {
 	server, raw := newPeerIDConnPair(t, Config{
 		Serializers: pingSerializers,
 		Handlers: map[byte]TypedHandler{
-			byte(wire.ClusterOpPing): func(req any) (any, error) {
+			byte(wire.ClusterOpPing): func(req wire.SSZMessage) (wire.SSZMessage, error) {
 				ping := req.(*wire.PingRequest)
 				gotPing = append(gotPing, ping)
 				return &wire.PongResponse{ChainID: 1}, nil
@@ -2518,7 +2519,7 @@ func TestSimulation_FullLifecycle(t *testing.T) {
 	server, raw := newPeerIDConnPair(t, Config{
 		Serializers: pingSerializers,
 		Handlers: map[byte]TypedHandler{
-			byte(wire.ClusterOpPing): func(req any) (any, error) {
+			byte(wire.ClusterOpPing): func(req wire.SSZMessage) (wire.SSZMessage, error) {
 				if slow.Load() {
 					time.Sleep(300 * time.Millisecond)
 				}

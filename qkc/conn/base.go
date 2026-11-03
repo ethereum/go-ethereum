@@ -24,39 +24,28 @@ import (
 // panic is fatal to the connection. Non-RPC handlers may return a nil response.
 // Handlers run concurrently, without an execution-order guarantee, and are
 // neither canceled nor awaited by Close.
-type TypedHandler func(req any) (resp any, err error)
+type TypedHandler func(req wire.SSZMessage) (resp wire.SSZMessage, err error)
 
 // OpSerializer describes how to deserialize a request and serialize a response
 // for a specific opcode.
 type OpSerializer struct {
-	NewRequest     func() any
-	NewResponse    func() any
-	Deserialize    func([]byte, any) error
-	Serialize      func(any) ([]byte, error)
+	NewRequest     func() wire.SSZMessage
+	NewResponse    func() wire.SSZMessage
 	ResponseOpCode byte
+}
+
+// sszPointer constrains a pointer to a message type to implement wire.SSZMessage.
+type sszPointer[T any] interface {
+	*T
+	wire.SSZMessage
 }
 
 // OpSerializerFor creates an OpSerializer for request type R and response type
 // S, with the response opcode set to respOp.
-// Its Serialize callback accepts both requests and responses.
-func OpSerializerFor[R, S any](respOp byte) *OpSerializer {
+func OpSerializerFor[R, S any, RP sszPointer[R], SP sszPointer[S]](respOp byte) *OpSerializer {
 	return &OpSerializer{
-		NewRequest:  func() any { return new(R) },
-		NewResponse: func() any { return new(S) },
-		Deserialize: func(p []byte, v any) error {
-			msg, ok := v.(wire.SSZMessage)
-			if !ok {
-				return fmt.Errorf("%T does not implement wire.SSZMessage", v)
-			}
-			return msg.UnmarshalSSZ(p)
-		},
-		Serialize: func(v any) ([]byte, error) {
-			msg, ok := v.(wire.SSZMessage)
-			if !ok {
-				return nil, fmt.Errorf("%T does not implement wire.SSZMessage", v)
-			}
-			return msg.MarshalSSZ()
-		},
+		NewRequest:     func() wire.SSZMessage { return RP(new(R)) },
+		NewResponse:    func() wire.SSZMessage { return SP(new(S)) },
 		ResponseOpCode: respOp,
 	}
 }
@@ -481,7 +470,7 @@ func (c *BaseConn) handleResponse(frame *wire.ClusterFrame, ser *OpSerializer) {
 	}
 
 	resp := ser.NewResponse()
-	if err := ser.Deserialize(frame.Payload, resp); err != nil {
+	if err := resp.UnmarshalSSZ(frame.Payload); err != nil {
 		c.log.Warn("malformed response payload", "opcode", frame.Opcode, "err", err)
 		c.shutdown(fmt.Errorf("malformed response payload for opcode 0x%x: %w", frame.Opcode, err))
 		return
@@ -523,7 +512,7 @@ func (c *BaseConn) dispatch(frame *wire.ClusterFrame, handler TypedHandler, ser 
 	}()
 
 	req := ser.NewRequest()
-	if err := ser.Deserialize(frame.Payload, req); err != nil {
+	if err := req.UnmarshalSSZ(frame.Payload); err != nil {
 		c.shutdown(fmt.Errorf("deserialize failed: %w", err))
 		return
 	}
@@ -538,7 +527,7 @@ func (c *BaseConn) dispatch(frame *wire.ClusterFrame, handler TypedHandler, ser 
 	if frame.RPCID == 0 {
 		return
 	}
-	respPayload, err := ser.Serialize(resp)
+	respPayload, err := resp.MarshalSSZ()
 	if err != nil {
 		c.shutdown(fmt.Errorf("serialize response failed: %w", err))
 		return
