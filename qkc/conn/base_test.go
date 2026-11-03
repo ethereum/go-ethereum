@@ -937,12 +937,13 @@ func TestBaseConn_InvalidResponseOpcodeClosesConnection(t *testing.T) {
 
 func TestBaseConn_WriteFailureClosesConnection(t *testing.T) {
 	tr := newFakeFrameTransport()
-	tr.writeErr = errors.New("write failed")
+	writeErr := errors.New("write failed")
+	tr.writeErr = writeErr
 	conn := newConn(tr)
 	conn.Start()
 
 	_, err := conn.SendRPC(context.Background(), byte(wire.ClusterOpPing), nil)
-	if err != ErrConnectionClosed {
+	if !errors.Is(err, ErrConnectionClosed) || !errors.Is(err, writeErr) {
 		t.Fatalf("expected ErrConnectionClosed, got %v", err)
 	}
 	<-conn.WaitUntilClosed()
@@ -954,10 +955,8 @@ func TestBaseConn_WriteFailureClosesConnection(t *testing.T) {
 func TestBaseConn_InvalidRPCFrameKeepsConnection(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
-		peerID  uint64
 		payload []byte
 	}{
-		{name: "unsupported peer ID", peerID: 7},
 		{name: "oversized payload", payload: make([]byte, wire.MaxFramePayloadLen+1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -972,7 +971,7 @@ func TestBaseConn_InvalidRPCFrameKeepsConnection(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			_, err := conn.SendRPCWithPeerID(ctx, byte(wire.ClusterOpPing), tc.payload, tc.peerID)
+			_, err := conn.SendRPC(ctx, byte(wire.ClusterOpPing), tc.payload)
 			if !errors.Is(err, wire.ErrInvalidClusterFrame) {
 				t.Fatalf("invalid RPC frame error = %v, want validation error", err)
 			}
@@ -1026,7 +1025,7 @@ func TestBaseConn_InvalidRPCPreservesOtherPending(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = conn.SendRPCWithPeerID(ctx, byte(wire.ClusterOpPing), nil, 7)
+	_, err = conn.SendRPC(ctx, byte(wire.ClusterOpPing), make([]byte, wire.MaxFramePayloadLen+1))
 	if !errors.Is(err, wire.ErrInvalidClusterFrame) || conn.pendingLen() != 1 {
 		t.Fatalf("invalid RPC: error=%v pending=%d", err, conn.pendingLen())
 	}
@@ -1053,7 +1052,7 @@ func TestBaseConn_InvalidResponseClosesConnection(t *testing.T) {
 }
 
 // TestBaseConn_WriteFailureReleasesWriteMuAndShutsDown: the transport error
-// path (not just the panic path) must surface the raw error to the sender,
+// path (not just the panic path) must preserve the transport error for the sender,
 // shut the connection down (transport closed exactly once), and leave writeMu
 // free: follow-up sends observe the Closed state instead of blocking forever.
 func TestBaseConn_WriteFailureReleasesWriteMuAndShutsDown(t *testing.T) {
@@ -1065,8 +1064,8 @@ func TestBaseConn_WriteFailureReleasesWriteMuAndShutsDown(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() { errCh <- conn.SendCommand(byte(wire.CommandOpHello), nil) }()
-	if err := receive(t, errCh, "SendCommand result"); !errors.Is(err, writeBoom) {
-		t.Fatalf("SendCommand error = %v, want the raw transport error", err)
+	if err := receive(t, errCh, "SendCommand result"); !errors.Is(err, ErrConnectionClosed) || !errors.Is(err, writeBoom) {
+		t.Fatalf("SendCommand error = %v, want connection closed and transport error", err)
 	}
 
 	awaitClosed(t, conn, "transport write failure")
@@ -1079,6 +1078,20 @@ func TestBaseConn_WriteFailureReleasesWriteMuAndShutsDown(t *testing.T) {
 	go func() { errCh2 <- conn.SendCommand(byte(wire.CommandOpHello), nil) }()
 	if err := receive(t, errCh2, "post-failure SendCommand"); err != ErrConnectionClosed {
 		t.Fatalf("SendCommand after write failure = %v, want ErrConnectionClosed", err)
+	}
+}
+
+func TestBaseConn_WriteFrameFailurePreservesCause(t *testing.T) {
+	writeErr := errors.New("write failed")
+	tr := newFakeFrameTransport()
+	tr.writeErr = writeErr
+	conn := newConn(tr)
+	conn.Start()
+	defer conn.Close()
+
+	err := conn.WriteFrame(&wire.ClusterFrame{})
+	if !errors.Is(err, ErrConnectionClosed) || !errors.Is(err, writeErr) {
+		t.Fatalf("WriteFrame error = %v, want connection closed and transport error", err)
 	}
 }
 
@@ -1146,7 +1159,7 @@ func TestBaseConn_WriteFailureShutsDownBeforeNextWrite(t *testing.T) {
 }
 
 // TestBaseConn_WriteFramePanicReleasesWriteMu: a panic from the transport's
-// WriteFrame is caught by writeFrameLocked (SendRPCWithPeerID/writeFrame release
+// WriteFrame is caught by writeFrameLocked (SendRPC/writeFrame release
 // writeMu via the returned error, not a defer). If writeMu were leaked, senders
 // issued after the panic would block forever at writeMu.Lock() instead of
 // observing the Closed state.
@@ -1165,7 +1178,7 @@ func TestBaseConn_WriteFramePanicReleasesWriteMu(t *testing.T) {
 	}()
 	select {
 	case err := <-result:
-		if err != ErrConnectionClosed {
+		if !errors.Is(err, ErrConnectionClosed) {
 			t.Fatalf("SendRPC after WriteFrame panic: expected ErrConnectionClosed, got %v", err)
 		}
 	case <-time.After(time.Second):
@@ -1686,17 +1699,17 @@ func TestBaseConn_SendRPCRejectsNonRequestOpcodes(t *testing.T) {
 	}
 }
 
-func TestBaseConn_SendRPCWithPeerID(t *testing.T) {
+func TestBaseConn_SendRPCZeroPeerID(t *testing.T) {
 	tr := newFakeFrameTransport()
 	conn := newPingConn(tr)
 	conn.Start()
 	defer conn.Close()
 
-	const peerID uint64 = 7
+	const peerID uint64 = 0
 	payload := validPingPayload(t)
 	result := make(chan rpcResult, 1)
 	go func() {
-		resp, err := conn.SendRPCWithPeerID(context.Background(), byte(wire.ClusterOpPing), payload, peerID)
+		resp, err := conn.SendRPC(context.Background(), byte(wire.ClusterOpPing), payload)
 		result <- rpcResult{resp: resp, err: err}
 	}()
 
@@ -1712,7 +1725,7 @@ func TestBaseConn_SendRPCWithPeerID(t *testing.T) {
 	})
 	res := receive(t, result, "RPC response with peer ID")
 	if res.err != nil {
-		t.Fatalf("SendRPCWithPeerID failed: %v", res.err)
+		t.Fatalf("SendRPC failed: %v", res.err)
 	}
 	if _, ok := res.resp.(*wire.PongResponse); !ok {
 		t.Fatalf("expected *wire.PongResponse, got %T", res.resp)
@@ -1721,16 +1734,14 @@ func TestBaseConn_SendRPCWithPeerID(t *testing.T) {
 
 // -- SendCommand tests --------------------------------------------------------
 
-// TestBaseConn_SendCommand: fire-and-forget commands carry rpc_id=0 with or
-// without a peer ID, run the handler without a response, and fail on a closed
-// connection.
+// TestBaseConn_SendCommand checks fire-and-forget commands use zero IDs, run
+// the handler without a response, and fail on a closed connection.
 func TestBaseConn_SendCommand(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
 		peerID uint64
 	}{
 		{name: "without peer ID"},
-		{name: "with peer ID", peerID: 7},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			tr := newFakeFrameTransport()
@@ -1752,12 +1763,7 @@ func TestBaseConn_SendCommand(t *testing.T) {
 			defer conn.Close()
 
 			payload := validHelloPayload(t)
-			var err error
-			if tt.peerID == 0 {
-				err = conn.SendCommand(byte(wire.CommandOpHello), payload)
-			} else {
-				err = conn.SendCommandWithPeerID(byte(wire.CommandOpHello), payload, tt.peerID)
-			}
+			err := conn.SendCommand(byte(wire.CommandOpHello), payload)
 			if err != nil {
 				t.Fatalf("SendCommand failed: %v", err)
 			}

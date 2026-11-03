@@ -211,19 +211,8 @@ func (c *BaseConn) Close() {
 }
 
 // SendRPC sends a request with ClusterPeerID zero and waits for its response.
-func (c *BaseConn) SendRPC(ctx context.Context, opcode byte, payload []byte) (any, error) {
-	return c.SendRPCWithPeerID(ctx, opcode, payload, 0)
-}
-
-// SendRPCWithPeerID sends a request with a cluster peer routing ID and waits
-// for its response. Returns the deserialized response object.
 // ctx controls response waiting; it does not interrupt lock waits or writes.
-func (c *BaseConn) SendRPCWithPeerID(
-	ctx context.Context,
-	opcode byte,
-	payload []byte,
-	clusterPeerID uint64,
-) (any, error) {
+func (c *BaseConn) SendRPC(ctx context.Context, opcode byte, payload []byte) (any, error) {
 	ser, ok := c.requestSerializers[opcode]
 	_, nonRPC := c.nonRPCOps[opcode]
 	if !ok || nonRPC {
@@ -253,10 +242,9 @@ func (c *BaseConn) SendRPCWithPeerID(
 	c.mu.Unlock()
 
 	err := c.writeFrameLocked(&wire.ClusterFrame{
-		ClusterPeerID: clusterPeerID,
-		Opcode:        opcode,
-		RPCID:         rpcID,
-		Payload:       payload,
+		Opcode:  opcode,
+		RPCID:   rpcID,
+		Payload: payload,
 	})
 	c.writeMu.Unlock()
 
@@ -267,10 +255,7 @@ func (c *BaseConn) SendRPCWithPeerID(
 	}()
 
 	if err != nil {
-		if errors.Is(err, wire.ErrInvalidClusterFrame) {
-			return nil, err
-		}
-		return nil, ErrConnectionClosed
+		return nil, err
 	}
 
 	select {
@@ -290,21 +275,15 @@ func (c *BaseConn) SendRPCWithPeerID(
 }
 
 // SendCommand sends a fire-and-forget command with ClusterPeerID zero.
+// The opcode must be registered in Config.NonRPCOps.
 func (c *BaseConn) SendCommand(opcode byte, payload []byte) error {
-	return c.SendCommandWithPeerID(opcode, payload, 0)
-}
-
-// SendCommandWithPeerID sends a fire-and-forget command with a cluster peer
-// routing ID. The opcode must be registered in Config.NonRPCOps.
-func (c *BaseConn) SendCommandWithPeerID(opcode byte, payload []byte, clusterPeerID uint64) error {
 	if _, ok := c.nonRPCOps[opcode]; !ok {
 		return fmt.Errorf("unknown command opcode 0x%x", opcode)
 	}
 	frame := &wire.ClusterFrame{
-		ClusterPeerID: clusterPeerID,
-		Opcode:        opcode,
-		RPCID:         0,
-		Payload:       payload,
+		Opcode:  opcode,
+		RPCID:   0,
+		Payload: payload,
 	}
 	return c.writeFrame(frame)
 }
@@ -409,6 +388,7 @@ func (c *BaseConn) writeFrameLocked(f *wire.ClusterFrame) (err error) {
 		}
 		if err != nil && !errors.Is(err, wire.ErrInvalidClusterFrame) {
 			c.shutdown(fmt.Errorf("write frame: %w", err))
+			err = fmt.Errorf("%w: %w", ErrConnectionClosed, err)
 		}
 	}()
 	return c.transport.WriteFrame(f)
