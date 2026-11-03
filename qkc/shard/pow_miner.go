@@ -40,8 +40,9 @@ const (
 	// coinbases with current work, as pyquarkchain's work_map and current_works.
 	miningWorkCacheSize = 128
 
-	// miningRetryInterval backs off local mining after failing to get work.
-	miningRetryInterval = time.Second
+	// miningRetryInterval backs off local mining after failing to get work or
+	// to import a mined block.
+	miningRetryInterval = 1 * time.Second
 )
 
 var (
