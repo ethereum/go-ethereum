@@ -1082,7 +1082,7 @@ func TestBaseConn_WriteFailureReleasesWriteMuAndShutsDown(t *testing.T) {
 	}
 }
 
-func TestBaseConn_WriteFailureBlocksWritesBeforeShutdown(t *testing.T) {
+func TestBaseConn_WriteFailureShutsDownBeforeNextWrite(t *testing.T) {
 	tr := newFakeFrameTransport()
 	conn := newConnWithHello(tr)
 	conn.Start()
@@ -1097,8 +1097,7 @@ func TestBaseConn_WriteFailureBlocksWritesBeforeShutdown(t *testing.T) {
 	receive(t, tr.writes, "pending RPC request")
 	tr.writeErr = errors.New("write failed")
 
-	// Reproduce the interval after a writer releases writeMu but before it
-	// calls shutdown. Another sender must not write to the damaged stream.
+	// A failed write must complete shutdown before releasing writeMu.
 	conn.writeMu.Lock()
 	err := conn.writeFrameLocked(&wire.ClusterFrame{})
 	conn.writeMu.Unlock()
@@ -1106,7 +1105,10 @@ func TestBaseConn_WriteFailureBlocksWritesBeforeShutdown(t *testing.T) {
 		t.Fatal("expected transport write error")
 	}
 	if !conn.IsClosed() {
-		t.Fatal("write failure did not mark the connection Closed")
+		t.Fatal("write failure did not close the connection")
+	}
+	if tr.closes() != 1 || conn.pendingLen() != 0 {
+		t.Fatalf("after write failure: transport closes=%d pending=%d", tr.closes(), conn.pendingLen())
 	}
 	tr.writeErr = nil // Any unexpected transport write would now succeed.
 	results := make(chan error, 6)
@@ -1125,8 +1127,8 @@ func TestBaseConn_WriteFailureBlocksWritesBeforeShutdown(t *testing.T) {
 		}()
 	}
 	for i := 0; i < cap(results); i++ {
-		if err := receive(t, results, "send before shutdown"); err != ErrConnectionClosed {
-			t.Fatalf("send before shutdown = %v, want ErrConnectionClosed", err)
+		if err := receive(t, results, "send after shutdown"); err != ErrConnectionClosed {
+			t.Fatalf("send after shutdown = %v, want ErrConnectionClosed", err)
 		}
 	}
 	if len(tr.writes) != 0 {
