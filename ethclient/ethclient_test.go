@@ -424,6 +424,18 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 		t.Fatalf("unexpected blob base fee: %v", blobBaseFee)
 	}
 
+	// BaseFee
+	baseFee, err := ec.BaseFee(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if baseFee.Cmp(big.NewInt(671627818)) != 0 {
+		t.Fatalf("unexpected base fee: %v", baseFee)
+	}
+	if _, err := ec.BaseFee(newCanceledContext()); err == nil {
+		t.Fatal("expected error for canceled context")
+	}
+
 	// FeeHistory
 	history, err := ec.FeeHistory(context.Background(), 1, big.NewInt(2), []float64{95, 99})
 	if err != nil {
