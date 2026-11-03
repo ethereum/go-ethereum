@@ -1,4 +1,18 @@
-// Copyright 2026-2027, QuarkChain.
+// Copyright 2026-2027 The quarkchain Authors
+// This file is part of the quarkchain library.
+//
+// The quarkchain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The quarkchain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package conn provides the generic RPC engine used by cluster connection
 // implementations.
@@ -52,7 +66,7 @@ func OpSerializerFor[R, S any, RP sszPointer[R], SP sszPointer[S]](respOp byte) 
 
 // pendingRPC represents an in-flight RPC call waiting for its response.
 type pendingRPC struct {
-	result     chan any // cap 1
+	result     chan wire.SSZMessage // cap 1
 	expectedOp byte
 }
 
@@ -85,6 +99,8 @@ const (
 //   - writeMu may be acquired before mu.
 //   - mu must never be held while acquiring writeMu.
 //   - mu must never be held during network I/O.
+//   - A failed write calls shutdown with writeMu held, so neither shutdown nor
+//     FrameTransport.Close may acquire writeMu.
 //
 // Invariants:
 //
@@ -199,16 +215,24 @@ func (c *BaseConn) Close() {
 	c.shutdown(nil)
 }
 
-// SendRPC sends a request with ClusterPeerID zero and waits for its response.
+// SendRPC serializes a request with ClusterPeerID zero and waits for its response.
+// Serialization errors are returned without closing the connection.
 // ctx controls response waiting; it does not interrupt lock waits or writes.
-func (c *BaseConn) SendRPC(ctx context.Context, opcode byte, payload []byte) (any, error) {
+func (c *BaseConn) SendRPC(ctx context.Context, opcode byte, req wire.SSZMessage) (wire.SSZMessage, error) {
 	ser, ok := c.requestSerializers[opcode]
 	_, nonRPC := c.nonRPCOps[opcode]
 	if !ok || nonRPC {
 		return nil, fmt.Errorf("unknown rpc request opcode 0x%x", opcode)
 	}
+	if req == nil {
+		return nil, fmt.Errorf("nil rpc request")
+	}
+	payload, err := req.MarshalSSZ()
+	if err != nil {
+		return nil, fmt.Errorf("serialize rpc request: %w", err)
+	}
 	call := &pendingRPC{
-		result:     make(chan any, 1),
+		result:     make(chan wire.SSZMessage, 1),
 		expectedOp: ser.ResponseOpCode,
 	}
 
@@ -230,7 +254,7 @@ func (c *BaseConn) SendRPC(ctx context.Context, opcode byte, payload []byte) (an
 	c.pending[rpcID] = call
 	c.mu.Unlock()
 
-	err := c.writeFrameLocked(&wire.ClusterFrame{
+	err = c.writeFrameLocked(&wire.ClusterFrame{
 		Opcode:  opcode,
 		RPCID:   rpcID,
 		Payload: payload,
@@ -263,11 +287,19 @@ func (c *BaseConn) SendRPC(ctx context.Context, opcode byte, payload []byte) (an
 	}
 }
 
-// SendCommand sends a fire-and-forget command with ClusterPeerID zero.
+// SendCommand serializes a fire-and-forget command with ClusterPeerID zero.
 // The opcode must be registered in Config.NonRPCOps.
-func (c *BaseConn) SendCommand(opcode byte, payload []byte) error {
+// Serialization errors are returned without closing the connection.
+func (c *BaseConn) SendCommand(opcode byte, cmd wire.SSZMessage) error {
 	if _, ok := c.nonRPCOps[opcode]; !ok {
 		return fmt.Errorf("unknown command opcode 0x%x", opcode)
+	}
+	if cmd == nil {
+		return fmt.Errorf("nil command")
+	}
+	payload, err := cmd.MarshalSSZ()
+	if err != nil {
+		return fmt.Errorf("serialize command: %w", err)
 	}
 	frame := &wire.ClusterFrame{
 		Opcode:  opcode,
