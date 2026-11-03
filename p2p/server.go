@@ -865,10 +865,7 @@ func (srv *Server) addPeerChecks(peers map[enode.ID]*Peer, inboundCount, browser
 
 // protocolsFor returns the subprotocols a connection may run.
 func (srv *Server) protocolsFor(c *conn) []Protocol {
-	if !c.isBrowser() {
-		return srv.Protocols
-	}
-	return browserProtocols(srv.Protocols)
+	return filterProtocols(srv.Protocols, c.isBrowser())
 }
 
 // listenLoop runs in its own goroutine and accepts
@@ -1001,7 +998,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		dialPub = dialDest.Pubkey()
 	}
 	if qc, ok := fd.(*quic.Conn); ok {
-		c.transport = newQUICTransport(qc, browserProtocols(srv.Protocols))
+		c.transport = newQUICTransport(qc, srv.protocolsFor(c))
 	} else {
 		c.transport = srv.newTransport(fd, dialPub)
 	}

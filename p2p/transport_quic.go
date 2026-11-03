@@ -189,14 +189,3 @@ func (c *conn) isBrowser() bool {
 	}
 	return scheme == "browser"
 }
-
-// browserProtocols returns the subprotocols that browser peers can run
-func browserProtocols(protos []Protocol) []Protocol {
-	var allowed []Protocol
-	for _, p := range protos {
-		if p.AllowBrowser {
-			allowed = append(allowed, p)
-		}
-	}
-	return allowed
-}

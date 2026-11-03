@@ -72,6 +72,17 @@ func (p Protocol) cap() Cap {
 	return Cap{p.Name, p.Version}
 }
 
+// filterProtocols returns the protocols where AllowBrowser matches.
+func filterProtocols(protos []Protocol, browser bool) []Protocol {
+	var allowed []Protocol
+	for _, p := range protos {
+		if p.AllowBrowser == browser {
+			allowed = append(allowed, p)
+		}
+	}
+	return allowed
+}
+
 // Cap is the structure of a peer capability.
 type Cap struct {
 	Name    string
