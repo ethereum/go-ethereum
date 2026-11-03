@@ -2002,8 +2002,13 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		} else {
 			// We're post-merge and the parent is pruned, try to recover the parent state
 			log.Debug("Pruned ancestor", "number", block.Number(), "hash", block.Hash())
-			_, err := bc.recoverAncestors(ctx, block, makeWitness)
-			return nil, it.index, err
+			// Recover the actual parent, not the candidate's claimed state root,
+			// then repeat full import to validate and persist the candidate.
+			parent := bc.GetBlock(block.ParentHash(), block.NumberU64()-1)
+			if _, err := bc.recoverAncestors(ctx, parent, false); err != nil {
+				return nil, it.index, err
+			}
+			return bc.insertChain(ctx, types.Blocks{block}, false, makeWitness)
 		}
 	// Some other error(except ErrKnownBlock) occurred, abort.
 	// ErrKnownBlock is allowed here since some known blocks

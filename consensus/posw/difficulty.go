@@ -17,11 +17,16 @@
 package posw
 
 import (
+	"errors"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
 )
+
+var errInvalidDifficulty = errors.New("invalid shard PoW difficulty")
 
 // CalcDifficulty is shared by root and shard consensus. It is Homestead's
 // adjustment with configurable parameters and no difficulty bomb, matching
@@ -43,7 +48,57 @@ func CalcDifficulty(config *params.PoSWConfig, timestamp, parentTimestamp uint64
 	return diff
 }
 
-// GetAdjustedDifficulty applies the same stake quota rule on root and shard chains.
+// GetAdjustedDifficulty returns a shard candidate's effective seal difficulty
+// using its actual parent state and fork history, without modifying the header.
+// config must pass Check, and header must pass header validation before use.
+// With staking disabled, reader is unused and may be nil.
+func GetAdjustedDifficulty(config *params.PoSWConfig, reader consensus.StakingReader, header *types.Header) (*big.Int, error) {
+	difficulty := header.QKCDifficulty()
+	if difficulty.Sign() <= 0 {
+		return nil, errInvalidDifficulty
+	}
+	if !config.StakingEnabled {
+		// Ordinary PoW needs neither a staking reader nor a window traversal.
+		return difficulty, nil
+	}
+	if reader == nil {
+		return nil, errors.New("shard staking reader unavailable")
+	}
+	parent := reader.GetHeader(header.ParentHash, header.Number.Uint64()-1)
+	if parent == nil {
+		return nil, consensus.ErrUnknownAncestor
+	}
+	// Pin the read to the actual parent, including on side forks. Candidate
+	// transactions, deposits and rewards must not affect its staking eligibility.
+	stakes, err := reader.GetShardLockedStakes(parent, header.Coinbase)
+	if err != nil {
+		return nil, err
+	}
+	// An address with no locked stake returns a non-nil zero value.
+	// Nil indicates an invalid reader result, not an unstaked miner.
+	if stakes == nil {
+		return nil, errors.New("missing shard staking result")
+	}
+	// Count all blocks by this coinbase on the candidate's fork, including genesis
+	// when it lies inside the window, just as pyquarkchain's block counter does.
+	var mined uint64
+	for i, ancestor := uint64(0), parent; i < config.WindowSize-1; i++ {
+		if ancestor.Coinbase == header.Coinbase {
+			mined++
+		}
+		// Do not require an ancestor outside the configured history window.
+		if ancestor.Number.Sign() == 0 || i+1 == config.WindowSize-1 {
+			break
+		}
+		ancestor = reader.GetHeader(ancestor.ParentHash, ancestor.Number.Uint64()-1)
+		if ancestor == nil {
+			return nil, consensus.ErrUnknownAncestor
+		}
+	}
+	return CalcAdjustedDifficulty(config, header.Number, difficulty, stakes, mined), nil
+}
+
+// CalcAdjustedDifficulty applies the same stake quota rule on root and shard chains.
 //
 // config supplies the staking rules. StakePerBlockAt provides the effective stake
 // requirement and handles the configured height offset and decay rules.
@@ -59,7 +114,7 @@ func CalcDifficulty(config *params.PoSWConfig, timestamp, parentTimestamp uint64
 // mined counts all blocks by this coinbase among the preceding windowSize-1
 // ancestors, including ordinary PoW blocks. Count ancestors on the candidate's
 // own chain, starting at its parent. The candidate occupies the last window slot.
-func GetAdjustedDifficulty(config *params.PoSWConfig, number, difficulty *big.Int, stakes *uint256.Int, mined uint64) *big.Int {
+func CalcAdjustedDifficulty(config *params.PoSWConfig, number, difficulty *big.Int, stakes *uint256.Int, mined uint64) *big.Int {
 	diff := new(big.Int).Set(difficulty)
 	if config == nil || !config.StakingEnabled || stakes == nil || number.Sign() == 0 {
 		return diff
