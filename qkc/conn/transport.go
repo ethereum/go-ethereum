@@ -28,6 +28,8 @@ var frameWriteTimeout = 20 * time.Second
 // unblock any currently blocked I/O operation.
 // A virtual transport's Close must close only that virtual connection and leave
 // the shared physical transport available to other routes.
+// WriteFrame may return wire.ErrInvalidClusterFrame only if no frame bytes were
+// written, including through an error wrapping it.
 type FrameTransport interface {
 	ReadFrame() (*wire.ClusterFrame, error)
 	WriteFrame(*wire.ClusterFrame) error

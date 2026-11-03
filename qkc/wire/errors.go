@@ -16,7 +16,13 @@
 
 package wire
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrInvalidClusterFrame identifies a frame rejected before any bytes are written.
+var ErrInvalidClusterFrame = errors.New("invalid cluster frame")
 
 // RemoteError reports a nonzero business ErrorCode returned by a remote peer.
 // Callers receive it as an error so that a rejected request is never mistaken

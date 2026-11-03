@@ -951,7 +951,7 @@ func TestBaseConn_WriteFailureClosesConnection(t *testing.T) {
 	}
 }
 
-func TestBaseConn_InvalidRPCFrameClosesConnection(t *testing.T) {
+func TestBaseConn_InvalidRPCFrameKeepsConnection(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		peerID  uint64
@@ -963,19 +963,93 @@ func TestBaseConn_InvalidRPCFrameClosesConnection(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			local, peer := net.Pipe()
 			defer peer.Close()
+			if err := peer.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
 			conn := newConn(newPipeTransport(t, local))
 			conn.Start()
 			defer conn.Close()
 
-			_, err := conn.SendRPCWithPeerID(context.Background(), byte(wire.ClusterOpPing), tc.payload, tc.peerID)
-			if err != ErrConnectionClosed {
-				t.Fatalf("invalid RPC frame error = %v, want ErrConnectionClosed", err)
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			_, err := conn.SendRPCWithPeerID(ctx, byte(wire.ClusterOpPing), tc.payload, tc.peerID)
+			if !errors.Is(err, wire.ErrInvalidClusterFrame) {
+				t.Fatalf("invalid RPC frame error = %v, want validation error", err)
 			}
-			if !conn.IsClosed() || conn.pendingLen() != 0 {
+			if !conn.IsActive() || conn.pendingLen() != 0 {
 				t.Fatalf("after invalid RPC frame: state=%v pending=%d", conn.State(), conn.pendingLen())
+			}
+			read := make(chan error, 1)
+			go func() { _, err := wire.ReadClusterFrame(peer, wire.MaxFramePayloadLen); read <- err }()
+			if err := conn.WriteFrame(&wire.ClusterFrame{}); err != nil {
+				t.Fatalf("write after validation failure: %v", err)
+			}
+			if err := receive(t, read, "frame after validation failure"); err != nil {
+				t.Fatalf("read after validation failure: %v", err)
 			}
 		})
 	}
+}
+
+func TestBaseConn_InvalidFrameKeepsConnection(t *testing.T) {
+	local, peer := net.Pipe()
+	defer peer.Close()
+	conn := newConn(newPipeTransport(t, local))
+	conn.Start()
+	defer conn.Close()
+	if err := conn.WriteFrame(nil); !errors.Is(err, wire.ErrInvalidClusterFrame) {
+		t.Fatalf("nil frame error = %v, want validation error", err)
+	}
+	if !conn.IsActive() {
+		t.Fatal("connection closed after invalid frame")
+	}
+}
+
+func TestBaseConn_InvalidRPCPreservesOtherPending(t *testing.T) {
+	local, peer := net.Pipe()
+	defer peer.Close()
+	if err := peer.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	conn := newConn(newPipeTransport(t, local))
+	conn.Start()
+	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	result := make(chan rpcResult, 1)
+	requestPayload := validPingPayload(t)
+	go func() {
+		resp, err := conn.SendRPC(ctx, byte(wire.ClusterOpPing), requestPayload)
+		result <- rpcResult{resp, err}
+	}()
+	request, err := wire.ReadClusterFrame(peer, wire.MaxFramePayloadLen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = conn.SendRPCWithPeerID(ctx, byte(wire.ClusterOpPing), nil, 7)
+	if !errors.Is(err, wire.ErrInvalidClusterFrame) || conn.pendingLen() != 1 {
+		t.Fatalf("invalid RPC: error=%v pending=%d", err, conn.pendingLen())
+	}
+	payload, err := (&wire.PongResponse{ChainID: 1}).MarshalSSZ()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := wire.WriteClusterFrame(peer, &wire.ClusterFrame{Opcode: byte(wire.ClusterOpPong), RPCID: request.RPCID, Payload: payload}); err != nil {
+		t.Fatal(err)
+	}
+	if got := receive(t, result, "pending RPC"); got.err != nil {
+		t.Fatalf("pending RPC failed: %v", got.err)
+	}
+}
+
+func TestBaseConn_InvalidResponseClosesConnection(t *testing.T) {
+	tr := newFakeFrameTransport()
+	tr.writeErr = wire.ErrInvalidClusterFrame
+	conn := newPingServerConn(tr)
+	conn.Start()
+	defer conn.Close()
+	tr.frames <- &wire.ClusterFrame{Opcode: byte(wire.ClusterOpPing), RPCID: 1, Payload: validPingPayload(t)}
+	awaitClosed(t, conn, "invalid response frame")
 }
 
 // TestBaseConn_WriteFailureReleasesWriteMuAndShutsDown: the transport error
@@ -1010,10 +1084,18 @@ func TestBaseConn_WriteFailureReleasesWriteMuAndShutsDown(t *testing.T) {
 
 func TestBaseConn_WriteFailureBlocksWritesBeforeShutdown(t *testing.T) {
 	tr := newFakeFrameTransport()
-	tr.writeErr = errors.New("write failed")
 	conn := newConnWithHello(tr)
 	conn.Start()
 	defer conn.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	pending := make(chan error, 1)
+	go func() {
+		_, err := conn.SendRPC(ctx, byte(wire.ClusterOpPing), nil)
+		pending <- err
+	}()
+	receive(t, tr.writes, "pending RPC request")
+	tr.writeErr = errors.New("write failed")
 
 	// Reproduce the interval after a writer releases writeMu but before it
 	// calls shutdown. Another sender must not write to the damaged stream.
@@ -1023,8 +1105,41 @@ func TestBaseConn_WriteFailureBlocksWritesBeforeShutdown(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected transport write error")
 	}
-	if err := conn.SendCommand(byte(wire.CommandOpHello), nil); err != ErrConnectionClosed {
-		t.Fatalf("SendCommand before shutdown = %v, want ErrConnectionClosed", err)
+	if !conn.IsClosed() {
+		t.Fatal("write failure did not mark the connection Closed")
+	}
+	tr.writeErr = nil // Any unexpected transport write would now succeed.
+	results := make(chan error, 6)
+	for i := 0; i < cap(results); i++ {
+		go func() {
+			var err error
+			switch i % 3 {
+			case 0:
+				_, err = conn.SendRPC(ctx, byte(wire.ClusterOpPing), nil)
+			case 1:
+				err = conn.SendCommand(byte(wire.CommandOpHello), nil)
+			case 2:
+				err = conn.WriteFrame(&wire.ClusterFrame{})
+			}
+			results <- err
+		}()
+	}
+	for i := 0; i < cap(results); i++ {
+		if err := receive(t, results, "send before shutdown"); err != ErrConnectionClosed {
+			t.Fatalf("send before shutdown = %v, want ErrConnectionClosed", err)
+		}
+	}
+	if len(tr.writes) != 0 {
+		t.Fatal("transport received a write after failure")
+	}
+	conn.Close()
+	conn.Close()
+	awaitClosed(t, conn, "Close after write failure")
+	if err := receive(t, pending, "pending RPC after Close"); err != ErrConnectionClosed {
+		t.Fatalf("pending RPC = %v, want ErrConnectionClosed", err)
+	}
+	if tr.closes() != 1 || conn.pendingLen() != 0 {
+		t.Fatalf("after Close: transport closes=%d pending=%d", tr.closes(), conn.pendingLen())
 	}
 }
 

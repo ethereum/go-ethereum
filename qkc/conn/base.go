@@ -127,8 +127,7 @@ type BaseConn struct {
 	peerRPCID uint64
 
 	// -- Frame send serialization (writeMu) --
-	writeMu     sync.Mutex
-	writeFailed bool // protected by writeMu; prevents writes before shutdown completes
+	writeMu sync.Mutex
 
 	// -- Synchronization primitives --
 	shutdownOnce sync.Once
@@ -241,13 +240,6 @@ func (c *BaseConn) SendRPCWithPeerID(
 		c.writeMu.Unlock()
 		return nil, err
 	}
-	if c.writeFailed {
-		// A previous write failed and may have sent a partial frame. Reject
-		// further writes while the connection is being closed.
-		c.writeMu.Unlock()
-		return nil, ErrConnectionClosed
-	}
-
 	c.mu.Lock()
 	if err := c.checkActiveLocked(); err != nil {
 		c.mu.Unlock()
@@ -268,16 +260,20 @@ func (c *BaseConn) SendRPCWithPeerID(
 	})
 	c.writeMu.Unlock()
 
-	if err != nil {
-		c.shutdown(fmt.Errorf("write frame rpc=%d: %w", rpcID, err))
-		return nil, ErrConnectionClosed
-	}
-
 	defer func() {
 		c.mu.Lock()
 		delete(c.pending, rpcID)
 		c.mu.Unlock()
 	}()
+
+	if err != nil {
+		if errors.Is(err, wire.ErrInvalidClusterFrame) {
+			return nil, err
+		}
+		c.shutdown(fmt.Errorf("write frame rpc=%d: %w", rpcID, err))
+		return nil, ErrConnectionClosed
+	}
+
 	select {
 	case resp := <-call.result:
 		return resp, nil
@@ -391,11 +387,6 @@ func (c *BaseConn) checkActiveLocked() error {
 // writeMu so queued writers cannot use a damaged stream before shutdown.
 func (c *BaseConn) writeFrame(f *wire.ClusterFrame) error {
 	c.writeMu.Lock()
-	if c.writeFailed {
-		c.writeMu.Unlock()
-		return ErrConnectionClosed
-	}
-
 	c.mu.RLock()
 	if err := c.checkActiveLocked(); err != nil {
 		c.mu.RUnlock()
@@ -407,21 +398,25 @@ func (c *BaseConn) writeFrame(f *wire.ClusterFrame) error {
 	err := c.writeFrameLocked(f)
 	c.writeMu.Unlock()
 
-	if err != nil {
+	if err != nil && !errors.Is(err, wire.ErrInvalidClusterFrame) {
 		c.shutdown(fmt.Errorf("write frame: %w", err))
 	}
 	return err
 }
 
-// writeFrameLocked requires writeMu. A failed or panicked write may have sent
-// part of a frame, so no further writes are allowed on this stream.
+// writeFrameLocked requires writeMu. Except for validation errors, a failed or
+// panicked write marks the connection Closed before releasing writeMu to prevent
+// further writes. The caller completes shutdown after releasing writeMu.
 func (c *BaseConn) writeFrameLocked(f *wire.ClusterFrame) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("transport write panic: %v", r)
 		}
-		if err != nil {
-			c.writeFailed = true
+		if err != nil && !errors.Is(err, wire.ErrInvalidClusterFrame) {
+			c.mu.Lock()
+			// Reject further writes now; shutdown performs cleanup after writeMu is released.
+			c.state = ConnectionStateClosed
+			c.mu.Unlock()
 		}
 	}()
 	return c.transport.WriteFrame(f)
@@ -585,6 +580,13 @@ func (c *BaseConn) dispatch(frame *wire.ClusterFrame, handler TypedHandler, ser 
 	}
 
 	if err := c.writeFrame(respFrame); err != nil {
+		if errors.Is(err, wire.ErrInvalidClusterFrame) {
+			// writeFrame leaves the connection open on validation errors so callers
+			// can correct invalid outbound frames. This response is constructed
+			// internally, and we cannot complete the peer's RPC, so close the
+			// connection rather than leave it waiting for a response.
+			c.shutdown(fmt.Errorf("invalid response frame rpc=%d: %w", frame.RPCID, err))
+		}
 		c.log.Debug("response write failed, connection shutting down", "rpcid", frame.RPCID, "err", err)
 	}
 }
