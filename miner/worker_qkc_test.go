@@ -304,7 +304,12 @@ func TestBuildQKCBlockDifficulty(t *testing.T) {
 		ExtraData: (&types.QKCExtra{ShardID: 1, Cursor: types.XShardCursor{RootBlockHeight: 1}}).Encode(),
 		Alloc:     alloc,
 	}
-	engine := qkcTestEngine{beacon.New(ethash.NewFaker())}
+	// The PoSW engine prepares the difficulty, before the builder executes transactions.
+	pow, err := posw.New(config.QuarkChain, genesis.ToBlock().Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := qkcTestEngine{pow}
 	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, engine, nil)
 	if err != nil {
 		t.Fatal(err)

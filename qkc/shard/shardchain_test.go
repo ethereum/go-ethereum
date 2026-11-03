@@ -38,8 +38,9 @@ import (
 	"github.com/holiman/uint256"
 )
 
-// noVerifyEngine is the beacon engine without header verification, as the
-// beacon engine rejects the QuarkChain extra data.
+// noVerifyEngine skips header verification, as the beacon engine rejects the
+// QuarkChain extra data. It hides consensus.SealVerifier, so imports of blocks
+// built with the PoSW engine skip seal verification too.
 type noVerifyEngine struct {
 	consensus.Engine
 }

@@ -25,8 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/beacon"
-	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/posw"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -50,10 +49,7 @@ func newMiningEnv(t *testing.T, shardID uint32) (*testEnv, *txpool.TxPool, *mine
 	roots, _, _, _, _, shard0, shard1 := testRootChain()
 	config := *params.MergedTestChainConfig
 	config.QuarkChain = params.NewTestQuarkChainConfig(shardID, 0, 1, 2)
-	env := &testEnv{
-		t: t, db: rawdb.NewMemoryDatabase(), config: &config,
-		engine: noVerifyEngine{beacon.New(ethash.NewFaker())}, rootGenesis: roots[0],
-	}
+	env := &testEnv{t: t, db: rawdb.NewMemoryDatabase(), config: &config, rootGenesis: roots[0]}
 	incoming := shard1
 	if shardID == 0 {
 		incoming = shard0
@@ -69,6 +65,13 @@ func newMiningEnv(t *testing.T, shardID uint32) (*testEnv, *txpool.TxPool, *mine
 		Config: &config, GasLimit: 54000, Alloc: alloc,
 		ExtraData: (&types.QKCExtra{ShardID: shardID, Cursor: pos(1, 0, 0)}).Encode(),
 	}
+	// Build with the PoSW engine, which prepares the difficulty, without
+	// verifying the test seals.
+	engine, err := posw.New(config.QuarkChain, genesis.ToBlock().Header())
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.engine = noVerifyEngine{engine}
 	chain, err := core.NewBlockChain(env.db, genesis, env.engine, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -231,7 +234,8 @@ func TestBuildShardBlockBuilderSettings(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := core.CalcGasLimit(env.genesis.GasLimit(), tt.gasCeil); block.GasLimit() != want {
+			// The PoSW engine fixes the gas limit to genesis, whatever the ceiling.
+			if want := env.genesis.GasLimit(); block.GasLimit() != want {
 				t.Fatalf("gas limit %d, want %d", block.GasLimit(), want)
 			}
 			txs := block.Transactions()

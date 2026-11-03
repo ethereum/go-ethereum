@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
-	"github.com/ethereum/go-ethereum/consensus/posw"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
@@ -326,10 +325,6 @@ func (miner *Miner) prepareWork(ctx context.Context, genParams *generateParams, 
 	}
 	if genParams.qkc != nil {
 		header.Extra = genParams.qkc.Encode()
-		// MixDigest carries the base (pre-PoSW) difficulty, which is also the
-		// PREVRANDAO of the block's transactions.
-		difficulty := posw.CalcDifficulty(miner.chainConfig.QuarkChain.PoSW, timestamp, parent.Time, parent.QKCDifficulty())
-		header.MixDigest = common.BigToHash(difficulty)
 	}
 	// Set the randomness field from the beacon chain if it's available.
 	if genParams.random != (common.Hash{}) {
