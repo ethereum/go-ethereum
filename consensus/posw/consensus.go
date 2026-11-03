@@ -198,6 +198,7 @@ func (p *PoSW) verifyHeader(chain consensus.ChainHeaderReader, header, parent *t
 	if cancun != (header.BlobGasUsed != nil) {
 		return errors.New("invalid blob gas used presence")
 	}
+	// TODO: Also disable blob transactions in the transaction pool to match this consensus restriction.
 	if header.BlobGasUsed != nil && *header.BlobGasUsed != 0 {
 		return errors.New("qkc blob gas used must be zero")
 	}
