@@ -78,9 +78,13 @@ staking. Use the same ordered list on every shard; reordering it changes the
 consensus configuration and is rejected for an initialized chain.
 
 SSZ message `ChainID` fields use the numeric uint256 representation above.
+Use `ChainIDToSSZ` and `ChainIDFromSSZ` to convert between `*big.Int` and these
+fields. Encoding rejects nil, negative and oversized IDs; zero is preserved,
+and handlers must still enforce the positive-ID requirement for shards.
 Business interfaces and P2P frames use `*big.Int`; the P2P frame prefix and the
 QKC header extra encode the ID as 32 big-endian bytes. Zero is reserved for
-root traffic in P2P routing. Cross-shard `send` and `SentMessage` use ABI
+root traffic in P2P routing; `RootChainID()` returns an independent zero value
+for each frame. Cross-shard `send` and `SentMessage` use ABI
 `uint256` for the destination chain ID.
 
 These encodings replace the former 4-byte IDs and are incompatible with old

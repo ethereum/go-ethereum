@@ -128,19 +128,22 @@ func TestP2PFramePayloadAliasesInput(t *testing.T) {
 }
 
 func TestRootChainID(t *testing.T) {
-	if RootChainID.Sign() != 0 {
-		t.Fatalf("root chain ID = %d, want zero", RootChainID)
+	first := &P2PFrame{ChainID: RootChainID()}
+	second := &P2PFrame{ChainID: RootChainID()}
+	first.ChainID.SetUint64(10001)
+	if second.ChainID.Sign() != 0 || RootChainID().Sign() != 0 {
+		t.Fatal("changing a frame's chain ID changed another root chain ID")
 	}
 	var encoded bytes.Buffer
-	if err := WriteP2PFrame(&encoded, &P2PFrame{ChainID: RootChainID}); err != nil {
+	if err := WriteP2PFrame(&encoded, second); err != nil {
 		t.Fatal(err)
 	}
 	frame, err := DecodeP2PFrame(encoded.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if frame.ChainID.Cmp(RootChainID) != 0 {
-		t.Fatalf("decoded chain ID = %d, want %d", frame.ChainID, RootChainID)
+	if frame.ChainID.Sign() != 0 {
+		t.Fatalf("decoded chain ID = %d, want zero", frame.ChainID)
 	}
 }
 

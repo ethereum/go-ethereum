@@ -26,9 +26,11 @@ import (
 	"math/big"
 )
 
-// RootChainID is reserved for root-chain traffic handled by the Master. It is
-// zero and is never a valid shard chain ID.
-var RootChainID = new(big.Int)
+// RootChainID returns a fresh zero ID for root-chain traffic handled by the
+// Master. Zero is never a valid shard chain ID.
+func RootChainID() *big.Int {
+	return new(big.Int)
+}
 
 const (
 	chainIDSize       = 32
