@@ -31,6 +31,9 @@ var _ consensus.Engine = (*PoSWSimulate)(nil)
 var _ consensus.SealVerifier = (*PoSWSimulate)(nil)
 
 // NewSimulate creates a simulation engine with the same configuration checks as New.
+// TODO: In the New/Init PR, add ConsensusType to params.QuarkChainConfig and have
+// ShardBackend.New instantiate the selected engine, defaulting to PoSW. Nodes on
+// the same chain must agree because this choice changes which seals are valid.
 func NewSimulate(config *params.QuarkChainConfig, genesis *types.Header) (*PoSWSimulate, error) {
 	engine, err := New(config, genesis)
 	if err != nil {
