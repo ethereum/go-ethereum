@@ -1,5 +1,6 @@
 # Shared network definitions. ChainID identifies each shard for EVM execution and routing.
-# Internal routing lists are derived from the configured chain IDs: [100001, 100002].
+# Routing lists follow the shard entries' order: [100001, 100002].
+# The first shard receives root rewards and hosts the root staking contract.
 NetworkID = 2
 
 # Shared EVM fork activation heights for every shard.
@@ -17,8 +18,6 @@ LondonBlock = "0"
 
 [Root]
 ConsensusType = "POW_ETHASH"
-# Chain receiving root rewards and hosting the root staking contract.
-CoinbaseChainID = 100001
 
 [Root.PoSW]
 AdjustmentCutoff = 7

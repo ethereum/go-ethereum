@@ -59,17 +59,22 @@ These IDs serve different purposes:
 | Field | Purpose | Requirement |
 | --- | --- | --- |
 | `NetworkID` | Identifies the P2P network. | Positive `uint32`. |
-| `Shards.ChainID` | Identifies a shard for both EVM replay protection and internal routing. | Unique positive `uint32` for deployment selection; zero is reserved for root-chain traffic. |
-| `Root.CoinbaseChainID` | Selects the chain for root rewards and the root staking contract. | Required; must match one of the configured `Shards.ChainID` values. |
+| `Shards.ChainID` | Identifies a shard for both EVM replay protection and internal routing. | Unique positive integer; the current configuration loader limits it to `uint32`. |
 
 A network ID may have the same numeric value as a chain ID. The example uses
-chain IDs `100001` and `100002`, with `Root.CoinbaseChainID = 100001`.
+chain IDs `100001` and `100002`.
 
-The shard count is derived from the `[[Shards]]` entries. Their order does not
-matter, and chain IDs may have gaps. The loader fills `QuarkChain.ChainIDs` with
-the root coinbase chain first, followed by all remaining chain IDs in ascending
-order. Both lists in the example are `[100001, 100002]`. This list cannot be
-supplied in TOML. There is no separate routing ID.
+The protocol represents chain IDs as positive `uint256` values; zero is reserved
+for root-chain traffic. The current configuration loader and `--qkc.chain`
+selector accept only values up to `4294967295`, including in `[[Slaves]]`.
+`NetworkID` is a separate `uint32` value.
+
+The shard count is derived from the `[[Shards]]` entries, and chain IDs may have
+gaps. The loader fills each shard's `QuarkChain.ChainIDs` in the same order as
+the entries. The first shard receives root rewards and hosts the root staking
+contract. Both lists in the example are `[100001, 100002]`. The order is part
+of the consensus configuration and must remain unchanged for an initialized
+chain. This list cannot be supplied in TOML. There is no separate routing ID.
 
 ### PoSW and staking
 
@@ -235,8 +240,10 @@ Both files follow geth's conventions:
   keys are errors.
 - `PublicHost` and `PublicPort` are deployment TOML keys for `Node.HTTPHost` and
   `Node.HTTPPort`; the effective configuration keeps geth's field names.
-- EVM chain IDs and fork block numbers use quoted big-integer values, such as
-  `ChainID = "100001"` and `LondonBlock = "0"`.
+- In `network.toml`, shard chain IDs and fork block numbers use quoted
+  big-integer values, such as `ChainID = "100001"` and `LondonBlock = "0"`.
+  In `cluster.toml`, `Slaves.ChainID` uses an unquoted integer, such as
+  `ChainID = 100001`.
 - `MinimumDifficulty`, `CoinbaseAmount`, and `StakePerBlock` use quoted decimal
   or hex integer strings and must fit `uint256`.
 - Ratios use quoted decimal strings, such as `RewardTaxRate = "0.5"`.

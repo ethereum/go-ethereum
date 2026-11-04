@@ -112,9 +112,10 @@ func TestNetworkValidation(t *testing.T) {
 		{"unknown peer", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ChainIDs[1] = big.NewInt(100003) }, "unknown or duplicate"},
 		{"overflow peer", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ChainIDs[1] = new(big.Int).SetUint64(1<<32 + 100002) }, "unknown or duplicate"},
 		{"duplicate peer", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ChainIDs[1] = big.NewInt(100001) }, "duplicate chain ID"},
-		{"missing root coinbase chain", func(c *NetworkConfig) { c.Root.CoinbaseChainID = 0 }, "must identify a network chain"},
-		{"unknown root coinbase chain", func(c *NetworkConfig) { c.Root.CoinbaseChainID = 100003 }, "must identify a network chain"},
-		{"wrong first chain", func(c *NetworkConfig) { c.Root.CoinbaseChainID = 100002 }, "first routing chain ID must match Root.CoinbaseChainID"},
+		{"wrong chain order", func(c *NetworkConfig) {
+			ids := c.Shards[0].QuarkChain.ChainIDs
+			ids[0], ids[1] = ids[1], ids[0]
+		}, "routing chain IDs must match shard order"},
 		{"missing root posw", func(c *NetworkConfig) { c.Root.PoSW = nil }, "Root: posw:"},
 		{"missing shard posw", func(c *NetworkConfig) { c.Shards[0].QuarkChain.PoSW = nil }, "chain 100001: posw:"},
 		{"invalid ordinary pow", func(c *NetworkConfig) { c.Shards[0].QuarkChain.PoSW.MinimumDifficulty = nil }, "chain 100001: posw:"},
@@ -266,27 +267,25 @@ func TestNetworkDerivedChainIDs(t *testing.T) {
 			}
 		})
 	}
-	// Routing uses the actual chain IDs, including gaps, rather than array positions.
-	content := strings.Replace(string(input), `ChainID = "100002"`, `ChainID = "200009"`, 1)
-	content = strings.Replace(content, "CoinbaseChainID = 100001", "CoinbaseChainID = 200009", 1)
+	// The first configured shard receives root rewards, even when its ID is larger.
+	parts := strings.SplitN(string(input), "\n[[Shards]]", 3)
+	first := strings.Replace(parts[2], `ChainID = "100002"`, `ChainID = "200009"`, 1)
+	content := parts[0] + "\n[[Shards]]" + first + "\n[[Shards]]" + parts[1]
 	cfg, err = LoadNetwork(writeConfig(t, []byte(content)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Shards[1].ChainID.Cmp(big.NewInt(200009)) != 0 || !reflect.DeepEqual(cfg.Shards[0].QuarkChain.ChainIDs, []*big.Int{big.NewInt(200009), big.NewInt(100001)}) {
+	if cfg.Shards[0].ChainID.Cmp(big.NewInt(200009)) != 0 || !reflect.DeepEqual(cfg.Shards[0].QuarkChain.ChainIDs, []*big.Int{big.NewInt(200009), big.NewInt(100001)}) {
 		t.Fatal("routing did not preserve noncontiguous chain IDs")
 	}
-	if cfg.Root.CoinbaseChainID != 200009 {
-		t.Fatal("configured root coinbase chain was replaced by the smallest chain ID")
-	}
-	if !cfg.Shards[0].IsXShardDestination(big.NewInt(200009)) || cfg.Shards[0].IsXShardDestination(big.NewInt(1)) || cfg.Shards[0].IsXShardDestination(big.NewInt(100001)) {
+	if !cfg.Shards[1].IsXShardDestination(big.NewInt(200009)) || cfg.Shards[1].IsXShardDestination(big.NewInt(1)) || cfg.Shards[1].IsXShardDestination(big.NewInt(100001)) {
 		t.Fatal("cross-shard routing did not use the configured chain IDs")
 	}
 	for i := range cfg.Shards {
 		shard := &cfg.Shards[i]
 		_, hasRootStaking := core.PoSWStakingContractAllocs(shard)[params.RootStakingContractAddress]
-		if shard.IsRootCoinbaseChain() != (i == 1) || hasRootStaking != (i == 1) {
-			t.Fatal("configured root coinbase chain was not applied to staking allocation")
+		if shard.IsRootCoinbaseChain() != (i == 0) || hasRootStaking != (i == 0) {
+			t.Fatal("first shard was not selected for root rewards and staking")
 		}
 	}
 }
@@ -326,7 +325,6 @@ DecayFactor = "0.88"
 	cfg, err := LoadNetwork(writeConfig(t, []byte(`NetworkID = 9
 [Root]
 ConsensusType = "POW_ETHASH"
-CoinbaseChainID = 11
 [Root.PoSW]
 `+pow+`
 [[Shards]]
@@ -362,19 +360,27 @@ func TestNetworkChainIDOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	third := strings.SplitN(string(input), "\n[[Shards]]", 3)[2]
-	third = strings.Replace(third, `ChainID = "100002"`, `ChainID = "100003"`, 1)
-	content := strings.Replace(string(input), "CoinbaseChainID = 100001", "CoinbaseChainID = 100003", 1)
+	content := strings.Replace(string(input), `ChainID = "100002"`, `ChainID = "100003"`, 1)
 	cfg, err := LoadNetwork(writeConfig(t, []byte(content+"\n[[Shards]]"+third)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(cfg.Shards[0].QuarkChain.ChainIDs, []*big.Int{big.NewInt(100003), big.NewInt(100001), big.NewInt(100002)}) {
-		t.Fatal("derived chain IDs must put the root coinbase first and sort the rest")
+	if !reflect.DeepEqual(cfg.Shards[0].QuarkChain.ChainIDs, []*big.Int{big.NewInt(100001), big.NewInt(100003), big.NewInt(100002)}) {
+		t.Fatal("derived chain IDs must follow shard order")
 	}
 	ids := cfg.Shards[1].QuarkChain.ChainIDs
 	ids[1], ids[2] = ids[2], ids[1]
-	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "same order on every shard") {
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "routing chain IDs must match shard order") {
 		t.Fatalf("inconsistent chain order accepted: %v", err)
+	}
+	for i := range cfg.Shards {
+		if i != 1 {
+			ids := cfg.Shards[i].QuarkChain.ChainIDs
+			ids[1], ids[2] = ids[2], ids[1]
+		}
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "routing chain IDs must match shard order") {
+		t.Fatalf("chain order inconsistent with shards accepted: %v", err)
 	}
 }
 
@@ -390,6 +396,7 @@ func TestInvalidTOML(t *testing.T) {
 		{"duplicate key", true, "NetworkID = 2\nNetworkID = 3"},
 		{"shared fork typo", true, "[ShardForks]\nHomesteadblock = \"0\""},
 		{"shared chain id", true, "[ShardForks]\nChainID = \"1\""},
+		{"obsolete root coinbase chain id", true, "[Root]\nCoinbaseChainID = 100001"},
 		{"invalid shared fork", true, "[ShardForks]\nLondonBlock = \"invalid\""},
 		{"local network field", true, "[Node]\nDataDir = \"data\""},
 		{"network local field", false, "[Root]\nPoSW = {}"},

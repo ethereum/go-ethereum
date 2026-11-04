@@ -51,9 +51,8 @@ type NetworkConfig struct {
 // RootConfig contains root-chain consensus settings. The root is not an EVM
 // chain and does not inherit a shard's chain ID or PoSW configuration.
 type RootConfig struct {
-	ConsensusType   params.ConsensusType
-	PoSW            *params.PoSWConfig
-	CoinbaseChainID uint32 // Chain receiving root rewards and hosting the root staking contract.
+	ConsensusType params.ConsensusType
+	PoSW          *params.PoSWConfig
 }
 
 const (
@@ -379,7 +378,7 @@ func (c *NetworkConfig) UnmarshalTOML(decode func(interface{}) error) error {
 }
 
 // LoadNetwork loads and validates a network definition. Each shard's topology
-// starts with the root coinbase chain, followed by the other IDs in numeric order.
+// follows the configured shard order, with the first shard receiving root rewards.
 // Root and shard PoSW configurations are required, including when staking is disabled.
 func LoadNetwork(file string) (*NetworkConfig, error) {
 	var cfg NetworkConfig
@@ -396,11 +395,6 @@ func LoadNetwork(file string) (*NetworkConfig, error) {
 			return nil, fmt.Errorf("%s: Shards[%d]: %w", file, i, err)
 		}
 		ids[i] = id
-	}
-	slices.Sort(ids)
-	if i := slices.Index(ids, cfg.Root.CoinbaseChainID); i > 0 {
-		copy(ids[1:i+1], ids[:i])
-		ids[0] = cfg.Root.CoinbaseChainID
 	}
 	for _, shard := range cfg.Shards {
 		if shard.QuarkChain == nil {
@@ -471,9 +465,6 @@ func (c *NetworkConfig) Validate() error {
 			return fmt.Errorf("chain %d: %w", id, err)
 		}
 	}
-	if !ids[c.Root.CoinbaseChainID] {
-		return fmt.Errorf("Root.CoinbaseChainID %d must identify a network chain for root rewards and staking", c.Root.CoinbaseChainID)
-	}
 	for _, shard := range c.Shards {
 		qkc := shard.QuarkChain
 		seen := make(map[uint32]bool, len(qkc.ChainIDs))
@@ -486,11 +477,8 @@ func (c *NetworkConfig) Validate() error {
 		if len(seen) != len(ids) {
 			return fmt.Errorf("chain %v: routing chain IDs must contain every network chain", shard.ChainID)
 		}
-		if qkc.ChainIDs[0].Uint64() != uint64(c.Root.CoinbaseChainID) {
-			return fmt.Errorf("chain %v: first routing chain ID must match Root.CoinbaseChainID", shard.ChainID)
-		}
-		if !slices.EqualFunc(qkc.ChainIDs, c.Shards[0].QuarkChain.ChainIDs, func(a, b *big.Int) bool { return a.Cmp(b) == 0 }) {
-			return fmt.Errorf("chain %v: routing chain IDs must have the same order on every shard", shard.ChainID)
+		if !slices.EqualFunc(qkc.ChainIDs, c.Shards, func(id *big.Int, member params.ChainConfig) bool { return id.Cmp(member.ChainID) == 0 }) {
+			return fmt.Errorf("chain %v: routing chain IDs must match shard order", shard.ChainID)
 		}
 	}
 	return nil
