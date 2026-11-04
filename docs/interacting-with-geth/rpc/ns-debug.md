@@ -175,6 +175,9 @@ block. The (from, to) parameters are the sequence of blocks to search, which can
 
 Note: to get the last state pass in the range of blocks in reverse, i.e. (last, first).
 
+This method is only supported with the hash-based state scheme. With the path-based state scheme, it
+returns the error `state history is not yet available in path-based scheme`.
+
 | Client  | Method invocation                                              |
 | :------ | -------------------------------------------------------------- |
 | Console | `debug.getAccessibleState(from, to rpc.BlockNumber)`           |
@@ -182,7 +185,8 @@ Note: to get the last state pass in the range of blocks in reverse, i.e. (last, 
 
 ### debug_getBadBlocks
 
-Returns a list of the last 'bad blocks' that the client has seen on the network and returns them as a JSON list of block-hashes.
+Returns recently encountered bad blocks as a JSON array of objects. Each entry contains the block's
+`hash`, its JSON representation in `block`, and its RLP encoding in `rlp`.
 
 | Client  | Method invocation                                |
 | :------ | ------------------------------------------------ |
