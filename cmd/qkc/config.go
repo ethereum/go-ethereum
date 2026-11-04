@@ -18,7 +18,7 @@ package main
 
 import (
 	"fmt"
-	"math"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/node"
@@ -39,7 +39,7 @@ var (
 		Name:  "qkc.role",
 		Usage: "Process role: master or slave",
 	}
-	qkcChainFlag = &cli.Uint64Flag{
+	qkcChainFlag = &cli.StringFlag{
 		Name:  "qkc.chain",
 		Usage: "Chain ID to select from the deployment (required for slave role)",
 	}
@@ -76,14 +76,13 @@ func loadQKCConfig(ctx *cli.Context) (*qkcconfig.NodeConfig, *qkcconfig.NetworkC
 	if cluster.NetworkFile == "" {
 		return nil, nil, fmt.Errorf("set NetworkFile in --config or supply --qkc.network")
 	}
-	var chainID *uint32
+	var chainID *big.Int
 	if ctx.IsSet(qkcChainFlag.Name) {
-		id := ctx.Uint64(qkcChainFlag.Name)
-		if id == 0 || id > math.MaxUint32 {
-			return nil, nil, fmt.Errorf("--qkc.chain must be a positive uint32 chain ID")
+		id, ok := new(big.Int).SetString(ctx.String(qkcChainFlag.Name), 10)
+		if !ok || id.Sign() <= 0 || id.BitLen() > 256 {
+			return nil, nil, fmt.Errorf("--qkc.chain must be a positive uint256 chain ID")
 		}
-		value := uint32(id)
-		chainID = &value
+		chainID = id
 	}
 	cfg, err := cluster.SelectNode(ctx.String(qkcRoleFlag.Name), chainID)
 	if err != nil {
@@ -193,7 +192,7 @@ func checkQKCConfig(ctx *cli.Context) error {
 	}
 	identity := cfg.Role
 	if cfg.ChainID != nil {
-		identity = fmt.Sprintf("%s, chain ID %d", cfg.Role, *cfg.ChainID)
+		identity = fmt.Sprintf("%s, chain ID %v", cfg.Role, cfg.ChainID)
 	}
 	_, err = fmt.Fprintf(ctx.App.Writer, "QuarkChain configuration is valid (%s, network ID %d)\n", identity, network.NetworkID)
 	return err

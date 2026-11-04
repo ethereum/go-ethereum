@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,11 +91,47 @@ func TestQKCConfigPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if master.Eth != nil || master.Node.P2P.MaxPeers != 0 || master.Node.P2P.NoDiscovery || len(master.ShardEndpoints) != 2 || master.ShardEndpoints[100001] != "127.0.0.1:38000" {
+	if master.Eth != nil || master.Node.P2P.MaxPeers != 0 || master.Node.P2P.NoDiscovery || len(master.ShardEndpoints) != 2 || master.ShardEndpoints["100001"] != "127.0.0.1:38000" {
 		t.Fatal("master selection, overrides or derived endpoints are incorrect")
 	}
 	if master.CoinbaseAddress != common.HexToAddress("0x1111111111111111111111111111111111111111") {
 		t.Fatal("CLI overrides replaced the master mining address")
+	}
+}
+
+func TestQKCLargeChainIDSelection(t *testing.T) {
+	const chainID = "18446744073709551617" // Greater than uint64.
+	dir := t.TempDir()
+	for _, fixture := range []struct {
+		path string
+		name string
+	}{
+		{qkcExampleCluster, "cluster.toml"},
+		{qkcExampleNetwork, "network.toml"},
+	} {
+		content, err := os.ReadFile(fixture.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content = bytes.Replace(content, []byte(`ChainID = "100001"`), []byte(`ChainID = "`+chainID+`"`), 1)
+		if err := os.WriteFile(filepath.Join(dir, fixture.name), content, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	clusterFile := filepath.Join(dir, "cluster.toml")
+	selected, err := readQKCFlags("--config", clusterFile, "--qkc.role", "slave", "--qkc.chain", chainID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected.ChainID == nil || selected.ChainID.String() != chainID {
+		t.Fatalf("selected chain ID = %v, want %s", selected.ChainID, chainID)
+	}
+	master, err := readQKCFlags("--config", clusterFile, "--qkc.role", "master")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if master.ShardEndpoints[chainID] != "127.0.0.1:38000" {
+		t.Fatalf("large chain endpoint = %q", master.ShardEndpoints[chainID])
 	}
 }
 
@@ -192,12 +229,17 @@ func TestQKCProcessFlags(t *testing.T) {
 		{[]string{"--qkc.role", "shard"}, "set --qkc.role"},
 		{[]string{"--qkc.role", "master", "--qkc.chain", "100001"}, "master cannot select"},
 		{[]string{"--qkc.role", "slave"}, "requires a chain ID"},
-		{[]string{"--qkc.role", "slave", "--qkc.chain", "0"}, "positive uint32 chain ID"},
+		{[]string{"--qkc.role", "slave", "--qkc.chain", "0"}, "positive uint256 chain ID"},
+		{[]string{"--qkc.role", "slave", "--qkc.chain", "-1"}, "positive uint256 chain ID"},
+		{[]string{"--qkc.role", "slave", "--qkc.chain", "0x10"}, "positive uint256 chain ID"},
+		{[]string{"--qkc.role", "slave", "--qkc.chain", "invalid"}, "positive uint256 chain ID"},
 		{[]string{"--qkc.role", "slave", "--qkc.chain", "1"}, "not in the deployment"},
 		{[]string{"--qkc.role", "slave", "--qkc.shard", "0"}, "flag provided but not defined: -qkc.shard"},
 		{[]string{"--qkc.role", "slave", "--qkc.chain", "100003"}, "not in the deployment"},
 		{[]string{"--qkc.role", "slave", "--qkc.chain", "4294967295"}, "not in the deployment"},
-		{[]string{"--qkc.role", "slave", "--qkc.chain", "4294967296"}, "positive uint32 chain ID"},
+		{[]string{"--qkc.role", "slave", "--qkc.chain", "4294967296"}, "not in the deployment"},
+		{[]string{"--qkc.role", "slave", "--qkc.chain", "18446744073709551616"}, "not in the deployment"},
+		{[]string{"--qkc.role", "slave", "--qkc.chain", new(big.Int).Lsh(big.NewInt(1), 256).String()}, "positive uint256 chain ID"},
 		{[]string{"--qkc.role", "master", "--syncmode", "full"}, "requires slave role"},
 		{[]string{"--qkc.role", "master", "--rpc.gascap", "0"}, "requires slave role"},
 		{[]string{"--qkc.role", "master", "--networkid", "100001"}, "must match the positive NetworkID"},

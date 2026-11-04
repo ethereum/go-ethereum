@@ -80,7 +80,7 @@ func TestNetworkExample(t *testing.T) {
 		}
 	}
 	// Equal numeric values do not conflate the network and EVM identifiers.
-	cfg.NetworkID = uint32(cfg.Shards[0].ChainID.Uint64())
+	cfg.NetworkID = 100001
 	if err := cfg.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -103,14 +103,14 @@ func TestNetworkValidation(t *testing.T) {
 		{"unsupported shard qkchash", func(c *NetworkConfig) { c.Shards[1].QuarkChain.ConsensusType = "POW_QKCHASH" }, "chain 100002: invalid ConsensusType"},
 		{"no shards", func(c *NetworkConfig) { c.Shards = nil }, "at least one shard"},
 		{"no quarkchain", func(c *NetworkConfig) { c.Shards[0].QuarkChain = nil }, "QuarkChain configuration is required"},
-		{"missing chain id", func(c *NetworkConfig) { c.Shards[0].ChainID = nil }, "positive uint32"},
-		{"zero chain id", func(c *NetworkConfig) { c.Shards[0].ChainID = new(big.Int) }, "positive uint32"},
-		{"negative chain id", func(c *NetworkConfig) { c.Shards[0].ChainID = big.NewInt(-1) }, "positive uint32"},
-		{"overflow chain id", func(c *NetworkConfig) { c.Shards[0].ChainID = new(big.Int).Lsh(big.NewInt(1), 32) }, "positive uint32"},
-		{"duplicate chain id", func(c *NetworkConfig) { c.Shards[1].ChainID = c.Shards[0].ChainID }, "duplicate ChainID"},
-		{"missing peer", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ChainIDs = []*big.Int{big.NewInt(100001)} }, "every network chain"},
-		{"unknown peer", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ChainIDs[1] = big.NewInt(100003) }, "unknown or duplicate"},
-		{"overflow peer", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ChainIDs[1] = new(big.Int).SetUint64(1<<32 + 100002) }, "unknown or duplicate"},
+		{"missing chain id", func(c *NetworkConfig) { c.Shards[0].ChainID = nil }, "positive uint256"},
+		{"zero chain id", func(c *NetworkConfig) { c.Shards[0].ChainID = new(big.Int) }, "positive uint256"},
+		{"negative chain id", func(c *NetworkConfig) { c.Shards[0].ChainID = big.NewInt(-1) }, "positive uint256"},
+		{"overflow chain id", func(c *NetworkConfig) { c.Shards[0].ChainID = new(big.Int).Lsh(big.NewInt(1), 256) }, "positive uint256"},
+		{"duplicate chain id", func(c *NetworkConfig) { c.Shards[1].ChainID = big.NewInt(100001) }, "duplicate ChainID"},
+		{"missing peer", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ChainIDs = []*big.Int{big.NewInt(100001)} }, "must match shard order"},
+		{"unknown peer", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ChainIDs[1] = big.NewInt(100003) }, "must match shard order"},
+		{"different peer", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ChainIDs[1] = new(big.Int).Lsh(big.NewInt(1), 128) }, "must match shard order"},
 		{"duplicate peer", func(c *NetworkConfig) { c.Shards[0].QuarkChain.ChainIDs[1] = big.NewInt(100001) }, "duplicate chain ID"},
 		{"wrong chain order", func(c *NetworkConfig) {
 			ids := c.Shards[0].QuarkChain.ChainIDs
@@ -295,7 +295,7 @@ func TestNetworkChainIDBounds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []string{"0", "-1", "100001", "4294967296", "18446744073709551616"} {
+	for _, value := range []string{"0", "-1", "100001", new(big.Int).Lsh(big.NewInt(1), 256).String()} {
 		t.Run(value, func(t *testing.T) {
 			content := strings.Replace(string(input), `ChainID = "100002"`, `ChainID = "`+value+`"`, 1)
 			if _, err := LoadNetwork(writeConfig(t, []byte(content))); err == nil {
@@ -303,13 +303,18 @@ func TestNetworkChainIDBounds(t *testing.T) {
 			}
 		})
 	}
-	content := strings.Replace(string(input), `ChainID = "100002"`, `ChainID = "4294967295"`, 1)
-	cfg, err := LoadNetwork(writeConfig(t, []byte(content)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Shards[1].ChainID.Uint64() != math.MaxUint32 {
-		t.Fatal("maximum routable chain ID was not preserved")
+	for _, id := range []*big.Int{
+		new(big.Int).Lsh(big.NewInt(1), 128),
+		new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1)),
+	} {
+		content := strings.Replace(string(input), `ChainID = "100002"`, `ChainID = "`+id.String()+`"`, 1)
+		cfg, err := LoadNetwork(writeConfig(t, []byte(content)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Shards[1].ChainID.Cmp(id) != 0 || cfg.Shards[0].QuarkChain.ChainIDs[1].Cmp(id) != 0 {
+			t.Fatalf("chain ID %v was not preserved in EVM and routing configuration", id)
+		}
 	}
 }
 
@@ -401,19 +406,19 @@ func TestInvalidTOML(t *testing.T) {
 		{"local network field", true, "[Node]\nDataDir = \"data\""},
 		{"network local field", false, "[Root]\nPoSW = {}"},
 		{"local typo", false, "[Master.Node]\nHttpPort = 1234"},
-		{"legacy shard nodes", false, "[[ShardNodes]]\nChainID = 100001"},
+		{"legacy shard nodes", false, "[[ShardNodes]]\nChainID = \"100001\""},
 		{"legacy shard id", false, "[[Slaves]]\nShardID = 0"},
-		{"legacy internal address", false, "[[Slaves]]\nChainID = 100001\nAddress = \"127.0.0.1:38000\""},
-		{"legacy cluster host", false, "[[Slaves]]\nChainID = 100001\nClusterHost = \"127.0.0.1\""},
+		{"legacy internal address", false, "[[Slaves]]\nChainID = \"100001\"\nAddress = \"127.0.0.1:38000\""},
+		{"legacy cluster host", false, "[[Slaves]]\nChainID = \"100001\"\nClusterHost = \"127.0.0.1\""},
 		{"invalid public port type", false, "[Master]\nPublicPort = \"invalid\""},
 		{"short master coinbase", false, "[Master]\nCoinbaseAddress = \"0x12\""},
-		{"legacy shard coinbase", false, "[[Slaves]]\nChainID = 100001\nCoinbaseAddress = \"0x111111111111111111111111111111111111111100000001\""},
-		{"invalid shard coinbase", false, "[[Slaves]]\nChainID = 100001\nCoinbaseAddress = \"0xgg11111111111111111111111111111111111111\""},
-		{"nested typo", false, "[[Slaves]]\nChainID = 100001\n[Slaves.Eth.Miner]\nUnknown = 1"},
-		{"invalid sync mode", false, "[[Slaves]]\nChainID = 100001\n[Slaves.Eth]\nSyncMode = \"invalid\""},
+		{"legacy shard coinbase", false, "[[Slaves]]\nChainID = \"100001\"\nCoinbaseAddress = \"0x111111111111111111111111111111111111111100000001\""},
+		{"invalid shard coinbase", false, "[[Slaves]]\nChainID = \"100001\"\nCoinbaseAddress = \"0xgg11111111111111111111111111111111111111\""},
+		{"nested typo", false, "[[Slaves]]\nChainID = \"100001\"\n[Slaves.Eth.Miner]\nUnknown = 1"},
+		{"invalid sync mode", false, "[[Slaves]]\nChainID = \"100001\"\n[Slaves.Eth]\nSyncMode = \"invalid\""},
 		{"derived role", false, "[Master]\nRole = \"master\""},
 		{"duplicate endpoint map", false, "[Master.ShardEndpoints]\n0 = \"127.0.0.1:38000\""},
-		{"chain id overflow", false, "[[Slaves]]\nChainID = 4294967296"},
+		{"invalid chain id text", false, "[[Slaves]]\nChainID = \"not-a-number\""},
 		{"obsolete posw flag", true, "[Root.PoSW]\nEnabled = true"},
 		{"invalid stake", true, "[Root.PoSW]\nStakePerBlock = \"invalid\""},
 		{"invalid ratio", true, "[Root.PoSW]\nDecayFactor = \"invalid\""},
@@ -489,7 +494,7 @@ func TestClusterExample(t *testing.T) {
 		if selected.CoinbaseAddress != addresses[i] {
 			t.Fatal("selected shard has the wrong mining address")
 		}
-		if master.ShardEndpoints[*entry.ChainID] != fmt.Sprintf("127.0.0.1:%d", 38000+i) {
+		if master.ShardEndpoints[entry.ChainID.String()] != fmt.Sprintf("127.0.0.1:%d", 38000+i) {
 			t.Fatal("master endpoints were not derived from deployment entries")
 		}
 		if entry.Eth.NetworkId != uint64(network.NetworkID) || entry.Node.HTTPPort != 18545+i {
@@ -505,10 +510,79 @@ func TestClusterExample(t *testing.T) {
 	}
 }
 
+func TestClusterLargeChainID(t *testing.T) {
+	id := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(1))
+	dir := t.TempDir()
+	networkInput, err := os.ReadFile("examples/network.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clusterInput, err := os.ReadFile("examples/cluster.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	networkFile := filepath.Join(dir, "network.toml")
+	clusterFile := filepath.Join(dir, "cluster.toml")
+	networkData := strings.Replace(string(networkInput), `ChainID = "100002"`, `ChainID = "`+id.String()+`"`, 1)
+	clusterData := strings.Replace(string(clusterInput), `ChainID = "100002"`, `ChainID = "`+id.String()+`"`, 1)
+	if err := os.WriteFile(networkFile, []byte(networkData), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(clusterFile, []byte(clusterData), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cluster, err := LoadCluster(clusterFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	network, err := LoadNetwork(cluster.NetworkFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cluster.Validate(network); err != nil {
+		t.Fatal(err)
+	}
+	if network.Shards[1].ChainID.Cmp(id) != 0 || network.Shards[0].QuarkChain.ChainIDs[1].Cmp(id) != 0 {
+		t.Fatal("large chain ID was not preserved in execution and routing configuration")
+	}
+	selected, err := cluster.SelectNode(RoleSlave, new(big.Int).Set(id))
+	if err != nil || selected != &cluster.Slaves[1] {
+		t.Fatalf("large chain ID did not select its Slave: %v", err)
+	}
+	master, err := cluster.SelectNode(RoleMaster, nil)
+	if err != nil || master.ShardEndpoints[id.String()] != "127.0.0.1:38001" {
+		t.Fatalf("large chain ID did not key the Master endpoint: %v", err)
+	}
+	original := cluster.Slaves[0].ChainID
+	cluster.Slaves[0].ChainID = new(big.Int).Set(id)
+	if err := cluster.Validate(network); err == nil || !strings.Contains(err.Error(), "duplicate deployed chain") {
+		t.Fatalf("numerically duplicate deployment ID accepted: %v", err)
+	}
+	cluster.Slaves[0].ChainID = new(big.Int).Add(id, big.NewInt(1))
+	if err := cluster.Validate(network); err == nil || !strings.Contains(err.Error(), "not in the network") {
+		t.Fatalf("unknown deployment ID accepted: %v", err)
+	}
+	cluster.Slaves[0].ChainID = original
+	firstID := network.Shards[0].ChainID
+	network.Shards[0].ChainID = new(big.Int).Set(id)
+	if err := network.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate ChainID") {
+		t.Fatalf("numerically duplicate network ID accepted: %v", err)
+	}
+	network.Shards[0].ChainID = firstID
+	network.Shards[0].QuarkChain.ChainIDs[1].SetInt64(7)
+	if network.Shards[1].QuarkChain.ChainIDs[1].Cmp(id) != 0 || network.Shards[1].ChainID.Cmp(id) != 0 {
+		t.Fatal("derived large chain ID aliases another shard or its identity")
+	}
+}
+
 func TestNodeDefaults(t *testing.T) {
 	master := DefaultNodeConfig(nil)
-	id := uint32(100001)
-	shard := DefaultNodeConfig(&id)
+	id := big.NewInt(100001)
+	shard := DefaultNodeConfig(id)
+	id.SetInt64(7)
+	if shard.ChainID.Cmp(big.NewInt(100001)) != 0 {
+		t.Fatal("default Slave identity aliases its input")
+	}
 	if master.Eth != nil || master.Node.P2P.MaxPeers != node.DefaultConfig.P2P.MaxPeers || shard.Eth.DatabaseCache != ethconfig.Defaults.DatabaseCache {
 		t.Fatal("geth defaults were not preserved")
 	}
@@ -526,10 +600,10 @@ func TestNodeDefaults(t *testing.T) {
 	if (master.Node.DataDir != "" && master.Node.DataDir == shard.Node.DataDir) || master.Node.Name == shard.Node.Name {
 		t.Fatal("process defaults share a data directory or instance name")
 	}
-	otherID := uint32(100002)
+	otherID := big.NewInt(100002)
 	for _, ephemeral := range []bool{false, true} {
 		endpoints := make(map[string]bool)
-		for _, cfg := range []NodeConfig{master, shard, DefaultNodeConfig(&otherID)} {
+		for _, cfg := range []NodeConfig{master, shard, DefaultNodeConfig(otherID)} {
 			if ephemeral {
 				cfg.Node.DataDir = ""
 			}
@@ -549,12 +623,12 @@ func TestClusterPublicEndpoint(t *testing.T) {
 		master            bool
 	}{
 		{"master", "[Master]\nPublicHost = \"127.0.0.1\"\nPublicPort = 18544", "127.0.0.1", 18544, true},
-		{"shard", "[[Slaves]]\nChainID = 100001\nPublicHost = \"127.0.0.1\"\nPublicPort = 18545", "127.0.0.1", 18545, false},
-		{"inherited public port", "[[Slaves]]\nChainID = 100001\nPublicHost = \"127.0.0.1\"", "127.0.0.1", node.DefaultHTTPPort, false},
-		{"public port leaves HTTP disabled", "[[Slaves]]\nChainID = 100001\nPublicPort = 18545", "", 18545, false},
-		{"native fallback", "[[Slaves]]\nChainID = 100001\n[Slaves.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "127.0.0.2", 18547, false},
-		{"public override", "[[Slaves]]\nChainID = 100001\nPublicHost = \"127.0.0.1\"\nPublicPort = 18545\n[Slaves.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "127.0.0.1", 18545, false},
-		{"explicit empty and zero", "[[Slaves]]\nChainID = 100001\nPublicHost = \"\"\nPublicPort = 0\n[Slaves.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "", 0, false},
+		{"shard", "[[Slaves]]\nChainID = \"100001\"\nPublicHost = \"127.0.0.1\"\nPublicPort = 18545", "127.0.0.1", 18545, false},
+		{"inherited public port", "[[Slaves]]\nChainID = \"100001\"\nPublicHost = \"127.0.0.1\"", "127.0.0.1", node.DefaultHTTPPort, false},
+		{"public port leaves HTTP disabled", "[[Slaves]]\nChainID = \"100001\"\nPublicPort = 18545", "", 18545, false},
+		{"native fallback", "[[Slaves]]\nChainID = \"100001\"\n[Slaves.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "127.0.0.2", 18547, false},
+		{"public override", "[[Slaves]]\nChainID = \"100001\"\nPublicHost = \"127.0.0.1\"\nPublicPort = 18545\n[Slaves.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "127.0.0.1", 18545, false},
+		{"explicit empty and zero", "[[Slaves]]\nChainID = \"100001\"\nPublicHost = \"\"\nPublicPort = 0\n[Slaves.Node]\nHTTPHost = \"127.0.0.2\"\nHTTPPort = 18547", "", 0, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg, err := LoadCluster(writeConfig(t, []byte(test.input)))
@@ -577,7 +651,7 @@ func TestClusterDefaultOverrides(t *testing.T) {
 MaxPeers = 0
 DiscoveryV4 = false
 [[Slaves]]
-ChainID = 100001
+ChainID = "100001"
 PrivateHost = "127.0.0.1"
 PrivatePort = 38000
 [Slaves.Eth]
@@ -588,7 +662,7 @@ GasPrice = "123"
 MaxPrice = "456"
 IgnorePrice = "7"
 [[Slaves]]
-ChainID = 100002
+ChainID = "100002"
 PrivateHost = "127.0.0.1"
 PrivatePort = 38001
 `)))
@@ -615,7 +689,7 @@ PrivatePort = 38001
 		t.Fatal("mutable geth defaults are shared with a shard")
 	}
 	// Omitting the entire Master table still supplies its defaults.
-	cfg, err = LoadCluster(writeConfig(t, []byte("[[Slaves]]\nChainID = 100001\nPrivateHost = \"localhost\"\nPrivatePort = 38000\n")))
+	cfg, err = LoadCluster(writeConfig(t, []byte("[[Slaves]]\nChainID = \"100001\"\nPrivateHost = \"localhost\"\nPrivatePort = 38000\n")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -661,7 +735,7 @@ func TestClusterNestedDefaults(t *testing.T) {
 		{"empty tables", "[Slaves.Eth.Miner]\n[Slaves.Eth.GPO]\n[Slaves.Eth.TxPool]\n[Slaves.Eth.BlobPool]", func(*ethconfig.Config) {}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			input := "[[Slaves]]\nChainID = 100001\n" + test.input + "\n[[Slaves]]\nChainID = 100002\n"
+			input := "[[Slaves]]\nChainID = \"100001\"\n" + test.input + "\n[[Slaves]]\nChainID = \"100002\"\n"
 			cfg, err := LoadCluster(writeConfig(t, []byte(input)))
 			if err != nil {
 				t.Fatal(err)
@@ -691,18 +765,18 @@ func TestClusterNestedDefaults(t *testing.T) {
 }
 
 func TestProcessSelection(t *testing.T) {
-	zero, unknown := uint32(0), uint32(100003)
+	zero, unknown := new(big.Int), big.NewInt(100003)
 	for _, test := range []struct {
 		role string
-		id   *uint32
+		id   *big.Int
 		want string
 	}{
 		{"", nil, "set --qkc.role"},
 		{"shard", nil, "set --qkc.role"},
-		{RoleMaster, &zero, "master cannot select"},
+		{RoleMaster, zero, "master cannot select"},
 		{RoleSlave, nil, "requires a chain ID"},
-		{RoleSlave, &unknown, "not in the deployment"},
-		{RoleSlave, &zero, "not in the deployment"},
+		{RoleSlave, unknown, "not in the deployment"},
+		{RoleSlave, zero, "not in the deployment"},
 	} {
 		if _, err := exampleCluster(t).SelectNode(test.role, test.id); err == nil || !strings.Contains(err.Error(), test.want) {
 			t.Fatalf("have %v, want error containing %q", err, test.want)
@@ -718,8 +792,11 @@ func TestClusterValidation(t *testing.T) {
 	}{
 		{"missing shard", func(c *ClusterConfig) { c.Slaves = c.Slaves[:1] }, "every network shard"},
 		{"missing id", func(c *ClusterConfig) { c.Slaves[0].ChainID = nil }, "ChainID is required"},
-		{"duplicate shard", func(c *ClusterConfig) { *c.Slaves[1].ChainID = 100001 }, "duplicate deployed chain"},
-		{"unknown shard", func(c *ClusterConfig) { *c.Slaves[1].ChainID = 100003 }, "not in the network"},
+		{"duplicate shard", func(c *ClusterConfig) { c.Slaves[1].ChainID = big.NewInt(100001) }, "duplicate deployed chain"},
+		{"unknown shard", func(c *ClusterConfig) { c.Slaves[1].ChainID = big.NewInt(100003) }, "not in the network"},
+		{"zero shard", func(c *ClusterConfig) { c.Slaves[1].ChainID = new(big.Int) }, "positive uint256"},
+		{"negative shard", func(c *ClusterConfig) { c.Slaves[1].ChainID = big.NewInt(-1) }, "positive uint256"},
+		{"overflow shard", func(c *ClusterConfig) { c.Slaves[1].ChainID = new(big.Int).Lsh(big.NewInt(1), 256) }, "positive uint256"},
 		{"duplicate cluster endpoint", func(c *ClusterConfig) {
 			c.Slaves[1].PrivateHost = c.Slaves[0].PrivateHost
 			c.Slaves[1].PrivatePort = c.Slaves[0].PrivatePort
@@ -734,7 +811,7 @@ func TestClusterValidation(t *testing.T) {
 			c.Slaves[1].PrivatePort = c.Slaves[0].PrivatePort
 		}, "TCP listeners conflict"},
 		{"shared datadir", func(c *ClusterConfig) { c.Slaves[1].Node.DataDir = c.Master.Node.DataDir }, "data directory is shared"},
-		{"master chain id", func(c *ClusterConfig) { c.Master.ChainID = new(uint32) }, "Master must not specify ChainID"},
+		{"master chain id", func(c *ClusterConfig) { c.Master.ChainID = new(big.Int) }, "Master must not specify ChainID"},
 		{"master execution", func(c *ClusterConfig) { c.Master.Eth = &ethconfig.Config{} }, "master cannot configure Eth"},
 		{"master cluster host", func(c *ClusterConfig) { c.Master.PrivateHost = "localhost" }, "master cannot configure Eth"},
 		{"master cluster port", func(c *ClusterConfig) { c.Master.PrivatePort = 38002 }, "master cannot configure Eth"},
@@ -1011,7 +1088,7 @@ func TestNodeValidation(t *testing.T) {
 		t.Fatalf("IPv6 internal endpoints must be valid: %v", err)
 	}
 	master, err := cluster.SelectNode(RoleMaster, nil)
-	if err != nil || master.ShardEndpoints[100001] != "[::1]:38000" {
+	if err != nil || master.ShardEndpoints["100001"] != "[::1]:38000" {
 		t.Fatalf("IPv6 cluster host was not joined correctly: %v", err)
 	}
 }

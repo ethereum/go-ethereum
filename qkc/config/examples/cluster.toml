@@ -18,7 +18,7 @@ MaxPeers = 25
 NoDiscovery = true
 
 [[Slaves]]
-ChainID = 100001
+ChainID = "100001"
 # Internal QKC TCP endpoint for Master and other shards.
 PrivateHost = "127.0.0.1"
 PrivatePort = 38000
@@ -39,7 +39,7 @@ DataDir = "./qkc-data/shard-100001"
 DatabaseCache = 512
 
 [[Slaves]]
-ChainID = 100002
+ChainID = "100002"
 # Internal QKC TCP endpoint for Master and other shards.
 PrivateHost = "127.0.0.1"
 PrivatePort = 38001
