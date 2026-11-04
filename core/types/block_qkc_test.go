@@ -67,6 +67,7 @@ func TestSanityCheckQKC(t *testing.T) {
 			h.Extra = e.Encode()
 		}, true},
 		{"extra", func(h *Header) { h.Extra = nil }, false},
+		{"zero chain ID", func(h *Header) { e, _ := h.QKCExtra(); e.ChainID = new(big.Int); h.Extra = e.Encode() }, false},
 		{"version", func(h *Header) { e, _ := h.QKCExtra(); e.Version = 1; h.Extra = e.Encode() }, false},
 		{"missing difficulty", func(h *Header) { h.Difficulty = nil }, false},
 		{"difficulty", func(h *Header) { h.Difficulty.SetInt64(1) }, false},
@@ -83,7 +84,7 @@ func TestSanityCheckQKC(t *testing.T) {
 			header := &Header{
 				Number: big.NewInt(1), Difficulty: new(big.Int), UncleHash: EmptyUncleHash,
 				GasLimit: 12_000_000,
-				Extra:    (&QKCExtra{ChainID: 3, XShardGasLimit: 6_000_000}).Encode(),
+				Extra:    (&QKCExtra{ChainID: big.NewInt(10004), XShardGasLimit: 6_000_000}).Encode(),
 			}
 			test.mutate(header)
 			if err := header.SanityCheckQKC(); (err == nil) != test.valid {
@@ -96,7 +97,7 @@ func TestSanityCheckQKC(t *testing.T) {
 func TestQKCExtraEncoding(t *testing.T) {
 	want := &QKCExtra{
 		Version:        1,
-		ChainID:        0x00010003,
+		ChainID:        big.NewInt(0x00010003),
 		PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0xaa}, 32)),
 		Cursor:         XShardCursor{RootBlockHeight: 1, MinorBlockIndex: 2, XShardDepositIndex: 3},
 		XShardGasUsed:  21000,
@@ -106,13 +107,13 @@ func TestQKCExtraEncoding(t *testing.T) {
 	}
 	wantExtra := common.FromHex("0x" +
 		"00000001" + // version, offset 0
-		"00010003" + // chainId, offset 4
-		strings.Repeat("aa", 32) + // prevRootBlock, offset 8
-		"0000000000000001" + "0000000000000002" + "0000000000000003" + // cursor, offset 40
-		"0000000000005208" + // xShardGasUsed, offset 64
-		"00000000000f4240" + // xShardGasLimit, offset 72
-		"0102030405060708" + // nonce, offset 80, start of the PoW seal
-		strings.Repeat("bb", 32)) // mixHash, offset 88
+		strings.Repeat("00", 28) + "00010003" + // chainId, offset 4
+		strings.Repeat("aa", 32) + // prevRootBlock, offset 36
+		"0000000000000001" + "0000000000000002" + "0000000000000003" + // cursor, offset 68
+		"0000000000005208" + // xShardGasUsed, offset 92
+		"00000000000f4240" + // xShardGasLimit, offset 100
+		"0102030405060708" + // nonce, offset 108, start of the PoW seal
+		strings.Repeat("bb", 32)) // mixHash, offset 116
 
 	extra := want.Encode()
 	if !bytes.Equal(extra, wantExtra) {
@@ -141,10 +142,10 @@ func TestQKCExtraInvalidLength(t *testing.T) {
 // extreme value of every field.
 func TestQKCExtraRoundTrip(t *testing.T) {
 	cases := []*QKCExtra{
-		{},
+		{ChainID: new(big.Int)},
 		{
 			Version:        1,
-			ChainID:        0x00010003,
+			ChainID:        big.NewInt(0x00010003),
 			PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0xaa}, 32)),
 			Cursor:         XShardCursor{RootBlockHeight: 1, MinorBlockIndex: 2, XShardDepositIndex: 3},
 			XShardGasUsed:  21000,
@@ -154,7 +155,7 @@ func TestQKCExtraRoundTrip(t *testing.T) {
 		},
 		{
 			Version:        ^uint32(0),
-			ChainID:        ^uint32(0),
+			ChainID:        new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1)),
 			PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0xff}, 32)),
 			Cursor:         XShardCursor{RootBlockHeight: ^uint64(0), MinorBlockIndex: ^uint64(0), XShardDepositIndex: ^uint64(0)},
 			XShardGasUsed:  ^uint64(0),
@@ -172,7 +173,10 @@ func TestQKCExtraRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("case %d: failed to decode: %v", i, err)
 		}
-		if !reflect.DeepEqual(have, want) {
+		// big.Int may represent zero with either a nil or an empty backing slice.
+		id := have.ChainID
+		have.ChainID = want.ChainID
+		if id.Cmp(want.ChainID) != 0 || !reflect.DeepEqual(have, want) {
 			t.Fatalf("case %d: decoding mismatch:\nhave %+v\nwant %+v", i, have, want)
 		}
 	}
@@ -180,7 +184,7 @@ func TestQKCExtraRoundTrip(t *testing.T) {
 
 func TestQKCExtraDecodeCopiesInput(t *testing.T) {
 	prevRootBlock := common.BytesToHash(bytes.Repeat([]byte{0xaa}, 32))
-	extra := (&QKCExtra{PrevRootBlock: prevRootBlock, MixHash: prevRootBlock}).Encode()
+	extra := (&QKCExtra{ChainID: big.NewInt(10001), PrevRootBlock: prevRootBlock, MixHash: prevRootBlock}).Encode()
 
 	have, err := DecodeQKCExtra(extra)
 	if err != nil {
@@ -189,7 +193,7 @@ func TestQKCExtraDecodeCopiesInput(t *testing.T) {
 	for i := range extra {
 		extra[i] = 0
 	}
-	if have.PrevRootBlock != prevRootBlock || have.MixHash != prevRootBlock {
+	if have.ChainID.Cmp(big.NewInt(10001)) != 0 || have.PrevRootBlock != prevRootBlock || have.MixHash != prevRootBlock {
 		t.Fatalf("decoded value aliases the input: %x/%x", have.PrevRootBlock, have.MixHash)
 	}
 }
@@ -290,7 +294,7 @@ func TestQKCSealHashSensitivity(t *testing.T) {
 	}
 	// The QKC fields outside the seal region participate as well.
 	other := qkcBaseExtra(nonce, mix)
-	other.ChainID = 4
+	other.ChainID = big.NewInt(4)
 	otherShard := qkcShardHeader(other, big.NewInt(1000))
 	if qkcSealHash(t, otherShard) == baseSeal {
 		t.Error("seal hash ignores the QuarkChain fields outside the seal")
@@ -457,7 +461,7 @@ func qkcSealHash(t *testing.T, h *Header) common.Hash {
 func qkcBaseExtra(nonce BlockNonce, mixHash common.Hash) *QKCExtra {
 	return &QKCExtra{
 		Version: 1,
-		ChainID: 3,
+		ChainID: big.NewInt(10004),
 		Nonce:   nonce,
 		MixHash: mixHash,
 	}
@@ -498,7 +502,7 @@ func qkcReferenceHeader() *Header {
 		Time:        1_600_000_000,
 		Extra: (&QKCExtra{
 			Version:        1,
-			ChainID:        0x00010003,
+			ChainID:        big.NewInt(0x00010003),
 			PrevRootBlock:  common.BytesToHash(bytes.Repeat([]byte{0x88}, 32)),
 			Cursor:         XShardCursor{RootBlockHeight: 1, MinorBlockIndex: 2, XShardDepositIndex: 3},
 			XShardGasUsed:  21_000,
@@ -514,7 +518,7 @@ func qkcReferenceHeader() *Header {
 // the correct one is the independent reference formula in
 // TestQKCSealHashReference; this test only checks that it does not move.
 func TestQKCBlockHashGolden(t *testing.T) {
-	const golden = "0xd6e3701b3d314251b417461c44a0e45575965606f523aff1309279f0ebff770b"
+	const golden = "0xd011a8e649f6a483edf8b6f5cb3e8952e4c7b07f8d61e8523ded84f44891ca25"
 	h := qkcReferenceHeader()
 	if have := h.Hash(); have != common.HexToHash(golden) {
 		t.Fatalf("block hash mismatch:\nhave %x\nwant %s", have, golden)

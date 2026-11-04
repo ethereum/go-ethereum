@@ -18,6 +18,7 @@ package params
 
 import (
 	"fmt"
+	"math/big"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,9 +41,6 @@ const (
 	// XShardGasLimitDivisor sets the cross-shard gas limit of a shard block, the
 	// gas reserved for its deposits, to its gas limit over this divisor.
 	XShardGasLimitDivisor uint64 = 2
-
-	// RootCoinbaseChainID is the shard the root chain pays its coinbase to.
-	RootCoinbaseChainID uint32 = 0
 )
 
 // ConsensusType identifies the PoW algorithm selected for a QKC root or shard chain.
@@ -66,10 +64,10 @@ func (c ConsensusType) Check() error {
 // QuarkChainConfig is the configuration of a QuarkChain shard chain. Its
 // presence in the chain config enables the QuarkChain specific features.
 type QuarkChainConfig struct {
-	// These existing routing fields carry the EVM chain IDs. Network loading
-	// derives them from ChainConfig.ChainID; they cannot be configured separately.
-	ChainID  uint32   `json:"chainId" toml:"-"`
-	ChainIDs []uint32 `json:"chainIds" toml:"-"`
+	// ChainIDs lists the EVM chain IDs of all shards, this one included.
+	// The first chain receives root rewards and hosts the root staking contract.
+	// Network loading derives this list; it cannot be configured separately in TOML.
+	ChainIDs []*big.Int `json:"chainIds" toml:"-"`
 
 	ConsensusType ConsensusType `json:"consensusType,omitempty"`
 	PoSW          *PoSWConfig   `json:"posw"` // Required consensus configuration for this shard.
@@ -84,8 +82,7 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 	if c == nil || other == nil {
 		return c == other
 	}
-	return c.ChainID == other.ChainID &&
-		slices.Equal(c.ChainIDs, other.ChainIDs) &&
+	return slices.EqualFunc(c.ChainIDs, other.ChainIDs, configBlockEqual) &&
 		c.ConsensusType == other.ConsensusType &&
 		c.PoSW.Equal(other.PoSW) &&
 		c.MaxBlocksPerRootBlock == other.MaxBlocksPerRootBlock
@@ -93,11 +90,50 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 
 // String implements the stringer interface.
 func (c QuarkChainConfig) String() string {
-	return fmt.Sprintf("quarkchain(shard: %d, shards: %v)", c.ChainID, c.ChainIDs)
+	return fmt.Sprintf("quarkchain(chains: %v)", c.ChainIDs)
 }
 
 // IsXShardDestination reports whether this shard can send a cross-shard
 // message to the given shard.
-func (c *QuarkChainConfig) IsXShardDestination(chainID uint32) bool {
-	return c != nil && chainID != c.ChainID && slices.Contains(c.ChainIDs, chainID)
+func (c *ChainConfig) IsXShardDestination(chainID *big.Int) bool {
+	return c != nil && c.QuarkChain != nil && chainID != nil && chainID.Sign() > 0 &&
+		!configBlockEqual(chainID, c.ChainID) &&
+		slices.ContainsFunc(c.QuarkChain.ChainIDs, func(id *big.Int) bool { return configBlockEqual(id, chainID) })
+}
+
+// IsRootCoinbaseChain reports whether this chain receives root rewards and hosts root staking.
+// These are assigned to the first chain in QuarkChain.ChainIDs.
+func (c *ChainConfig) IsRootCoinbaseChain() bool {
+	return c != nil && c.QuarkChain != nil && c.ChainID != nil && len(c.QuarkChain.ChainIDs) > 0 &&
+		configBlockEqual(c.ChainID, c.QuarkChain.ChainIDs[0])
+}
+
+// CheckQuarkChain validates the shard identity, network membership and consensus settings.
+// Shard IDs use the same positive uint256 values as transaction signatures and the EVM.
+func (c *ChainConfig) CheckQuarkChain() error {
+	if c.QuarkChain == nil {
+		return nil
+	}
+	validID := func(id *big.Int) bool { return id != nil && id.Sign() > 0 && id.BitLen() <= 256 }
+	if !validID(c.ChainID) {
+		return fmt.Errorf("invalid QuarkChain chain ID: %v", c.ChainID)
+	}
+	q := c.QuarkChain
+	if len(q.ChainIDs) == 0 {
+		return fmt.Errorf("chain IDs must not be empty")
+	}
+	seen := make(map[string]bool, len(q.ChainIDs))
+	for _, id := range q.ChainIDs {
+		if !validID(id) {
+			return fmt.Errorf("invalid member chain ID: %v", id)
+		}
+		if seen[id.String()] {
+			return fmt.Errorf("duplicate chain ID: %v", id)
+		}
+		seen[id.String()] = true
+	}
+	if !seen[c.ChainID.String()] {
+		return fmt.Errorf("chain IDs must include local chain %v", c.ChainID)
+	}
+	return q.PoSW.Check()
 }

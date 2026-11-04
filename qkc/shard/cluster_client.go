@@ -18,6 +18,7 @@ package shard
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -34,7 +35,7 @@ type ClusterClient interface {
 	// (returned as *wire.RemoteError), or no connection for chainID is returned
 	// as an error. If only some hosts acknowledge the request, the caller must
 	// not report the block header to Master and must retry delivery to chainID.
-	BroadcastXShardTxList(ctx context.Context, chainID uint32, minorBlockHash common.Hash, depositTxList []*types.DepositTx) error
+	BroadcastXShardTxList(ctx context.Context, chainID *big.Int, minorBlockHash common.Hash, depositTxList []*types.DepositTx) error
 
 	// SendMinorBlockHeaderToMaster reports an accepted shard block to Master.
 	// It returns nil after a completed RPC whose remote ErrorCode is zero. A

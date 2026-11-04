@@ -53,23 +53,23 @@ import (
 //
 //	offset  size  field
 //	0       4     version
-//	4       4     chainId
-//	8       32    prevRootBlock
-//	40      24    cursor (rootBlockHeight, minorBlockIndex, xShardDepositIndex)
-//	64      8     xShardGasUsed
-//	72      8     xShardGasLimit
-//	80      8     nonce       <- start of the PoW seal
-//	88      32    mixHash
+//	4       32    chainId
+//	36      32    prevRootBlock
+//	68      24    cursor (rootBlockHeight, minorBlockIndex, xShardDepositIndex)
+//	92      8     xShardGasUsed
+//	100     8     xShardGasLimit
+//	108     8     nonce       <- start of the PoW seal
+//	116     32    mixHash
 //
 // Integers are big-endian.
-const QKCExtraSize = 120
+const QKCExtraSize = 148
 
 // Offsets of the PoW seal inside the extra data: the nonce followed by the mix
 // hash, together the tail region that Header.QKCSealHash zeroes. The seal is
 // covered by the block hash but not by the seal hash.
 const (
-	qkcExtraNonceOffset   = 80 // nonce, 8 bytes
-	qkcExtraMixHashOffset = 88 // mix hash, 32 bytes
+	qkcExtraNonceOffset   = 108 // nonce, 8 bytes
+	qkcExtraMixHashOffset = 116 // mix hash, 32 bytes
 )
 
 // XShardCursor is a position in the stream of cross-shard messages confirmed by
@@ -89,7 +89,7 @@ type XShardCursor struct {
 // Header.MixDigest carries the QuarkChain difficulty rather than a mix hash.
 type QKCExtra struct {
 	Version        uint32
-	ChainID        uint32
+	ChainID        *big.Int
 	PrevRootBlock  common.Hash // latest root block seen; EmptyHash for shard genesis
 	Cursor         XShardCursor
 	XShardGasUsed  uint64      // gas used by the cross-shard messages applied in the block
@@ -106,27 +106,34 @@ func DecodeQKCExtra(extra []byte) (*QKCExtra, error) {
 	}
 	e := &QKCExtra{
 		Version: binary.BigEndian.Uint32(extra[0:4]),
-		ChainID: binary.BigEndian.Uint32(extra[4:8]),
+		ChainID: new(big.Int).SetBytes(extra[4:36]),
 		Cursor: XShardCursor{
-			RootBlockHeight:    binary.BigEndian.Uint64(extra[40:48]),
-			MinorBlockIndex:    binary.BigEndian.Uint64(extra[48:56]),
-			XShardDepositIndex: binary.BigEndian.Uint64(extra[56:64]),
+			RootBlockHeight:    binary.BigEndian.Uint64(extra[68:76]),
+			MinorBlockIndex:    binary.BigEndian.Uint64(extra[76:84]),
+			XShardDepositIndex: binary.BigEndian.Uint64(extra[84:92]),
 		},
-		XShardGasUsed:  binary.BigEndian.Uint64(extra[64:72]),
-		XShardGasLimit: binary.BigEndian.Uint64(extra[72:80]),
+		XShardGasUsed:  binary.BigEndian.Uint64(extra[92:100]),
+		XShardGasLimit: binary.BigEndian.Uint64(extra[100:108]),
 	}
-	copy(e.PrevRootBlock[:], extra[8:40])
+	copy(e.PrevRootBlock[:], extra[36:68])
 	copy(e.Nonce[:], extra[qkcExtraNonceOffset:qkcExtraMixHashOffset])
 	copy(e.MixHash[:], extra[qkcExtraMixHashOffset:QKCExtraSize])
 	return e, nil
 }
 
 // Encode packs the QuarkChain fields into the extra data of a shard block
-// header.
+// header. It panics if ChainID is negative or does not fit in 256 bits.
 func (e *QKCExtra) Encode() []byte {
 	extra := make([]byte, 0, QKCExtraSize)
 	extra = binary.BigEndian.AppendUint32(extra, e.Version)
-	extra = binary.BigEndian.AppendUint32(extra, e.ChainID)
+	var chainID [32]byte
+	if e.ChainID != nil {
+		if e.ChainID.Sign() < 0 || e.ChainID.BitLen() > 256 {
+			panic("invalid QKC chain ID")
+		}
+		e.ChainID.FillBytes(chainID[:])
+	}
+	extra = append(extra, chainID[:]...)
 	extra = append(extra, e.PrevRootBlock[:]...)
 	extra = binary.BigEndian.AppendUint64(extra, e.Cursor.RootBlockHeight)
 	extra = binary.BigEndian.AppendUint64(extra, e.Cursor.MinorBlockIndex)
@@ -153,6 +160,9 @@ func (h *Header) SanityCheckQKC() error {
 	}
 	if extra.Version != 0 {
 		return fmt.Errorf("unsupported qkc version: %d", extra.Version)
+	}
+	if extra.ChainID.Sign() == 0 {
+		return errors.New("shard chain ID must be positive")
 	}
 	// Preserve geth's post-Merge execution semantics. The base PoW difficulty
 	// is in MixDigest; QKCExtra carries the actual nonce and mix hash.

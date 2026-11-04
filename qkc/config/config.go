@@ -53,7 +53,7 @@ type NetworkConfig struct {
 type RootConfig struct {
 	ConsensusType   params.ConsensusType
 	PoSW            *params.PoSWConfig
-	CoinbaseChainID uint32 // Intended root reward and staking chain; runtime integration follows separately.
+	CoinbaseChainID uint32 // Chain receiving root rewards and hosting the root staking contract.
 }
 
 const (
@@ -378,8 +378,8 @@ func (c *NetworkConfig) UnmarshalTOML(decode func(interface{}) error) error {
 	return nil
 }
 
-// LoadNetwork loads and validates a network definition. Each shard's routing
-// identity and topology are derived from the EVM chain IDs, sorted numerically.
+// LoadNetwork loads and validates a network definition. Each shard's topology
+// starts with the root coinbase chain, followed by the other IDs in numeric order.
 // Root and shard PoSW configurations are required, including when staking is disabled.
 func LoadNetwork(file string) (*NetworkConfig, error) {
 	var cfg NetworkConfig
@@ -398,12 +398,18 @@ func LoadNetwork(file string) (*NetworkConfig, error) {
 		ids[i] = id
 	}
 	slices.Sort(ids)
+	if i := slices.Index(ids, cfg.Root.CoinbaseChainID); i > 0 {
+		copy(ids[1:i+1], ids[:i])
+		ids[0] = cfg.Root.CoinbaseChainID
+	}
 	for _, shard := range cfg.Shards {
 		if shard.QuarkChain == nil {
 			continue
 		}
-		shard.QuarkChain.ChainID = uint32(shard.ChainID.Uint64())
-		shard.QuarkChain.ChainIDs = slices.Clone(ids)
+		shard.QuarkChain.ChainIDs = make([]*big.Int, len(ids))
+		for i, id := range ids {
+			shard.QuarkChain.ChainIDs[i] = new(big.Int).SetUint64(uint64(id))
+		}
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("%s: %w", file, err)
@@ -411,16 +417,12 @@ func LoadNetwork(file string) (*NetworkConfig, error) {
 	return &cfg, nil
 }
 
-// routingChainID checks the EVM identifier before narrowing it to the wire format.
+// routingChainID checks the EVM identifier before narrowing it for deployment selection.
 func routingChainID(chain *params.ChainConfig) (uint32, error) {
 	if chain.ChainID == nil || chain.ChainID.Sign() <= 0 || chain.ChainID.BitLen() > 32 {
-		return 0, errors.New("ChainID must be a positive uint32 for EVM execution and routing")
+		return 0, errors.New("ChainID must be a positive uint32 for deployment selection")
 	}
-	id := uint32(chain.ChainID.Uint64())
-	if id == math.MaxUint32 {
-		return 0, fmt.Errorf("chain ID %d is reserved for the root chain", id)
-	}
-	return id, nil
+	return uint32(chain.ChainID.Uint64()), nil
 }
 
 func load(file string, cfg interface{}) error {
@@ -465,9 +467,6 @@ func (c *NetworkConfig) Validate() error {
 			return fmt.Errorf("duplicate ChainID %d", id)
 		}
 		ids[id] = true
-		if shard.QuarkChain.ChainID != id {
-			return fmt.Errorf("chain %d: QuarkChain.ChainID must match the EVM ChainID", id)
-		}
 		if err := shard.CheckConfigForkOrder(); err != nil {
 			return fmt.Errorf("chain %d: %w", id, err)
 		}
@@ -479,13 +478,19 @@ func (c *NetworkConfig) Validate() error {
 		qkc := shard.QuarkChain
 		seen := make(map[uint32]bool, len(qkc.ChainIDs))
 		for _, id := range qkc.ChainIDs {
-			if !ids[id] || seen[id] {
-				return fmt.Errorf("chain %d: routing chain IDs contain unknown or duplicate chain %d", qkc.ChainID, id)
+			if id.BitLen() > 32 || !ids[uint32(id.Uint64())] || seen[uint32(id.Uint64())] {
+				return fmt.Errorf("chain %v: routing chain IDs contain unknown or duplicate chain %v", shard.ChainID, id)
 			}
-			seen[id] = true
+			seen[uint32(id.Uint64())] = true
 		}
 		if len(seen) != len(ids) {
-			return fmt.Errorf("chain %d: routing chain IDs must contain every network chain", qkc.ChainID)
+			return fmt.Errorf("chain %v: routing chain IDs must contain every network chain", shard.ChainID)
+		}
+		if qkc.ChainIDs[0].Uint64() != uint64(c.Root.CoinbaseChainID) {
+			return fmt.Errorf("chain %v: first routing chain ID must match Root.CoinbaseChainID", shard.ChainID)
+		}
+		if !slices.EqualFunc(qkc.ChainIDs, c.Shards[0].QuarkChain.ChainIDs, func(a, b *big.Int) bool { return a.Cmp(b) == 0 }) {
+			return fmt.Errorf("chain %v: routing chain IDs must have the same order on every shard", shard.ChainID)
 		}
 	}
 	return nil

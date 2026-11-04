@@ -804,7 +804,7 @@ func (c *ChainConfig) CheckCompatible(newcfg *ChainConfig, height uint64, time u
 // to guarantee that forks can be implemented in a different order than on official networks
 func (c *ChainConfig) CheckConfigForkOrder() error {
 	if c.QuarkChain != nil {
-		if err := c.QuarkChain.PoSW.Check(); err != nil {
+		if err := c.CheckQuarkChain(); err != nil {
 			return err
 		}
 	}

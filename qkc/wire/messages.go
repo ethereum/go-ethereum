@@ -59,9 +59,9 @@ type Data []byte
 // on these links, but the receiver ignored it.
 type PingRequest struct {
 	// ChainID identifies the dialing chain on chain↔chain links, whose frames
-	// have no metadata. Master→chain handlers ignore it; zero is a valid chain
-	// ID and does not mean root.
-	ChainID    uint32
+	// have no metadata. It encodes ChainConfig.ChainID as a little-endian
+	// uint256. Master→chain handlers ignore it.
+	ChainID    [UInt256Length]byte
 	HasRootTip bool
 	RootTip    Data `ssz-max:"4294967295"` // SSZ-encoded RootBlock when HasRootTip is true.
 }
@@ -69,14 +69,14 @@ type PingRequest struct {
 // PongResponse (ClusterOp.PONG, 0x82) is the chain's response to PING and
 // echoes the request RPCID in the frame header.
 type PongResponse struct {
-	ChainID uint32
+	ChainID [UInt256Length]byte
 }
 
 // ChainInfo describes a remote chain for ConnectToChainsRequest.
 type ChainInfo struct {
 	Host    []byte `ssz-max:"4294967295"`
 	Port    uint16
-	ChainID uint32
+	ChainID [UInt256Length]byte
 }
 
 // ConnectToChainsRequest (opcode 0x83) asks a chain to connect to the listed
@@ -118,9 +118,9 @@ type AddMinorBlockHeaderResponse struct {
 // shard, including empty lists for the inbox cursor. Each item is RLP(DepositTx),
 // without the 0x7e transaction prefix, in source log order.
 type AddXshardTxListRequest struct {
-	ChainID        uint32      // Destination QuarkChainConfig.ChainID.
-	MinorBlockHash common.Hash // Source block hash.
-	DepositTxList  []Data      `ssz-max:"4294967295,4294967295" ssz-size:"?,?"`
+	ChainID        [UInt256Length]byte // Destination ChainConfig.ChainID, little-endian.
+	MinorBlockHash common.Hash         // Source block hash.
+	DepositTxList  []Data              `ssz-max:"4294967295,4294967295" ssz-size:"?,?"`
 }
 
 type AddXshardTxListResponse struct {

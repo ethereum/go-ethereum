@@ -17,7 +17,7 @@ LondonBlock = "0"
 
 [Root]
 ConsensusType = "POW_ETHASH"
-# Intended root reward and staking chain; runtime integration follows separately.
+# Chain receiving root rewards and hosting the root staking contract.
 CoinbaseChainID = 100001
 
 [Root.PoSW]

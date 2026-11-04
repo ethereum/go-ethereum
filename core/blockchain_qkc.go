@@ -43,12 +43,12 @@ func (bc *BlockChain) GetShardLockedStakes(header *types.Header, staker common.A
 	return stakes, err
 }
 
-// GetRootChainStakes reads root-chain stakes and the mining signer from shard 0.
+// GetRootChainStakes reads root-chain stakes and the mining signer from the root coinbase chain.
 // The caller selects the shard block confirmed by the candidate root's parent;
 // header is that shard block's header, not a root-block header.
 func (bc *BlockChain) GetRootChainStakes(header *types.Header, staker common.Address) (*uint256.Int, common.Address, error) {
-	if bc.chainConfig.QuarkChain == nil || bc.chainConfig.QuarkChain.ChainID != 0 {
-		return nil, common.Address{}, errors.New("root-chain stakes are only available on shard 0")
+	if !bc.chainConfig.IsRootCoinbaseChain() {
+		return nil, common.Address{}, errors.New("root-chain stakes are only available on the root coinbase chain")
 	}
 	return bc.getLockedStakes(header, params.RootStakingContractAddress, staker)
 }

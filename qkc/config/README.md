@@ -59,22 +59,17 @@ These IDs serve different purposes:
 | Field | Purpose | Requirement |
 | --- | --- | --- |
 | `NetworkID` | Identifies the P2P network. | Positive `uint32`. |
-| `Shards.ChainID` | Identifies a shard for both EVM replay protection and internal routing. | Unique positive `uint32`, at most `4294967294`. `4294967295` is reserved for root-chain traffic. |
-| `Root.CoinbaseChainID` | Records the intended chain for root rewards and the root staking contract. | Required; must match one of the configured `Shards.ChainID` values. |
+| `Shards.ChainID` | Identifies a shard for both EVM replay protection and internal routing. | Unique positive `uint32` for deployment selection; zero is reserved for root-chain traffic. |
+| `Root.CoinbaseChainID` | Selects the chain for root rewards and the root staking contract. | Required; must match one of the configured `Shards.ChainID` values. |
 
 A network ID may have the same numeric value as a chain ID. The example uses
 chain IDs `100001` and `100002`, with `Root.CoinbaseChainID = 100001`.
 
 The shard count is derived from the `[[Shards]]` entries. Their order does not
-matter, and chain IDs may have gaps. The loader fills the existing internal
-`QuarkChain.ChainID` field with the EVM `ChainID`, and `QuarkChain.ChainIDs` with
-all configured chain IDs in ascending order, including itself. Both lists in the
-example are `[100001, 100002]`. These internal fields cannot be supplied in TOML.
-There is no separate routing ID.
-
-`Root.CoinbaseChainID` is parsed and validated here. Runtime root reward delivery
-and staking still use the existing shard-zero rules; applying this setting to
-execution is follow-up work alongside genesis generation and service startup.
+matter, and chain IDs may have gaps. The loader fills `QuarkChain.ChainIDs` with
+the root coinbase chain first, followed by all remaining chain IDs in ascending
+order. Both lists in the example are `[100001, 100002]`. This list cannot be
+supplied in TOML. There is no separate routing ID.
 
 ### PoSW and staking
 

@@ -15,15 +15,15 @@
 // along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
 // add-posw-staking adds missing PoSW staking contract accounts to a QuarkChain
-// genesis configuration's alloc. Shard 0 gets both root and shard staking
+// genesis configuration's alloc. The root coinbase chain gets both root and shard staking
 // contracts; other shards get only shard staking. Existing accounts are preserved
 // and staking contract code is validated before the output file is written.
 //
 // Usage: add-posw-staking <input-genesis.json> <output-genesis.json>
 // The first argument is this project's QuarkChain genesis JSON file: the geth
-// genesis format extended with config.quarkchain. Its chainId selects the staking
-// contracts to add; an omitted chainId defaults to 0. A plain geth genesis file
-// without config.quarkchain is rejected.
+// genesis format extended with config.quarkchain. config.chainId identifies the chain,
+// and config.quarkchain.chainIds[0] selects the root staking chain.
+// A plain geth genesis file without config.quarkchain is rejected.
 // The second argument is the output path for the complete updated genesis JSON;
 // an existing output file is overwritten after successful generation.
 //
@@ -80,7 +80,7 @@ func generate(input io.Reader, output io.Writer) error {
 	if genesis.Alloc == nil {
 		genesis.Alloc = make(types.GenesisAlloc)
 	}
-	for address, account := range core.PoSWStakingContractAllocs(genesis.Config.QuarkChain.ChainID) {
+	for address, account := range core.PoSWStakingContractAllocs(genesis.Config) {
 		if _, exists := genesis.Alloc[address]; !exists {
 			genesis.Alloc[address] = account
 		}

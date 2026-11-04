@@ -36,7 +36,7 @@ import (
 
 const xShardOutboxABIJSON = `[
 	{"type": "function", "name": "send", "stateMutability": "payable", "outputs": [], "inputs": [
-		{"name": "dstShard", "type": "uint32"},
+		{"name": "dstShard", "type": "uint256"},
 		{"name": "to", "type": "address"},
 		{"name": "value", "type": "uint256"},
 		{"name": "gasLimit", "type": "uint64"},
@@ -44,7 +44,7 @@ const xShardOutboxABIJSON = `[
 		{"name": "data", "type": "bytes"}
 	]},
 	{"type": "event", "name": "SentMessage", "inputs": [
-		{"name": "dstShard", "type": "uint32", "indexed": true},
+		{"name": "dstShard", "type": "uint256", "indexed": true},
 		{"name": "from", "type": "address", "indexed": true},
 		{"name": "to", "type": "address", "indexed": true},
 		{"name": "value", "type": "uint256"},
@@ -67,16 +67,15 @@ const (
 	xShardGasPrice = 10
 	xShardValue    = 1000
 	xShardGasLimit = params.XShardSendGas // the gas limit of a move
-	xShardDst      = 2
+	xShardDst      = 10003
 )
 
 func xShardChainConfig() *params.ChainConfig {
-	cfg := *params.MergedTestChainConfig
-	cfg.QuarkChain = &params.QuarkChainConfig{ChainID: 1, ChainIDs: []uint32{0, 1, 2}}
+	cfg := *params.NewTestQuarkChainConfig(10002, 10001, 10002, 10003)
 	return &cfg
 }
 
-// newXShardEVM returns an EVM of shard 1 of a network of shards 0, 1 and 2,
+// newXShardEVM returns an EVM of chain 10002 of a network of chains 10001, 10002 and 10003,
 // running a transaction of xShardSender at xShardGasPrice.
 func newXShardEVM() (*EVM, *state.StateDB) {
 	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
@@ -97,9 +96,9 @@ func newXShardEVM() (*EVM, *state.StateDB) {
 	return evm, statedb
 }
 
-func packXShardSend(t *testing.T, dstShard uint32, to common.Address, value *big.Int, gasLimit uint64, isMove bool, data []byte) []byte {
+func packXShardSend(t *testing.T, dstShard int64, to common.Address, value *big.Int, gasLimit uint64, isMove bool, data []byte) []byte {
 	t.Helper()
-	input, err := xShardOutboxABI.Pack("send", dstShard, to, value, gasLimit, isMove, data)
+	input, err := xShardOutboxABI.Pack("send", big.NewInt(dstShard), to, value, gasLimit, isMove, data)
 	if err != nil {
 		t.Fatalf("failed to pack input: %v", err)
 	}
@@ -149,6 +148,28 @@ func TestXShardOutboxSend(t *testing.T) {
 	}
 }
 
+func TestXShardOutboxLargeChainID(t *testing.T) {
+	evm, statedb := newXShardEVM()
+	id := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(xShardDst))
+	evm.chainConfig.QuarkChain.ChainIDs = append(evm.chainConfig.QuarkChain.ChainIDs, new(big.Int).Set(id))
+	input, err := xShardOutboxABI.Pack("send", id, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, true, []byte{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cost := uint256.NewInt(xShardValue + xShardGasLimit*xShardGasPrice)
+	if _, _, err := evm.Call(xShardSender, params.XShardOutboxAddress, input, NewGasBudget(1_000_000, 0), cost); err != nil {
+		t.Fatal(err)
+	}
+	logs := statedb.Logs()
+	if len(logs) != 1 || logs[0].Topics[1] != common.BigToHash(id) {
+		t.Fatalf("destination chain ID lost in event: %v", logs)
+	}
+	evm.chainConfig.ChainID = new(big.Int).Set(id)
+	if _, _, err := evm.Call(xShardSender, params.XShardOutboxAddress, input, NewGasBudget(1_000_000, 0), cost); !errors.Is(err, errXShardInvalidShard) {
+		t.Fatalf("accepted a message to the local chain: %v", err)
+	}
+}
+
 // TestXShardMessageEncoding checks that the outbox decodes the input of send
 // and encodes the SentMessage event as the standard ABI encoder and decoder,
 // including messages it does not accept yet.
@@ -169,7 +190,7 @@ func TestXShardMessageEncoding(t *testing.T) {
 				t.Fatalf("failed to decode input: %v", err)
 			}
 			want := &xShardMessage{
-				dstShard: xShardDst,
+				dstShard: big.NewInt(xShardDst),
 				to:       xShardRecipient,
 				value:    uint256.NewInt(xShardValue),
 				gasLimit: tt.gasLimit,
@@ -214,7 +235,7 @@ func checkSentMessageLog(t *testing.T, log *types.Log, gasLimit uint64, isMove b
 		t.Fatalf("failed to unpack data: %v", err)
 	}
 	want := map[string]any{
-		"dstShard": uint32(xShardDst),
+		"dstShard": big.NewInt(xShardDst),
 		"from":     xShardSender,
 		"to":       xShardRecipient,
 		"value":    big.NewInt(xShardValue),
@@ -274,7 +295,7 @@ func TestXShardOutboxInvalid(t *testing.T) {
 		{name: "empty input", input: func(*testing.T) []byte { return nil }, want: errXShardInvalidInput},
 		{name: "unknown selector", input: func(t *testing.T) []byte { in := withData(t); in[0] ^= 1; return in }, want: errXShardInvalidInput},
 		{name: "short input", input: func(t *testing.T) []byte { return withData(t)[:4+6*32] }, want: errXShardInvalidInput},
-		{name: "dirty dstShard", input: edit(27, 1), want: errXShardInvalidInput},
+		{name: "unknown large chain ID", input: edit(27, 1), want: errXShardInvalidShard},
 		{name: "dirty to", input: edit(32+11, 1), want: errXShardInvalidInput},
 		{name: "dirty gasLimit", input: edit(3*32+23, 1), want: errXShardInvalidInput},
 		{name: "dirty isMove", input: edit(4*32, 1), want: errXShardInvalidInput},
@@ -289,7 +310,7 @@ func TestXShardOutboxInvalid(t *testing.T) {
 		{name: "trailing bytes", input: func(t *testing.T) []byte { return append(withData(t), make([]byte, 32)...) }, want: errXShardInvalidInput},
 		{name: "missing padding", input: func(t *testing.T) []byte { in := withData(t); return in[:len(in)-1] }, want: errXShardInvalidInput},
 		{name: "own shard", input: func(t *testing.T) []byte {
-			return packXShardSend(t, 1, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, true, nil)
+			return packXShardSend(t, 10002, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, true, nil)
 		}, want: errXShardInvalidShard},
 		{name: "unknown shard", input: func(t *testing.T) []byte {
 			return packXShardSend(t, 3, xShardRecipient, big.NewInt(xShardValue), xShardGasLimit, true, nil)

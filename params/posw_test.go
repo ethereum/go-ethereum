@@ -88,9 +88,9 @@ func TestPoSWConfigEqualFields(t *testing.T) {
 }
 
 func TestNewTestQuarkChainConfigIsolation(t *testing.T) {
-	chainIDs := []uint32{0, 1}
-	first := NewTestQuarkChainConfig(1, chainIDs...)
-	second := NewTestQuarkChainConfig(1, chainIDs...)
+	chainIDs := []int64{10001, 10002}
+	first := NewTestQuarkChainConfig(10002, chainIDs...).QuarkChain
+	second := NewTestQuarkChainConfig(10002, chainIDs...).QuarkChain
 	if err := second.PoSW.Check(); err != nil {
 		t.Fatal(err)
 	}
@@ -98,11 +98,11 @@ func TestNewTestQuarkChainConfigIsolation(t *testing.T) {
 	first.PoSW.CoinbaseAmount.SetInt64(9)
 	first.PoSW.DecayFactor.SetInt64(0)
 	first.PoSW.RewardTaxRate.SetInt64(0)
-	first.ChainIDs[0] = 9
+	first.ChainIDs[0].SetInt64(9)
 	chainIDs[1] = 9
 	if second.PoSW.MinimumDifficulty.Int64() != 1 || second.PoSW.CoinbaseAmount.Sign() != 0 ||
 		second.PoSW.DecayFactor.Cmp(big.NewRat(22, 25)) != 0 || second.PoSW.RewardTaxRate.Cmp(big.NewRat(1, 2)) != 0 ||
-		!reflect.DeepEqual(second.ChainIDs, []uint32{0, 1}) || first.ChainIDs[1] != 1 {
+		!reflect.DeepEqual(second.ChainIDs, []*big.Int{big.NewInt(10001), big.NewInt(10002)}) || first.ChainIDs[1].Int64() != 10002 {
 		t.Fatal("test configurations share mutable defaults or the caller's chain IDs")
 	}
 }

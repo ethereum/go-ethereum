@@ -61,7 +61,7 @@ func (miner *Miner) BuildQKCBlock(ctx context.Context, args QKCBlockArgs) (*type
 		targetGasLimit: args.TargetGasLimit,
 		noTxs:          args.NoTxs,
 		qkc: &types.QKCExtra{
-			ChainID:       miner.chainConfig.QuarkChain.ChainID,
+			ChainID:       miner.chainConfig.ChainID,
 			PrevRootBlock: args.PrevRootBlock,
 		},
 	}, false)

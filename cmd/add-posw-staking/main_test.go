@@ -29,14 +29,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-func stakingGenesisConfig(chainID uint32) *params.ChainConfig {
+func stakingGenesisConfig(chainID int64) *params.ChainConfig {
 	config := *params.AllEthashProtocolChanges
-	config.QuarkChain = params.NewTestQuarkChainConfig(chainID)
+	config.ChainID = big.NewInt(chainID)
+	config.QuarkChain = params.NewTestQuarkChainConfig(chainID).QuarkChain
 	return &config
 }
 
 func TestGenerate(t *testing.T) {
-	for _, chainID := range []uint32{0, 1} {
+	for _, chainID := range []int64{10001, 10002} {
 		config := stakingGenesisConfig(chainID)
 		funded := common.HexToAddress("0xabcd")
 		// Generation preserves configured accounts and fills missing staking accounts.
@@ -66,14 +67,14 @@ func TestGenerate(t *testing.T) {
 			t.Fatal(err)
 		}
 		account := configured.Alloc[params.ShardStakingContractAddress]
-		if configured.Config.QuarkChain.ChainID != chainID || !reflect.DeepEqual(account, base.Alloc[params.ShardStakingContractAddress]) {
+		if configured.Config.ChainID.Int64() != chainID || !reflect.DeepEqual(account, base.Alloc[params.ShardStakingContractAddress]) {
 			t.Fatal("configured staking account changed")
 		}
 		if configured.Alloc[funded].Balance.Uint64() != 42 || !bytes.Equal(configured.Alloc[funded].Code, []byte{0}) {
 			t.Fatal("ordinary allocation lost")
 		}
 		wantLen := 2
-		if chainID == 0 {
+		if chainID == 10001 {
 			wantLen++
 		}
 		if len(configured.Alloc) != wantLen {
@@ -89,9 +90,45 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
+func TestGenerateRootStakingOnFirstChain(t *testing.T) {
+	id := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(10002))
+	for _, test := range []struct {
+		name     string
+		chainIDs []*big.Int
+		wantRoot bool
+	}{
+		{"first chain", []*big.Int{new(big.Int).Set(id), big.NewInt(10001)}, true},
+		{"other chain", []*big.Int{big.NewInt(10001), new(big.Int).Set(id)}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			config := stakingGenesisConfig(10002)
+			config.ChainID = new(big.Int).Set(id)
+			config.QuarkChain.ChainIDs = test.chainIDs
+			input, err := json.Marshal(&core.Genesis{Config: config, GasLimit: 12_000_000, Difficulty: big.NewInt(1), Alloc: types.GenesisAlloc{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			if err := generate(bytes.NewReader(input), &output); err != nil {
+				t.Fatal(err)
+			}
+			var genesis core.Genesis
+			if err := json.Unmarshal(output.Bytes(), &genesis); err != nil {
+				t.Fatal(err)
+			}
+			if genesis.Config.ChainID.Cmp(id) != 0 || !genesis.Config.QuarkChain.Equal(config.QuarkChain) {
+				t.Fatal("large chain ID or configured chain order lost")
+			}
+			if gotRoot := len(genesis.Alloc[params.RootStakingContractAddress].Code) > 0; gotRoot != test.wantRoot {
+				t.Fatalf("root staking deployment: have %v, want %v", gotRoot, test.wantRoot)
+			}
+		})
+	}
+}
+
 func TestGenerateRejectsInvalidGenesis(t *testing.T) {
-	config := stakingGenesisConfig(1)
-	wrongShard, err := json.Marshal(&core.Genesis{Config: config, GasLimit: 12_000_000, Difficulty: big.NewInt(1), Alloc: core.PoSWStakingContractAllocs(0)})
+	config := stakingGenesisConfig(10002)
+	wrongShard, err := json.Marshal(&core.Genesis{Config: config, GasLimit: 12_000_000, Difficulty: big.NewInt(1), Alloc: core.PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(10001))})
 	if err != nil {
 		t.Fatal(err)
 	}

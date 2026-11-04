@@ -196,7 +196,7 @@ func TestQKCProcessFlags(t *testing.T) {
 		{[]string{"--qkc.role", "slave", "--qkc.chain", "1"}, "not in the deployment"},
 		{[]string{"--qkc.role", "slave", "--qkc.shard", "0"}, "flag provided but not defined: -qkc.shard"},
 		{[]string{"--qkc.role", "slave", "--qkc.chain", "100003"}, "not in the deployment"},
-		{[]string{"--qkc.role", "slave", "--qkc.chain", "4294967295"}, "reserved root ID"},
+		{[]string{"--qkc.role", "slave", "--qkc.chain", "4294967295"}, "not in the deployment"},
 		{[]string{"--qkc.role", "slave", "--qkc.chain", "4294967296"}, "positive uint32 chain ID"},
 		{[]string{"--qkc.role", "master", "--syncmode", "full"}, "requires slave role"},
 		{[]string{"--qkc.role", "master", "--rpc.gascap", "0"}, "requires slave role"},

@@ -114,7 +114,7 @@ func TestChainHeaderMessagesSSZ(t *testing.T) {
 		GasLimit:        1000000,
 		GasUsed:         21000,
 		Time:            12345,
-		Extra:           (&types.QKCExtra{ChainID: 1}).Encode(),
+		Extra:           (&types.QKCExtra{ChainID: big.NewInt(10002)}).Encode(),
 		MixDigest:       common.HexToHash("0x0304"),
 		BaseFee:         big.NewInt(100),
 		WithdrawalsHash: &withdrawals,
@@ -183,7 +183,7 @@ func TestCrossChainDepositsSSZ(t *testing.T) {
 		t.Fatal(err)
 	}
 	msg := &AddXshardTxListRequest{
-		ChainID:        2,
+		ChainID:        [UInt256Length]byte{2},
 		MinorBlockHash: deposit.SourceBlockHash,
 		DepositTxList:  []Data{Data(depositData)},
 	}
@@ -215,7 +215,7 @@ func TestCrossChainDepositsSSZ(t *testing.T) {
 		t.Fatalf("deposit hash tree root: %v", err)
 	}
 
-	empty := &AddXshardTxListRequest{ChainID: 2, MinorBlockHash: msg.MinorBlockHash}
+	empty := &AddXshardTxListRequest{ChainID: [UInt256Length]byte{2}, MinorBlockHash: msg.MinorBlockHash}
 	var decodedEmpty AddXshardTxListRequest
 	encoded, err = empty.MarshalSSZ()
 	if err != nil {
@@ -289,7 +289,7 @@ func TestRootBlockPayloadsSSZ(t *testing.T) {
 
 func TestPingPongSSZRoundTrip(t *testing.T) {
 	ping := &PingRequest{
-		ChainID:    0x10002,
+		ChainID:    [UInt256Length]byte{2, 0, 1},
 		HasRootTip: true,
 		RootTip:    []byte{0xaa, 0xbb},
 	}
@@ -304,7 +304,7 @@ func TestPingPongSSZRoundTrip(t *testing.T) {
 		t.Fatalf("deep mismatch: got %+v, want %+v", &got, ping)
 	}
 
-	pong := &PongResponse{ChainID: 2}
+	pong := &PongResponse{ChainID: [UInt256Length]byte{2}}
 	roundTripSSZ(t, pong)
 
 	// Boundary: all dynamic fields empty.
@@ -312,8 +312,25 @@ func TestPingPongSSZRoundTrip(t *testing.T) {
 	roundTripSSZ(t, &PongResponse{})
 }
 
+func TestSSZLargeChainIDs(t *testing.T) {
+	// Numeric uint256 is little-endian; this ID uses both the high and low bits.
+	id := [UInt256Length]byte{0: 0x31, 16: 0x80, 31: 0x40}
+	for _, msg := range []SSZMessage{
+		&PingRequest{ChainID: id, HasRootTip: true, RootTip: Data{1}},
+		&PongResponse{ChainID: id},
+		&ChainInfo{Host: []byte("localhost"), Port: 38391, ChainID: id},
+		&ConnectToChainsRequest{ChainInfoList: []ChainInfo{{ChainID: id}}},
+		&AddXshardTxListRequest{ChainID: id, DepositTxList: []Data{{1}}},
+	} {
+		roundTripSSZ(t, msg)
+	}
+	if got := mustMarshalSSZ(t, &PongResponse{ChainID: id}); !bytes.Equal(got, id[:]) {
+		t.Fatalf("chain ID encoding: have %x, want %x", got, id)
+	}
+}
+
 func TestChainToChainPingCarriesChainIDWithoutRootTip(t *testing.T) {
-	for _, chainID := range []uint32{0, 1} {
+	for _, chainID := range [][UInt256Length]byte{{1}, {2}} {
 		ping := &PingRequest{ChainID: chainID, HasRootTip: false}
 		encoded := mustMarshalSSZ(t, ping)
 
@@ -330,8 +347,8 @@ func TestChainToChainPingCarriesChainIDWithoutRootTip(t *testing.T) {
 func TestConnectToChainsSSZRoundTrip(t *testing.T) {
 	req := &ConnectToChainsRequest{
 		ChainInfoList: []ChainInfo{
-			{Host: []byte("10.0.0.1"), Port: 38391, ChainID: 1},
-			{Host: []byte("10.0.0.2"), Port: 38392, ChainID: 2},
+			{Host: []byte("10.0.0.1"), Port: 38391, ChainID: [UInt256Length]byte{1}},
+			{Host: []byte("10.0.0.2"), Port: 38392, ChainID: [UInt256Length]byte{2}},
 		},
 	}
 	roundTripSSZ(t, req)
@@ -364,8 +381,9 @@ func TestHelloCommandSSZRoundTrip(t *testing.T) {
 }
 
 func TestSSZRejectsInvalidOffset(t *testing.T) {
-	// PingRequest's RootTip offset cannot point inside its 9-byte fixed section.
-	bad := []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00}
+	// PingRequest's RootTip offset cannot point inside its 37-byte fixed section.
+	bad := make([]byte, 37)
+	bad[0], bad[33] = 1, 36
 	if err := new(PingRequest).UnmarshalSSZ(bad); err == nil {
 		t.Fatal("UnmarshalSSZ accepted an offset inside the fixed section")
 	}
@@ -377,7 +395,7 @@ func TestGeneratedCodecsRejectMalformedPayloads(t *testing.T) {
 		offsetAt int
 		new      func() SSZMessage
 	}{
-		{"PingRequest", 5, func() SSZMessage { return new(PingRequest) }},
+		{"PingRequest", 33, func() SSZMessage { return new(PingRequest) }},
 		{"PongResponse", -1, func() SSZMessage { return new(PongResponse) }},
 		{"ChainInfo", 0, func() SSZMessage { return new(ChainInfo) }},
 		{"ConnectToChainsRequest", 0, func() SSZMessage { return new(ConnectToChainsRequest) }},
@@ -387,7 +405,7 @@ func TestGeneratedCodecsRejectMalformedPayloads(t *testing.T) {
 		{"HelloCommand", 58, func() SSZMessage { return new(HelloCommand) }},
 		{"AddMinorBlockHeaderRequest", 0, func() SSZMessage { return new(AddMinorBlockHeaderRequest) }},
 		{"AddMinorBlockHeaderResponse", -1, func() SSZMessage { return new(AddMinorBlockHeaderResponse) }},
-		{"AddXshardTxListRequest", 36, func() SSZMessage { return new(AddXshardTxListRequest) }},
+		{"AddXshardTxListRequest", 64, func() SSZMessage { return new(AddXshardTxListRequest) }},
 		{"AddXshardTxListResponse", -1, func() SSZMessage { return new(AddXshardTxListResponse) }},
 		{"GetRootChainStakesRequest", -1, func() SSZMessage { return new(GetRootChainStakesRequest) }},
 		{"GetRootChainStakesResponse", -1, func() SSZMessage { return new(GetRootChainStakesResponse) }},
@@ -444,17 +462,18 @@ func TestResultListGoldenEncoding(t *testing.T) {
 // TestSSZGoldenEncoding pins the encoding of a PingRequest with a fixed-width
 // ChainID, HasRootTip=false, and an empty RootTip.
 //
-//	PingRequest{ChainID: 1, HasRootTip: false}
-//	  ChainID  = 1 -> 01 00 00 00
+//	PingRequest{ChainID: [UInt256Length]byte{1}, HasRootTip: false}
+//	  ChainID  = 1 -> 01 followed by 31 zero bytes
 //	  HasRootTip   -> 00
-//	  offset(RootTip) = 9 -> 09 00 00 00
+//	  offset(RootTip) = 37 -> 25 00 00 00
 func TestSSZGoldenEncoding(t *testing.T) {
-	ping := &PingRequest{ChainID: 1}
+	ping := &PingRequest{ChainID: [UInt256Length]byte{1}}
 	got, err := ping.MarshalSSZ()
 	if err != nil {
 		t.Fatalf("MarshalSSZ: %v", err)
 	}
-	want := []byte{0x01, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00}
+	want := make([]byte, 37)
+	want[0], want[33] = 1, 37
 	if !bytes.Equal(got, want) {
 		t.Fatalf("golden mismatch:\n  got  %x\n  want %x", got, want)
 	}
@@ -464,7 +483,8 @@ func TestSSZGoldenEncoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MarshalSSZ: %v", err)
 	}
-	wantEmpty := []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x09, 0x00, 0x00, 0x00}
+	wantEmpty := make([]byte, 37)
+	wantEmpty[33] = 37
 	if !bytes.Equal(empty, wantEmpty) {
 		t.Fatalf("empty golden mismatch:\n  got  %x\n  want %x", empty, wantEmpty)
 	}

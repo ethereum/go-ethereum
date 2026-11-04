@@ -39,7 +39,7 @@ func (p *PoSW) VerifySeal(chain consensus.ChainHeaderReader, header *types.Heade
 	}
 	// The calculator requires a staking reader only when staking is enabled.
 	reader, _ := chain.(consensus.StakingReader)
-	difficulty, err := GetAdjustedDifficulty(p.config.PoSW, reader, header)
+	difficulty, err := GetAdjustedDifficulty(p.config.QuarkChain.PoSW, reader, header)
 	if err != nil {
 		return err
 	}

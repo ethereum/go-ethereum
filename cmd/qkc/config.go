@@ -79,8 +79,8 @@ func loadQKCConfig(ctx *cli.Context) (*qkcconfig.NodeConfig, *qkcconfig.NetworkC
 	var chainID *uint32
 	if ctx.IsSet(qkcChainFlag.Name) {
 		id := ctx.Uint64(qkcChainFlag.Name)
-		if id == 0 || id >= math.MaxUint32 {
-			return nil, nil, fmt.Errorf("--qkc.chain must be a positive uint32 chain ID other than the reserved root ID")
+		if id == 0 || id > math.MaxUint32 {
+			return nil, nil, fmt.Errorf("--qkc.chain must be a positive uint32 chain ID")
 		}
 		value := uint32(id)
 		chainID = &value
