@@ -22,7 +22,7 @@
 // Usage: add-posw-staking <input-genesis.json> <output-genesis.json>
 // The first argument is this project's QuarkChain genesis JSON file: the geth
 // genesis format extended with config.quarkchain. config.chainId identifies the chain,
-// and config.quarkchain.rootCoinbaseChainId selects the root staking chain.
+// and config.quarkchain.chainIds[0] selects the root staking chain.
 // A plain geth genesis file without config.quarkchain is rejected.
 // The second argument is the output path for the complete updated genesis JSON;
 // an existing output file is overwritten after successful generation.

@@ -46,9 +46,9 @@ const (
 // QuarkChainConfig is the configuration of a QuarkChain shard chain. Its
 // presence in the chain config enables the QuarkChain specific features.
 type QuarkChainConfig struct {
-	ChainIDs []*big.Int `json:"chainIds"` // EVM chain IDs of all shards, this one included.
-	// RootCoinbaseChainID receives root rewards and hosts the root staking contract.
-	RootCoinbaseChainID *big.Int `json:"rootCoinbaseChainId"`
+	// ChainIDs lists the EVM chain IDs of all shards, this one included.
+	// The first chain receives root rewards and hosts the root staking contract.
+	ChainIDs []*big.Int `json:"chainIds"`
 
 	PoSW *PoSWConfig `json:"posw"` // Required consensus configuration for this shard.
 	// MaxBlocksPerRootBlock caps the number of blocks of this shard a root
@@ -62,15 +62,14 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 	if c == nil || other == nil {
 		return c == other
 	}
-	return configBlockEqual(c.RootCoinbaseChainID, other.RootCoinbaseChainID) &&
-		slices.EqualFunc(c.ChainIDs, other.ChainIDs, configBlockEqual) &&
+	return slices.EqualFunc(c.ChainIDs, other.ChainIDs, configBlockEqual) &&
 		c.PoSW.Equal(other.PoSW) &&
 		c.MaxBlocksPerRootBlock == other.MaxBlocksPerRootBlock
 }
 
 // String implements the stringer interface.
 func (c QuarkChainConfig) String() string {
-	return fmt.Sprintf("quarkchain(chains: %v, root coinbase chain: %v)", c.ChainIDs, c.RootCoinbaseChainID)
+	return fmt.Sprintf("quarkchain(chains: %v)", c.ChainIDs)
 }
 
 // IsXShardDestination reports whether this shard can send a cross-shard
@@ -82,9 +81,10 @@ func (c *ChainConfig) IsXShardDestination(chainID *big.Int) bool {
 }
 
 // IsRootCoinbaseChain reports whether this chain receives root rewards and hosts root staking.
+// These are assigned to the first chain in QuarkChain.ChainIDs.
 func (c *ChainConfig) IsRootCoinbaseChain() bool {
-	return c != nil && c.QuarkChain != nil && c.ChainID != nil &&
-		configBlockEqual(c.ChainID, c.QuarkChain.RootCoinbaseChainID)
+	return c != nil && c.QuarkChain != nil && c.ChainID != nil && len(c.QuarkChain.ChainIDs) > 0 &&
+		configBlockEqual(c.ChainID, c.QuarkChain.ChainIDs[0])
 }
 
 // CheckQuarkChain validates the shard identity, network membership and consensus settings.
@@ -98,8 +98,8 @@ func (c *ChainConfig) CheckQuarkChain() error {
 		return fmt.Errorf("invalid QuarkChain chain ID: %v", c.ChainID)
 	}
 	q := c.QuarkChain
-	if !validID(q.RootCoinbaseChainID) {
-		return fmt.Errorf("invalid root coinbase chain ID: %v", q.RootCoinbaseChainID)
+	if len(q.ChainIDs) == 0 {
+		return fmt.Errorf("chain IDs must not be empty")
 	}
 	seen := make(map[string]bool, len(q.ChainIDs))
 	for _, id := range q.ChainIDs {
@@ -111,8 +111,8 @@ func (c *ChainConfig) CheckQuarkChain() error {
 		}
 		seen[id.String()] = true
 	}
-	if !seen[c.ChainID.String()] || !seen[q.RootCoinbaseChainID.String()] {
-		return fmt.Errorf("chain IDs must include local chain %v and root coinbase chain %v", c.ChainID, q.RootCoinbaseChainID)
+	if !seen[c.ChainID.String()] {
+		return fmt.Errorf("chain IDs must include local chain %v", c.ChainID)
 	}
 	return q.PoSW.Check()
 }

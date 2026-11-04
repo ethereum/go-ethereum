@@ -90,26 +90,39 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
-func TestGenerateLargeRootCoinbaseChainID(t *testing.T) {
+func TestGenerateRootStakingOnFirstChain(t *testing.T) {
 	id := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(10002))
-	config := stakingGenesisConfig(10002)
-	config.ChainID = new(big.Int).Set(id)
-	config.QuarkChain.RootCoinbaseChainID = new(big.Int).Set(id)
-	config.QuarkChain.ChainIDs = []*big.Int{new(big.Int).Set(id)}
-	input, err := json.Marshal(&core.Genesis{Config: config, GasLimit: 12_000_000, Difficulty: big.NewInt(1), Alloc: types.GenesisAlloc{}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var output bytes.Buffer
-	if err := generate(bytes.NewReader(input), &output); err != nil {
-		t.Fatal(err)
-	}
-	var genesis core.Genesis
-	if err := json.Unmarshal(output.Bytes(), &genesis); err != nil {
-		t.Fatal(err)
-	}
-	if genesis.Config.ChainID.Cmp(id) != 0 || genesis.Config.QuarkChain.RootCoinbaseChainID.Cmp(id) != 0 || len(genesis.Alloc[params.RootStakingContractAddress].Code) == 0 {
-		t.Fatal("large chain ID or configured root staking deployment lost")
+	for _, test := range []struct {
+		name     string
+		chainIDs []*big.Int
+		wantRoot bool
+	}{
+		{"first chain", []*big.Int{new(big.Int).Set(id), big.NewInt(10001)}, true},
+		{"other chain", []*big.Int{big.NewInt(10001), new(big.Int).Set(id)}, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			config := stakingGenesisConfig(10002)
+			config.ChainID = new(big.Int).Set(id)
+			config.QuarkChain.ChainIDs = test.chainIDs
+			input, err := json.Marshal(&core.Genesis{Config: config, GasLimit: 12_000_000, Difficulty: big.NewInt(1), Alloc: types.GenesisAlloc{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var output bytes.Buffer
+			if err := generate(bytes.NewReader(input), &output); err != nil {
+				t.Fatal(err)
+			}
+			var genesis core.Genesis
+			if err := json.Unmarshal(output.Bytes(), &genesis); err != nil {
+				t.Fatal(err)
+			}
+			if genesis.Config.ChainID.Cmp(id) != 0 || !genesis.Config.QuarkChain.Equal(config.QuarkChain) {
+				t.Fatal("large chain ID or configured chain order lost")
+			}
+			if gotRoot := len(genesis.Alloc[params.RootStakingContractAddress].Code) > 0; gotRoot != test.wantRoot {
+				t.Fatalf("root staking deployment: have %v, want %v", gotRoot, test.wantRoot)
+			}
+		})
 	}
 }
 

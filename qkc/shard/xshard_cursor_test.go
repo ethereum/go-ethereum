@@ -131,14 +131,18 @@ func TestConfiguredRootCoinbaseChain(t *testing.T) {
 	id := new(big.Int).Lsh(big.NewInt(1), 128)
 	config := params.NewTestQuarkChainConfig(10002)
 	config.ChainID = new(big.Int).Set(id)
-	config.QuarkChain.RootCoinbaseChainID = new(big.Int).Set(id)
+	config.QuarkChain.ChainIDs = []*big.Int{new(big.Int).Set(id), big.NewInt(10001)}
 	cursor := &xShardCursor{config: config, root: roots[1], depositIndex: 1}
 	if got := cursor.current(); !reflect.DeepEqual(got, rootCoinbaseDeposit(roots[1])) {
 		t.Fatalf("configured reward chain did not receive root coinbase: %v", got)
 	}
 	config.ChainID = big.NewInt(10001)
 	if got := cursor.current(); got != nil {
-		t.Fatal("root reward still assigned by the old default ID")
+		t.Fatal("root reward assigned to a chain other than the first entry")
+	}
+	config.QuarkChain.ChainIDs[0], config.QuarkChain.ChainIDs[1] = config.QuarkChain.ChainIDs[1], config.QuarkChain.ChainIDs[0]
+	if got := cursor.current(); !reflect.DeepEqual(got, rootCoinbaseDeposit(roots[1])) {
+		t.Fatalf("root reward did not follow the first entry after reordering: %v", got)
 	}
 }
 

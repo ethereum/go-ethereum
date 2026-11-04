@@ -72,8 +72,10 @@ little-endian. Do not apply this numeric byte order rule to hashes.
 
 Shard identity is the positive `params.ChainConfig.ChainID`, used by signatures,
 the EVM, headers, routing and cross-shard messages. There is no separate shard
-number. `quarkchain.rootCoinbaseChainId` names the member chain receiving root
-rewards and hosting root staking.
+number. `quarkchain.chainIds` must be nonempty and include the local chain ID.
+Its first entry, `quarkchain.chainIds[0]`, receives root rewards and hosts root
+staking. Use the same ordered list on every shard; reordering it changes the
+consensus configuration and is rejected for an initialized chain.
 
 SSZ message `ChainID` fields use the numeric uint256 representation above.
 Business interfaces and P2P frames use `*big.Int`; the P2P frame prefix and the

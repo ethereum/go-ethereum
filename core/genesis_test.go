@@ -58,6 +58,9 @@ func TestSetupGenesisQuarkChainConfig(t *testing.T) {
 				{"chainIds", func(c *params.ChainConfig) {
 					c.QuarkChain.ChainIDs = []*big.Int{big.NewInt(10001), big.NewInt(10002), big.NewInt(10003)}
 				}, false, true},
+				{"chainIds order", func(c *params.ChainConfig) {
+					c.QuarkChain.ChainIDs[0], c.QuarkChain.ChainIDs[1] = c.QuarkChain.ChainIDs[1], c.QuarkChain.ChainIDs[0]
+				}, false, true},
 				{"maxBlocksPerRootBlock", func(c *params.ChainConfig) { c.QuarkChain.MaxBlocksPerRootBlock = 12 }, false, true},
 				{"remove config", func(c *params.ChainConfig) { c.QuarkChain = nil }, false, true},
 				{"add config", func(c *params.ChainConfig) {

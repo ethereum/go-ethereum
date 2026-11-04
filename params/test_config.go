@@ -19,8 +19,8 @@ package params
 import "math/big"
 
 // NewTestQuarkChainConfig returns a fresh chain configuration for tests using
-// fake consensus, with staking disabled and zero subsidy. Chain 10001 receives
-// root rewards. If chainIDs is omitted, the local and root reward chains are included.
+// fake consensus, with staking disabled and zero subsidy. The first chain receives
+// root rewards. If chainIDs is omitted, chain 10001 is first and the local chain is included.
 func NewTestQuarkChainConfig(chainID int64, chainIDs ...int64) *ChainConfig {
 	if len(chainIDs) == 0 {
 		chainIDs = []int64{10001}
@@ -31,7 +31,6 @@ func NewTestQuarkChainConfig(chainID int64, chainIDs ...int64) *ChainConfig {
 	config := *MergedTestChainConfig
 	config.ChainID = big.NewInt(chainID)
 	config.QuarkChain = &QuarkChainConfig{
-		RootCoinbaseChainID: big.NewInt(10001),
 		PoSW: &PoSWConfig{
 			AdjustmentCutoff: 7, AdjustmentFactor: 512, MinimumDifficulty: big.NewInt(1),
 			CoinbaseAmount: big.NewInt(0), EpochInterval: 3153600, DecayFactor: big.NewRat(22, 25), RewardTaxRate: big.NewRat(1, 2),

@@ -118,7 +118,6 @@ func TestHeaderLargeChainID(t *testing.T) {
 	id := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(10001))
 	chain.config.ChainID = new(big.Int).Set(id)
 	chain.config.QuarkChain.ChainIDs = []*big.Int{new(big.Int).Set(id)}
-	chain.config.QuarkChain.RootCoinbaseChainID = new(big.Int).Set(id)
 	extra, _ := parent.QKCExtra()
 	extra.ChainID = new(big.Int).Set(id)
 	parent.Extra = extra.Encode()

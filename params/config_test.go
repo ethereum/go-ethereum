@@ -127,7 +127,7 @@ func TestQuarkChainConfigEqual(t *testing.T) {
 		want   bool
 	}{
 		{"unchanged", func(c *QuarkChainConfig) {}, true},
-		{"rootCoinbaseChainId", func(c *QuarkChainConfig) { c.RootCoinbaseChainID = big.NewInt(10002) }, false},
+		{"chainIds order", func(c *QuarkChainConfig) { c.ChainIDs[0], c.ChainIDs[1] = c.ChainIDs[1], c.ChainIDs[0] }, false},
 		{"chainIds", func(c *QuarkChainConfig) { c.ChainIDs[1] = big.NewInt(10003) }, false},
 		{"posw", func(c *QuarkChainConfig) { c.PoSW.CoinbaseAmount.SetInt64(100) }, false},
 		{"missing posw", func(c *QuarkChainConfig) { c.PoSW = nil }, false},
@@ -152,7 +152,6 @@ func TestQuarkChainIDs(t *testing.T) {
 	config := NewTestQuarkChainConfig(10001, 10001, 10002)
 	config.ChainID = new(big.Int).Set(large)
 	config.QuarkChain.ChainIDs[0] = new(big.Int).Set(large)
-	config.QuarkChain.RootCoinbaseChainID = new(big.Int).Set(large)
 	if err := config.CheckConfigForkOrder(); err != nil {
 		t.Fatal(err)
 	}
@@ -168,8 +167,9 @@ func TestQuarkChainIDs(t *testing.T) {
 		{"negative local", func(c *ChainConfig) { c.ChainID = big.NewInt(-1) }},
 		{"overflow local", func(c *ChainConfig) { c.ChainID = new(big.Int).Lsh(big.NewInt(1), 256) }},
 		{"unknown local", func(c *ChainConfig) { c.ChainID = big.NewInt(10003) }},
-		{"missing root", func(c *ChainConfig) { c.QuarkChain.RootCoinbaseChainID = nil }},
-		{"unknown root", func(c *ChainConfig) { c.QuarkChain.RootCoinbaseChainID = big.NewInt(10003) }},
+		{"missing chain IDs", func(c *ChainConfig) { c.QuarkChain.ChainIDs = nil }},
+		{"empty chain IDs", func(c *ChainConfig) { c.QuarkChain.ChainIDs = []*big.Int{} }},
+		{"missing first member", func(c *ChainConfig) { c.QuarkChain.ChainIDs[0] = nil }},
 		{"missing member", func(c *ChainConfig) { c.QuarkChain.ChainIDs[1] = nil }},
 		{"zero member", func(c *ChainConfig) { c.QuarkChain.ChainIDs[1] = new(big.Int) }},
 		{"negative member", func(c *ChainConfig) { c.QuarkChain.ChainIDs[1] = big.NewInt(-1) }},
@@ -181,6 +181,9 @@ func TestQuarkChainIDs(t *testing.T) {
 			test.change(config)
 			if err := config.CheckConfigForkOrder(); err == nil {
 				t.Fatal("invalid chain identity accepted")
+			}
+			if len(config.QuarkChain.ChainIDs) == 0 && config.IsRootCoinbaseChain() {
+				t.Fatal("empty chain IDs cannot designate a root coinbase chain")
 			}
 		})
 	}
