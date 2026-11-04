@@ -133,13 +133,13 @@ func readClusterFrame(r io.Reader, maxPayloadLen uint32, hasPeerID bool) (*Clust
 
 func writeClusterFrame(w io.Writer, frame *ClusterFrame, withPeerID bool) error {
 	if frame == nil {
-		return errors.New("nil cluster frame")
+		return fmt.Errorf("%w: nil cluster frame", ErrInvalidClusterFrame)
 	}
 	if !withPeerID && frame.ClusterPeerID != 0 {
-		return errors.New("cluster peer ID is not supported by this frame codec")
+		return fmt.Errorf("%w: cluster peer ID is not supported by this frame codec", ErrInvalidClusterFrame)
 	}
 	if len(frame.Payload) > MaxFramePayloadLen {
-		return errors.New("payload too large")
+		return fmt.Errorf("%w: payload too large", ErrInvalidClusterFrame)
 	}
 
 	extra := 0
