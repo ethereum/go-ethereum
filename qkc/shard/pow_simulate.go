@@ -30,8 +30,9 @@ import (
 // candidate's timestamp, as PoW block intervals are, and returns a random
 // nonce. Chains mined this way must not verify seals.
 //
-// TODO: the PoSW engine verifies every seal. Add a chain config switch to skip
-// seal verification, like pyquarkchain's DISABLE_POW_CHECK.
+// TODO: In the New/Init PR, add ConsensusType to params.QuarkChainConfig and have
+// ShardBackend.New instantiate posw.New or posw.NewSimulate accordingly, defaulting
+// to PoSW. Nodes on the same chain must agree because this changes seal validity.
 type simulatedSearch struct {
 	blockTime time.Duration
 }
