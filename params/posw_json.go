@@ -32,7 +32,6 @@ func (c PoSWConfig) MarshalJSON() ([]byte, error) {
 		AdjustmentFactor        uint64       `json:"adjustmentFactor"`              // Output example: 512, without quotes.
 		MinimumDifficulty       *big.Int     `json:"minimumDifficulty"`             // Output example: 1000000, without quotes; null if nil.
 		CoinbaseAmount          *big.Int     `json:"coinbaseAmount"`                // Output example: 6500000000000000000, without quotes; null if nil.
-		RewardTaxRate           *json.Number `json:"rewardTaxRate"`                 // Output example: 0.5, without quotes; null if nil.
 		EpochInterval           uint64       `json:"epochInterval"`                 // Output example: 3153600, without quotes.
 		DecayFactor             *json.Number `json:"decayFactor"`                   // Output example: 0.88, without quotes; null if nil.
 		OriginalBlockNumber     uint64       `json:"originalBlockNumber,omitempty"` // Output example: 12345678, without quotes; omitted when zero.
@@ -41,10 +40,6 @@ func (c PoSWConfig) MarshalJSON() ([]byte, error) {
 		DiffDivider             uint64       `json:"diffDivider"`                   // Output example: 10000, without quotes.
 		StakePerBlock           *big.Int     `json:"stakePerBlock"`                 // Output example: 1000000000000000000000000, without quotes; null if nil.
 		PoSWStakingDecayEnabled bool         `json:"poswStakingDecayEnabled"`       // Output example: true or false, without quotes.
-	}
-	tax, err := ratioToJSON(c.RewardTaxRate)
-	if err != nil {
-		return nil, fmt.Errorf("posw: rewardTaxRate: %w", err)
 	}
 	decay, err := ratioToJSON(c.DecayFactor)
 	if err != nil {
@@ -55,7 +50,6 @@ func (c PoSWConfig) MarshalJSON() ([]byte, error) {
 		AdjustmentFactor:        c.AdjustmentFactor,
 		MinimumDifficulty:       c.MinimumDifficulty,
 		CoinbaseAmount:          c.CoinbaseAmount,
-		RewardTaxRate:           tax,
 		EpochInterval:           c.EpochInterval,
 		DecayFactor:             decay,
 		OriginalBlockNumber:     c.OriginalBlockNumber,
@@ -79,7 +73,6 @@ func (c *PoSWConfig) UnmarshalJSON(input []byte) error {
 		AdjustmentFactor        *math.HexOrDecimal64  `json:"adjustmentFactor"`              // Supported input: 512, "512" or "0x200".
 		MinimumDifficulty       *math.HexOrDecimal256 `json:"minimumDifficulty"`             // Supported input: 1000000, "1000000" or "0xf4240".
 		CoinbaseAmount          *math.HexOrDecimal256 `json:"coinbaseAmount"`                // Supported input: decimal integer or decimal/hex string, e.g. 100, "100" or "0x64".
-		RewardTaxRate           *json.Number          `json:"rewardTaxRate"`                 // Supported input: 0.5 or "0.5"; fraction strings such as "1/2" are rejected.
 		EpochInterval           *math.HexOrDecimal64  `json:"epochInterval"`                 // Supported input: 3153600, "3153600" or "0x301ec0".
 		DecayFactor             *json.Number          `json:"decayFactor"`                   // Supported input: 0.88 or "0.88"; fraction strings such as "22/25" are rejected.
 		OriginalBlockNumber     *math.HexOrDecimal64  `json:"originalBlockNumber,omitempty"` // Supported input: 12345678, "12345678" or "0xbc614e".
@@ -92,10 +85,6 @@ func (c *PoSWConfig) UnmarshalJSON(input []byte) error {
 	var dec configJSON
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
-	}
-	tax, err := ratioFromJSON(dec.RewardTaxRate)
-	if err != nil {
-		return fmt.Errorf("posw: rewardTaxRate: %w", err)
 	}
 	decay, err := ratioFromJSON(dec.DecayFactor)
 	if err != nil {
@@ -112,9 +101,6 @@ func (c *PoSWConfig) UnmarshalJSON(input []byte) error {
 	}
 	if dec.CoinbaseAmount != nil {
 		c.CoinbaseAmount = (*big.Int)(dec.CoinbaseAmount)
-	}
-	if dec.RewardTaxRate != nil {
-		c.RewardTaxRate = tax
 	}
 	if dec.EpochInterval != nil {
 		c.EpochInterval = uint64(*dec.EpochInterval)

@@ -99,7 +99,9 @@ func TestNew(t *testing.T) {
 	chain, genesis := newTestChain()
 	invalid := params.NewTestQuarkChainConfig(0)
 	invalid.PoSW.AdjustmentCutoff = 0
-	for _, config := range []*params.QuarkChainConfig{nil, {}, invalid} {
+	missingTax := params.NewTestQuarkChainConfig(0)
+	missingTax.RewardTaxRate = nil
+	for _, config := range []*params.QuarkChainConfig{nil, {}, invalid, missingTax} {
 		if engine, err := New(config, genesis); err == nil || engine != nil {
 			t.Fatalf("invalid config accepted: engine %v, error %v", engine, err)
 		}
@@ -367,7 +369,8 @@ func uint64Ptr(value uint64) *uint64 { return &value }
 func TestPrepareAndFinalize(t *testing.T) {
 	chain, parent := newTestChain()
 	config := chain.config.QuarkChain.PoSW
-	config.CoinbaseAmount, config.RewardTaxRate = big.NewInt(101), big.NewRat(1, 2)
+	config.CoinbaseAmount = big.NewInt(101)
+	chain.config.QuarkChain.RewardTaxRate = big.NewRat(1, 2)
 	engine := newTestEngine(t, chain)
 	h := child(parent)
 	h.GasLimit += 2

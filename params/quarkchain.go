@@ -17,7 +17,9 @@
 package params
 
 import (
+	"errors"
 	"fmt"
+	"math/big"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -52,6 +54,10 @@ type QuarkChainConfig struct {
 	ShardIDs []uint32 `json:"shardIds"` // IDs of all shards in the network, this one included
 
 	PoSW *PoSWConfig `json:"posw"` // Required consensus configuration for this shard.
+	// RewardTaxRate is the fraction of the decayed subsidy and each miner fee
+	// shared with root. Check requires a finite decimal in [0, 1] with a reduced
+	// denominator no greater than 100. AfterTax returns the retained share.
+	RewardTaxRate *big.Rat `json:"rewardTaxRate"`
 	// MaxBlocksPerRootBlock caps the number of blocks of this shard a root
 	// block can confirm, as max_blocks_per_shard_in_one_root_block in
 	// pyquarkchain. Zero means no cap.
@@ -66,7 +72,39 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 	return c.ShardID == other.ShardID &&
 		slices.Equal(c.ShardIDs, other.ShardIDs) &&
 		c.PoSW.Equal(other.PoSW) &&
+		configRatEqual(c.RewardTaxRate, other.RewardTaxRate) &&
 		c.MaxBlocksPerRootBlock == other.MaxBlocksPerRootBlock
+}
+
+// Check validates consensus parameters and the shared reward/fee tax rule.
+func (c *QuarkChainConfig) Check() error {
+	if c == nil {
+		return errors.New("quarkchain: missing shard configuration")
+	}
+	if err := c.PoSW.Check(); err != nil {
+		return err
+	}
+	if c.RewardTaxRate == nil || c.RewardTaxRate.Sign() < 0 || c.RewardTaxRate.Cmp(big.NewRat(1, 1)) > 0 {
+		return errors.New("quarkchain: reward tax rate must be between zero and one")
+	}
+	// Match pyquarkchain's reward_tax_rate denominator limit.
+	if c.RewardTaxRate.Denom().Cmp(big.NewInt(100)) > 0 {
+		return errors.New("quarkchain: reward tax rate denominator must not exceed 100")
+	}
+	if _, exact := c.RewardTaxRate.FloatPrec(); !exact {
+		return errors.New("quarkchain: reward tax rate must have a finite decimal representation")
+	}
+	return nil
+}
+
+// AfterTax returns floor(amount * (1 - RewardTaxRate)) as a new integer.
+// Apply it to each transaction fee before summing, as in pyquarkchain. amount
+// must be nonnegative; Check validates the configured rate. Arbitrary-precision
+// arithmetic avoids overflow when multiplying a uint256 amount by the numerator.
+func (c *QuarkChainConfig) AfterTax(amount *big.Int) *big.Int {
+	localRate := new(big.Rat).Sub(big.NewRat(1, 1), c.RewardTaxRate)
+	local := new(big.Int).Mul(amount, localRate.Num())
+	return local.Div(local, localRate.Denom())
 }
 
 // String implements the stringer interface.

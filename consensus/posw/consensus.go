@@ -56,7 +56,7 @@ func New(config *params.QuarkChainConfig, genesis *types.Header) (*PoSW, error) 
 	if config == nil {
 		return nil, errors.New("posw: missing shard configuration")
 	}
-	if err := config.PoSW.Check(); err != nil {
+	if err := config.Check(); err != nil {
 		return nil, err
 	}
 	if genesis == nil {
@@ -272,10 +272,11 @@ func (p *PoSW) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	return nil
 }
 
-// Finalize credits the subsidy after decay and reward tax. BlockRewardAt handles
-// the old height offset and rounding; transaction fees are accounted for elsewhere.
+// Finalize credits the subsidy after separately rounding epoch decay and reward
+// tax, as in pyquarkchain. Transaction fees are accounted for elsewhere.
 func (p *PoSW) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
 	reward := p.config.PoSW.BlockRewardAt(header.Number)
+	reward = p.config.AfterTax(reward)
 	if reward.Sign() != 0 {
 		state.AddBalance(header.Coinbase, uint256.MustFromBig(reward), tracing.BalanceIncreaseRewardMineBlock)
 	}

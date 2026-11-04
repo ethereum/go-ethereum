@@ -30,9 +30,10 @@ func NewTestQuarkChainConfig(shardID uint32, shardIDs ...uint32) *QuarkChainConf
 	}
 	return &QuarkChainConfig{
 		ShardID: shardID, ShardIDs: slices.Clone(shardIDs),
+		RewardTaxRate: big.NewRat(1, 2),
 		PoSW: &PoSWConfig{
 			AdjustmentCutoff: 7, AdjustmentFactor: 512, MinimumDifficulty: big.NewInt(1),
-			CoinbaseAmount: big.NewInt(0), EpochInterval: 3153600, DecayFactor: big.NewRat(22, 25), RewardTaxRate: big.NewRat(1, 2),
+			CoinbaseAmount: big.NewInt(0), EpochInterval: 3153600, DecayFactor: big.NewRat(22, 25),
 		},
 	}
 }
