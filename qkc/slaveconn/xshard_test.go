@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/qkc/conn"
 	"github.com/ethereum/go-ethereum/qkc/wire"
 )
 
@@ -96,14 +97,14 @@ func TestRejectUnconfiguredSlave(t *testing.T) {
 	}
 }
 
-func (h *testXshardHandler) AddXshardTxList(req *wire.AddXshardTxListRequest) *wire.AddXshardTxListResponse {
+func (h *testXshardHandler) AddXshardTxList(req *wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error) {
 	h.requests <- req
-	return &wire.AddXshardTxListResponse{}
+	return &wire.AddXshardTxListResponse{}, nil
 }
 
-type xshardHandlerFunc func(*wire.AddXshardTxListRequest) *wire.AddXshardTxListResponse
+type xshardHandlerFunc func(*wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error)
 
-func (h xshardHandlerFunc) AddXshardTxList(req *wire.AddXshardTxListRequest) *wire.AddXshardTxListResponse {
+func (h xshardHandlerFunc) AddXshardTxList(req *wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error) {
 	return h(req)
 }
 
@@ -144,11 +145,11 @@ func newTestXshardPeer(t *testing.T, handler XshardHandler) *XshardConn {
 
 func TestXshardConnRemoteErrorKeepsConnection(t *testing.T) {
 	const errorCode = 404
-	peer := newTestXshardPeer(t, xshardHandlerFunc(func(req *wire.AddXshardTxListRequest) *wire.AddXshardTxListResponse {
+	peer := newTestXshardPeer(t, xshardHandlerFunc(func(req *wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error) {
 		if req.ChainID != 0 {
-			return &wire.AddXshardTxListResponse{ErrorCode: errorCode}
+			return &wire.AddXshardTxListResponse{ErrorCode: errorCode}, nil
 		}
-		return &wire.AddXshardTxListResponse{}
+		return &wire.AddXshardTxListResponse{}, nil
 	}))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -162,15 +163,40 @@ func TestXshardConnRemoteErrorKeepsConnection(t *testing.T) {
 	}
 }
 
+func TestXshardConnHandlerErrorClosesConnection(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		response *wire.AddXshardTxListResponse
+	}{
+		{"nil response", nil},
+		{"success response with error", &wire.AddXshardTxListResponse{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			peer := newTestXshardPeer(t, xshardHandlerFunc(func(*wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error) {
+				return tc.response, errors.New("handler unavailable")
+			}))
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: 0})
+			if !errors.Is(err, conn.ErrConnectionClosed) {
+				t.Fatalf("expected connection closure after handler error, got %v", err)
+			}
+			if err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: 0}); !errors.Is(err, conn.ErrConnectionClosed) {
+				t.Fatalf("request after handler failure: expected connection closed, got %v", err)
+			}
+		})
+	}
+}
+
 func TestXshardConnContextErrorsKeepConnection(t *testing.T) {
 	entered := make(chan struct{}, 2)
 	release := make(chan struct{})
-	peer := newTestXshardPeer(t, xshardHandlerFunc(func(req *wire.AddXshardTxListRequest) *wire.AddXshardTxListResponse {
+	peer := newTestXshardPeer(t, xshardHandlerFunc(func(req *wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error) {
 		if req.ChainID != 0 {
 			entered <- struct{}{}
 			<-release
 		}
-		return &wire.AddXshardTxListResponse{}
+		return &wire.AddXshardTxListResponse{}, nil
 	}))
 	t.Cleanup(func() { close(release) })
 	for _, tc := range []struct {

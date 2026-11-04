@@ -32,6 +32,9 @@ import (
 // indexed by each remote slave's chain ID. Connections and chain IDs remain
 // indexed until the pool closes. Concurrent dials may establish multiple
 // connections to the same slave.
+//
+// TODO: Define xshard TCP disconnect handling, including pool cleanup and whether
+// to stop the cluster or reconnect. Closed connections currently remain indexed.
 type XshardPool struct {
 	// mu guards all mutable pool state below. Registration
 	// (registerConnection) and Close are multi-map transactions over these

@@ -33,12 +33,13 @@ import (
 
 // XshardHandler serves cross-shard requests received from other slaves,
 // implemented by the business layer. Implementations must be safe for concurrent
-// calls and return a non-nil response.
+// calls and return a non-nil response when the error is nil.
 //
-// Execution failures must be encoded in the response ErrorCode. They are sent
-// to the peer without closing the connection.
+// Business failures must be encoded in the response ErrorCode with a nil error,
+// so they are sent to the peer without closing the connection. A non-nil error
+// signals a handler failure and closes the connection via BaseConn.
 type XshardHandler interface {
-	AddXshardTxList(req *wire.AddXshardTxListRequest) *wire.AddXshardTxListResponse
+	AddXshardTxList(req *wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error)
 }
 
 // XshardConn is a slave-to-slave TCP connection for cross-shard RPCs.
@@ -151,7 +152,7 @@ func (x *XshardConn) handlePing(req wire.SSZMessage) (wire.SSZMessage, error) {
 
 // handleAddXshardTxList delegates to the business handler.
 func (x *XshardConn) handleAddXshardTxList(req wire.SSZMessage) (wire.SSZMessage, error) {
-	return x.handler.AddXshardTxList(req.(*wire.AddXshardTxListRequest)), nil
+	return x.handler.AddXshardTxList(req.(*wire.AddXshardTxListRequest))
 }
 
 // waitUntilPingReceived blocks until the first PING, connection close, or
