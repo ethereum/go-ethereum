@@ -1,6 +1,20 @@
-// Copyright 2026-2027, QuarkChain.
+// Copyright 2026-2027 The quarkchain Authors
+// This file is part of the quarkchain library.
+//
+// The quarkchain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The quarkchain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
-package shardconn
+package slaveconn
 
 import (
 	"context"
@@ -14,9 +28,10 @@ import (
 	"github.com/ethereum/go-ethereum/qkc/wire"
 )
 
-// XshardPool manages connections to other shard nodes, indexed by ChainID.
-// Connections and ChainIDs remain indexed until the pool closes. Concurrent
-// dials may establish multiple connections to the same node.
+// XshardPool manages the local slave's cross-shard connections to other slaves,
+// indexed by each remote slave's chain ID. Connections and chain IDs remain
+// indexed until the pool closes. Concurrent dials may establish multiple
+// connections to the same slave.
 type XshardPool struct {
 	// mu guards all mutable pool state below. Registration
 	// (registerConnection) and Close are multi-map transactions over these
@@ -26,23 +41,24 @@ type XshardPool struct {
 	conns       map[uint32][]*XshardConn
 	connections map[*XshardConn]struct{}
 
-	chainIDs map[uint32]struct{}
-	selfID   uint32
-	// Only configured chain IDs are added to the routing index.
+	chainIDs     map[uint32]struct{}
+	localChainID uint32
+	// Only connections to slaves with configured chain IDs enter the routing index.
 	configuredChainIDs map[uint32]struct{}
 	maxPayloadSize     uint32        // 0 uses the maximum frame payload length.
-	handler            XshardHandler // Serves inbound xshard requests.
+	handler            XshardHandler // Serves cross-shard requests from other slaves.
 	closed             bool
 	log                log.Logger
 }
 
 // Public API
 
-// NewXshardPool creates a connection pool for the local shard node. selfID is
-// its ChainID, and configuredChainIDs contains the cluster's configured
-// ChainIDs. A zero maxPayloadSize uses the protocol's maximum payload size.
-// handler serves inbound xshard requests and must not be nil.
-func NewXshardPool(selfID uint32, configuredChainIDs []uint32, maxPayloadSize uint32, handler XshardHandler, logger log.Logger) (*XshardPool, error) {
+// NewXshardPool creates the local slave's pool of cross-shard connections.
+// localChainID identifies the chain hosted by this slave; configuredChainIDs
+// lists the chain IDs hosted by the cluster's slaves. A zero maxPayloadSize
+// uses the protocol's maximum payload size. handler serves cross-shard requests
+// from other slaves and must not be nil.
+func NewXshardPool(localChainID uint32, configuredChainIDs []uint32, maxPayloadSize uint32, handler XshardHandler, logger log.Logger) (*XshardPool, error) {
 	if handler == nil {
 		return nil, errors.New("xshard handler must not be nil")
 	}
@@ -63,7 +79,7 @@ func NewXshardPool(selfID uint32, configuredChainIDs []uint32, maxPayloadSize ui
 		conns:              make(map[uint32][]*XshardConn),
 		connections:        make(map[*XshardConn]struct{}),
 		chainIDs:           make(map[uint32]struct{}),
-		selfID:             selfID,
+		localChainID:       localChainID,
 		handler:            handler,
 		configuredChainIDs: clusterSet,
 		maxPayloadSize:     maxPayloadSize,
@@ -71,28 +87,28 @@ func NewXshardPool(selfID uint32, configuredChainIDs []uint32, maxPayloadSize ui
 	}, nil
 }
 
-// DialToChain establishes an outbound connection to the shard node identified
-// by chainInfo.ChainID.
-func (p *XshardPool) DialToChain(ctx context.Context, chainInfo wire.ChainInfo) error {
-	if _, ok := p.configuredChainIDs[chainInfo.ChainID]; !ok {
-		return fmt.Errorf("chain ID %d is not configured", chainInfo.ChainID)
+// DialToSlave establishes an outbound cross-shard connection to the slave
+// described by slaveInfo. Its ChainID identifies the chain hosted by that slave.
+func (p *XshardPool) DialToSlave(ctx context.Context, slaveInfo wire.ChainInfo) error {
+	if _, ok := p.configuredChainIDs[slaveInfo.ChainID]; !ok {
+		return fmt.Errorf("slave chain ID %d is not configured", slaveInfo.ChainID)
 	}
-	if p.knownRemote(chainInfo.ChainID) {
-		p.log.Info("outbound xshard connection skipped: remote already known", "remote_id", chainInfo.ChainID)
+	if p.knownSlave(slaveInfo.ChainID) {
+		p.log.Info("outbound xshard connection skipped: slave already known", "remote_chain_id", slaveInfo.ChainID)
 		return nil
 	}
 
-	addr := net.JoinHostPort(string(chainInfo.Host), strconv.Itoa(int(chainInfo.Port)))
+	addr := net.JoinHostPort(string(slaveInfo.Host), strconv.Itoa(int(slaveInfo.Port)))
 	// Dialer.Timeout keeps bounding the dial when ctx is never cancelled.
 	nc, err := (&net.Dialer{Timeout: defaultDialTimeout}).DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return fmt.Errorf("dial xshard peer %s: %w", addr, err)
+		return fmt.Errorf("dial xshard slave %s: %w", addr, err)
 	}
 
-	conn, err := newXshardConn(nc, p.maxPayloadSize, p.selfID, chainInfo.ChainID, true, p.handler, p.log)
+	conn, err := newXshardConn(nc, p.maxPayloadSize, p.localChainID, slaveInfo.ChainID, true, p.handler, p.log)
 	if err != nil {
 		nc.Close()
-		return fmt.Errorf("create xshard conn to %s: %w", addr, err)
+		return fmt.Errorf("create xshard connection to slave %s: %w", addr, err)
 	}
 
 	if !p.trackConnection(conn) {
@@ -101,10 +117,10 @@ func (p *XshardPool) DialToChain(ctx context.Context, chainInfo wire.ChainInfo) 
 	}
 	conn.base.Start()
 
-	// The peer must confirm the advertised chain ID.
+	// The remote slave must confirm its advertised chain ID.
 	// Bound the handshake independently of the caller's context so a peer
 	// that keeps the TCP connection open but never responds to PING cannot
-	// block DialToChain indefinitely.
+	// block DialToSlave indefinitely.
 	pingCtx, cancel := context.WithTimeout(ctx, xshardHandshakeTimeout)
 	defer cancel()
 
@@ -113,9 +129,9 @@ func (p *XshardPool) DialToChain(ctx context.Context, chainInfo wire.ChainInfo) 
 		p.rejectConnection(conn)
 		return fmt.Errorf("ping failed for %s: %w", conn.base.RemoteAddr(), err)
 	}
-	if id != chainInfo.ChainID {
+	if id != slaveInfo.ChainID {
 		p.rejectConnection(conn)
-		return fmt.Errorf("chain ID mismatch for %s: expected %d, got %d", conn.base.RemoteAddr(), chainInfo.ChainID, id)
+		return fmt.Errorf("slave chain ID mismatch for %s: expected %d, got %d", conn.base.RemoteAddr(), slaveInfo.ChainID, id)
 	}
 
 	// Do not deduplicate again after the handshake: simultaneous dials could
@@ -123,28 +139,28 @@ func (p *XshardPool) DialToChain(ctx context.Context, chainInfo wire.ChainInfo) 
 	if err := p.registerConnection(conn); err != nil {
 		return err
 	}
-	p.log.Info("indexed xshard connection", "chain_id", id)
+	p.log.Info("indexed xshard connection to slave", "remote_chain_id", id)
 	return nil
 }
 
-// HandleInbound takes ownership of an accepted xshard connection: it waits
-// for the handshake and indexes the conn. Conns whose handshake fails or
-// times out are discarded and never enter the routing index. Registration
-// happens-before the PONG reply for inbound connections, so a successful
+// HandleInbound takes ownership of an accepted cross-shard connection from
+// another slave: it waits for the handshake and indexes the conn. Conns whose
+// handshake fails or times out are discarded and never enter the routing index.
+// Registration happens-before the PONG reply for inbound connections, so a successful
 // handshake observed by the dialing peer implies that the inbound connection
 // has already been indexed by this pool.
 func (p *XshardPool) HandleInbound(nc net.Conn) {
 	// Inbound identity arrives with the first PING.
-	conn, err := newXshardConn(nc, p.maxPayloadSize, p.selfID, 0, false, p.handler, p.log)
+	conn, err := newXshardConn(nc, p.maxPayloadSize, p.localChainID, 0, false, p.handler, p.log)
 	if err != nil {
 		nc.Close()
-		p.log.Error("inbound xshard conn rejected", "err", err)
+		p.log.Error("inbound xshard connection from slave rejected", "err", err)
 		return
 	}
 
 	if !p.trackConnection(conn) {
 		conn.base.Close()
-		p.log.Warn("xshard pool closed, closing inbound conn immediately", "remote", conn.base.RemoteAddr())
+		p.log.Warn("xshard pool closed, closing inbound connection from slave", "remote", conn.base.RemoteAddr())
 		return
 	}
 
@@ -154,15 +170,15 @@ func (p *XshardPool) HandleInbound(nc net.Conn) {
 	conn.base.Start()
 
 	if !conn.waitUntilPingReceived() {
-		p.log.Warn("inbound xshard connection closed before ping", "remote", conn.base.RemoteAddr())
+		p.log.Warn("inbound xshard connection from slave closed before ping", "remote", conn.base.RemoteAddr())
 		p.rejectConnection(conn)
 		return
 	}
 
-	// A remote may have multiple inbound connections.
+	// A remote slave may have multiple inbound connections.
 	if err := p.registerConnection(conn); err != nil {
 		conn.base.Close() // defensive
-		p.log.Warn("inbound xshard connection rejected", "remote", conn.base.RemoteAddr(), "err", err)
+		p.log.Warn("inbound xshard connection from slave rejected", "remote", conn.base.RemoteAddr(), "err", err)
 		return
 	}
 	// Release the barrier: the first PING's PONG is written only after this
@@ -171,11 +187,12 @@ func (p *XshardPool) HandleInbound(nc net.Conn) {
 	// conn, which unblocks the barrier with an error instead of a PONG.
 	close(conn.inboundRegistered)
 
-	p.log.Info("indexed inbound xshard connection", "chain_id", conn.RemoteChainID())
+	p.log.Info("indexed inbound xshard connection from slave", "remote_chain_id", conn.RemoteChainID())
 }
 
-// Lookup returns the connections currently indexed for a chain. They may be
-// closed concurrently afterwards, so callers must tolerate failed sends.
+// Lookup returns cross-shard connections to the slave identified by chainID.
+// They may be closed concurrently afterwards, so callers must tolerate failed
+// sends.
 // The returned slice is a copy holding the original pointers.
 func (p *XshardPool) Lookup(chainID uint32) []*XshardConn {
 	p.mu.RLock()
@@ -243,16 +260,16 @@ func (p *XshardPool) registerConnection(conn *XshardConn) error {
 		delete(p.connections, conn)
 		p.mu.Unlock()
 		conn.base.Close()
-		return fmt.Errorf("chain ID %d is not configured", conn.RemoteChainID())
+		return fmt.Errorf("slave chain ID %d is not configured", conn.RemoteChainID())
 	}
 
-	p.addChainConnectionLocked(conn)
+	p.addSlaveConnectionLocked(conn)
 	p.mu.Unlock()
 	return nil
 }
 
-// addChainConnectionLocked registers the peer's chain ID.
-func (p *XshardPool) addChainConnectionLocked(conn *XshardConn) {
+// addSlaveConnectionLocked indexes the connection by the remote slave's chain ID.
+func (p *XshardPool) addSlaveConnectionLocked(conn *XshardConn) {
 	id := conn.RemoteChainID()
 	p.chainIDs[id] = struct{}{}
 	p.conns[id] = append(p.conns[id], conn)
@@ -270,13 +287,14 @@ func (p *XshardPool) trackConnection(conn *XshardConn) bool {
 	return true
 }
 
-// knownRemote reports whether expectedID is self or already known.
-func (p *XshardPool) knownRemote(id uint32) bool {
+// knownSlave reports whether chainID identifies the local slave or a slave
+// already in the routing index.
+func (p *XshardPool) knownSlave(chainID uint32) bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	if p.selfID == id {
+	if p.localChainID == chainID {
 		return true
 	}
-	_, known := p.chainIDs[id]
+	_, known := p.chainIDs[chainID]
 	return known
 }

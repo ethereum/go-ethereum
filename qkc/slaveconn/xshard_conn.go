@@ -1,6 +1,21 @@
-// Copyright 2026-2027, QuarkChain.
+// Copyright 2026-2027 The quarkchain Authors
+// This file is part of the quarkchain library.
+//
+// The quarkchain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The quarkchain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
-package shardconn
+// Package slaveconn implements slave-side cluster connections.
+package slaveconn
 
 import (
 	"context"
@@ -16,25 +31,25 @@ import (
 	"github.com/ethereum/go-ethereum/qkc/wire"
 )
 
-// XshardHandler serves inbound xshard requests, implemented by the business
-// layer. Implementations must be safe for concurrent calls.
+// XshardHandler serves cross-shard requests received from other slaves,
+// implemented by the business layer. Implementations must be safe for concurrent
+// calls and return a non-nil response.
 //
-// A returned error signals a connection-level failure and closes the
-// connection via BaseConn; business failures must be encoded in the response
-// ErrorCode instead.
+// Execution failures must be encoded in the response ErrorCode. They are sent
+// to the peer without closing the connection.
 type XshardHandler interface {
-	AddXshardTxList(req *wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error)
+	AddXshardTxList(req *wire.AddXshardTxListRequest) *wire.AddXshardTxListResponse
 }
 
-// XshardConn is a direct TCP connection between shard nodes.
+// XshardConn is a slave-to-slave TCP connection for cross-shard RPCs.
 type XshardConn struct {
 	base *conn.BaseConn
 
 	handler XshardHandler
 
-	localID uint32
-	// peerID is the remote shard node's ChainID.
-	peerID uint32
+	// Each slave hosts one chain, whose ChainID identifies it in the cluster.
+	localChainID  uint32
+	remoteChainID uint32
 
 	outbound     bool
 	pingReceived chan struct{} // closed after the first PING
@@ -46,17 +61,17 @@ type XshardConn struct {
 	inboundRegistered chan struct{}
 }
 
-// newXshardConn creates a connection to another shard node. For outbound
-// connections peerID is the expected ChainID; for inbound connections the
-// remote ChainID is learned from the first PING.
-func newXshardConn(nc net.Conn, maxPayloadSize uint32, localID, peerID uint32, outbound bool, handler XshardHandler, logger log.Logger) (*XshardConn, error) {
+// newXshardConn creates a cross-shard connection to another slave. For outbound
+// connections remoteChainID is that slave's expected chain ID; for inbound
+// connections it is learned from the first PING.
+func newXshardConn(nc net.Conn, maxPayloadSize uint32, localChainID, remoteChainID uint32, outbound bool, handler XshardHandler, logger log.Logger) (*XshardConn, error) {
 	if handler == nil {
 		return nil, errors.New("xshard handler must not be nil")
 	}
 	if maxPayloadSize == 0 {
 		maxPayloadSize = wire.MaxFramePayloadLen
 	}
-	xc := &XshardConn{handler: handler, localID: localID, peerID: peerID, outbound: outbound, pingReceived: make(chan struct{})}
+	xc := &XshardConn{handler: handler, localChainID: localChainID, remoteChainID: remoteChainID, outbound: outbound, pingReceived: make(chan struct{})}
 	xc.base = conn.NewBaseConn(conn.Config{
 		Transport: conn.NewTCPTransport(
 			nc,
@@ -80,12 +95,14 @@ func newXshardConn(nc net.Conn, maxPayloadSize uint32, localID, peerID uint32, o
 
 // Public API
 
-// RemoteChainID returns the chain ID established by the handshake.
-func (x *XshardConn) RemoteChainID() uint32 { return x.peerID }
+// RemoteChainID returns the remote slave's chain ID established by the handshake.
+func (x *XshardConn) RemoteChainID() uint32 { return x.remoteChainID }
 
-// SendAddXshardTxList sends an AddXshardTxListRequest to the peer.
+// SendAddXshardTxList sends an AddXshardTxListRequest to the peer. A nonzero
+// ErrorCode is returned as *wire.RemoteError; transport and context errors are
+// returned unchanged.
 func (x *XshardConn) SendAddXshardTxList(ctx context.Context, req *wire.AddXshardTxListRequest) error {
-	resp, err := x.sendRPC(ctx, byte(wire.ClusterOpAddXshardTxListRequest), req)
+	resp, err := x.base.SendRPC(ctx, byte(wire.ClusterOpAddXshardTxListRequest), req)
 	if err != nil {
 		return err
 	}
@@ -95,7 +112,7 @@ func (x *XshardConn) SendAddXshardTxList(ctx context.Context, req *wire.AddXshar
 		return fmt.Errorf("unexpected response %T", resp)
 	}
 	if r.ErrorCode != 0 {
-		return fmt.Errorf("AddXshardTxList failed: %d", r.ErrorCode)
+		return &wire.RemoteError{Code: r.ErrorCode}
 	}
 
 	return nil
@@ -103,14 +120,14 @@ func (x *XshardConn) SendAddXshardTxList(ctx context.Context, req *wire.AddXshar
 
 // Internal implementation
 
-// handlePing records the remote ChainID for inbound connections and signals
-// the pool. Inbound PONGs are sent after the pool registers the connection.
-func (x *XshardConn) handlePing(req any) (any, error) {
+// handlePing records the remote slave's chain ID for inbound connections and
+// signals the pool. Inbound PONGs are sent after the pool registers the connection.
+func (x *XshardConn) handlePing(req wire.SSZMessage) (wire.SSZMessage, error) {
 	ping := req.(*wire.PingRequest)
 
 	x.pingOnce.Do(func() {
 		if !x.outbound {
-			x.peerID = ping.ChainID
+			x.remoteChainID = ping.ChainID
 		}
 		close(x.pingReceived)
 	})
@@ -129,12 +146,12 @@ func (x *XshardConn) handlePing(req any) (any, error) {
 		}
 	}
 
-	return &wire.PongResponse{ChainID: x.localID}, nil
+	return &wire.PongResponse{ChainID: x.localChainID}, nil
 }
 
 // handleAddXshardTxList delegates to the business handler.
-func (x *XshardConn) handleAddXshardTxList(req any) (any, error) {
-	return x.handler.AddXshardTxList(req.(*wire.AddXshardTxListRequest))
+func (x *XshardConn) handleAddXshardTxList(req wire.SSZMessage) (wire.SSZMessage, error) {
+	return x.handler.AddXshardTxList(req.(*wire.AddXshardTxListRequest)), nil
 }
 
 // waitUntilPingReceived blocks until the first PING, connection close, or
@@ -154,9 +171,9 @@ func (x *XshardConn) waitUntilPingReceived() bool {
 	}
 }
 
-// sendPing sends PING and returns the peer's chain ID.
+// sendPing sends PING and returns the remote slave's chain ID.
 func (x *XshardConn) sendPing(ctx context.Context) (uint32, error) {
-	resp, err := x.sendRPC(ctx, byte(wire.ClusterOpPing), &wire.PingRequest{ChainID: x.localID})
+	resp, err := x.base.SendRPC(ctx, byte(wire.ClusterOpPing), &wire.PingRequest{ChainID: x.localChainID})
 	if err != nil {
 		return 0, err
 	}
@@ -165,12 +182,4 @@ func (x *XshardConn) sendPing(ctx context.Context) (uint32, error) {
 		return 0, fmt.Errorf("unexpected ping response %T", resp)
 	}
 	return pong.ChainID, nil
-}
-
-func (x *XshardConn) sendRPC(ctx context.Context, opcode byte, req wire.SSZMessage) (any, error) {
-	payload, err := req.MarshalSSZ()
-	if err != nil {
-		return nil, err
-	}
-	return x.base.SendRPC(ctx, opcode, payload)
 }
