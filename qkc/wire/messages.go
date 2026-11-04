@@ -72,23 +72,23 @@ type PongResponse struct {
 	ChainID uint32
 }
 
-// ChainInfo describes a remote chain for ConnectToChainsRequest.
-type ChainInfo struct {
+// SlaveInfo describes a slave endpoint and the chain it hosts.
+type SlaveInfo struct {
 	Host    []byte `ssz-max:"4294967295"`
 	Port    uint16
 	ChainID uint32
 }
 
-// ConnectToChainsRequest (opcode 0x83) asks a chain to connect to the listed
-// chains and report each result.
-type ConnectToChainsRequest struct {
-	ChainInfoList []ChainInfo `ssz-max:"4294967295"`
+// ConnectToSlavesRequest (opcode 0x83) asks a slave to connect to the listed
+// slaves and report each result.
+type ConnectToSlavesRequest struct {
+	SlaveInfoList []SlaveInfo `ssz-max:"4294967295"`
 }
 
-// ConnectToChainsResponse (opcode 0x84) reports one result per requested
-// chain, in request order. Empty means success; non-empty contains the error
+// ConnectToSlavesResponse (opcode 0x84) reports one result per requested
+// slave, in request order. Empty means success; non-empty contains the error
 // payload.
-type ConnectToChainsResponse struct {
+type ConnectToSlavesResponse struct {
 	ResultList [][]byte `ssz-max:"4294967295,4294967295" ssz-size:"?,?"`
 }
 

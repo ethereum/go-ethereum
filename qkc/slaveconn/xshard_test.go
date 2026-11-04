@@ -64,7 +64,7 @@ func TestRejectUnconfiguredSlave(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	if err := pool.DialToSlave(context.Background(), wire.ChainInfo{ChainID: 2}); err == nil || !strings.Contains(err.Error(), "not configured") {
+	if err := pool.DialToSlave(context.Background(), wire.SlaveInfo{ChainID: 2}); err == nil || !strings.Contains(err.Error(), "not configured") {
 		t.Fatalf("expected unconfigured slave error, got %v", err)
 	}
 
@@ -264,7 +264,7 @@ func TestTCPXshardHandshakeAndRequest(t *testing.T) {
 	addr := listener.Addr().(*net.TCPAddr)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := client.DialToSlave(ctx, wire.ChainInfo{Host: []byte("127.0.0.1"), Port: uint16(addr.Port), ChainID: 0}); err != nil {
+	if err := client.DialToSlave(ctx, wire.SlaveInfo{Host: []byte("127.0.0.1"), Port: uint16(addr.Port), ChainID: 0}); err != nil {
 		t.Fatal(err)
 	}
 	<-done
@@ -310,7 +310,7 @@ func TestDialToSlaveRejectsWrongChainID(t *testing.T) {
 	addr := listener.Addr().(*net.TCPAddr)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := client.DialToSlave(ctx, wire.ChainInfo{Host: []byte("127.0.0.1"), Port: uint16(addr.Port), ChainID: 3}); err == nil {
+	if err := client.DialToSlave(ctx, wire.SlaveInfo{Host: []byte("127.0.0.1"), Port: uint16(addr.Port), ChainID: 3}); err == nil {
 		t.Fatal("expected slave chain ID mismatch")
 	}
 	if len(client.Lookup(3)) != 0 {

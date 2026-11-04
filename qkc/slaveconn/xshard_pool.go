@@ -92,7 +92,7 @@ func NewXshardPool(localChainID uint32, configuredChainIDs []uint32, maxPayloadS
 
 // DialToSlave establishes an outbound cross-shard connection to the slave
 // described by slaveInfo. Its ChainID identifies the chain hosted by that slave.
-func (p *XshardPool) DialToSlave(ctx context.Context, slaveInfo wire.ChainInfo) error {
+func (p *XshardPool) DialToSlave(ctx context.Context, slaveInfo wire.SlaveInfo) error {
 	if _, ok := p.configuredChainIDs[slaveInfo.ChainID]; !ok {
 		return fmt.Errorf("slave chain ID %d is not configured", slaveInfo.ChainID)
 	}

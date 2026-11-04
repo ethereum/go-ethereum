@@ -39,8 +39,8 @@ func TestNewClusterMessageRegistry(t *testing.T) {
 	}{
 		{ClusterOpPing, &PingRequest{}},
 		{ClusterOpPong, &PongResponse{}},
-		{ClusterOpConnectToChainsRequest, &ConnectToChainsRequest{}},
-		{ClusterOpConnectToChainsResponse, &ConnectToChainsResponse{}},
+		{ClusterOpConnectToSlavesRequest, &ConnectToSlavesRequest{}},
+		{ClusterOpConnectToSlavesResponse, &ConnectToSlavesResponse{}},
 		{ClusterOpAddRootBlockRequest, &AddRootBlockRequest{}},
 		{ClusterOpAddRootBlockResponse, &AddRootBlockResponse{}},
 		{ClusterOpAddMinorBlockHeaderRequest, &AddMinorBlockHeaderRequest{}},
@@ -327,9 +327,9 @@ func TestChainToChainPingCarriesChainIDWithoutRootTip(t *testing.T) {
 	}
 }
 
-func TestConnectToChainsSSZRoundTrip(t *testing.T) {
-	req := &ConnectToChainsRequest{
-		ChainInfoList: []ChainInfo{
+func TestConnectToSlavesSSZRoundTrip(t *testing.T) {
+	req := &ConnectToSlavesRequest{
+		SlaveInfoList: []SlaveInfo{
 			{Host: []byte("10.0.0.1"), Port: 38391, ChainID: 1},
 			{Host: []byte("10.0.0.2"), Port: 38392, ChainID: 2},
 		},
@@ -337,7 +337,7 @@ func TestConnectToChainsSSZRoundTrip(t *testing.T) {
 	roundTripSSZ(t, req)
 
 	// Results mirror the request order; empty bytes mean success.
-	resp := &ConnectToChainsResponse{
+	resp := &ConnectToSlavesResponse{
 		ResultList: [][]byte{
 			nil,                    // success
 			[]byte("dial timeout"), // failure
@@ -346,8 +346,8 @@ func TestConnectToChainsSSZRoundTrip(t *testing.T) {
 	roundTripSSZ(t, resp)
 
 	// Boundary: empty lists.
-	roundTripSSZ(t, &ConnectToChainsRequest{})
-	roundTripSSZ(t, &ConnectToChainsResponse{})
+	roundTripSSZ(t, &ConnectToSlavesRequest{})
+	roundTripSSZ(t, &ConnectToSlavesResponse{})
 }
 
 func TestHelloCommandSSZRoundTrip(t *testing.T) {
@@ -379,9 +379,9 @@ func TestGeneratedCodecsRejectMalformedPayloads(t *testing.T) {
 	}{
 		{"PingRequest", 5, func() SSZMessage { return new(PingRequest) }},
 		{"PongResponse", -1, func() SSZMessage { return new(PongResponse) }},
-		{"ChainInfo", 0, func() SSZMessage { return new(ChainInfo) }},
-		{"ConnectToChainsRequest", 0, func() SSZMessage { return new(ConnectToChainsRequest) }},
-		{"ConnectToChainsResponse", 0, func() SSZMessage { return new(ConnectToChainsResponse) }},
+		{"SlaveInfo", 0, func() SSZMessage { return new(SlaveInfo) }},
+		{"ConnectToSlavesRequest", 0, func() SSZMessage { return new(ConnectToSlavesRequest) }},
+		{"ConnectToSlavesResponse", 0, func() SSZMessage { return new(ConnectToSlavesResponse) }},
 		{"AddRootBlockRequest", 0, func() SSZMessage { return new(AddRootBlockRequest) }},
 		{"AddRootBlockResponse", -1, func() SSZMessage { return new(AddRootBlockResponse) }},
 		{"HelloCommand", 58, func() SSZMessage { return new(HelloCommand) }},
@@ -420,7 +420,7 @@ func TestGeneratedCodecsRejectMalformedPayloads(t *testing.T) {
 }
 
 func TestResultListGoldenEncoding(t *testing.T) {
-	msg := &ConnectToChainsResponse{ResultList: [][]byte{nil, []byte("x")}}
+	msg := &ConnectToSlavesResponse{ResultList: [][]byte{nil, []byte("x")}}
 	got, err := msg.MarshalSSZ()
 	if err != nil {
 		t.Fatalf("MarshalSSZ: %v", err)

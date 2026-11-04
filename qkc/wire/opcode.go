@@ -40,8 +40,8 @@ const (
 	// Cluster connection opcodes.
 	ClusterOpPing                    ClusterOp = 1 + ClusterOpBase // 0x81
 	ClusterOpPong                    ClusterOp = 2 + ClusterOpBase // 0x82
-	ClusterOpConnectToChainsRequest  ClusterOp = 3 + ClusterOpBase // 0x83
-	ClusterOpConnectToChainsResponse ClusterOp = 4 + ClusterOpBase // 0x84
+	ClusterOpConnectToSlavesRequest  ClusterOp = 3 + ClusterOpBase // 0x83
+	ClusterOpConnectToSlavesResponse ClusterOp = 4 + ClusterOpBase // 0x84
 
 	// Master-to-chain root block update.
 	ClusterOpAddRootBlockRequest  ClusterOp = 5 + ClusterOpBase // 0x85
