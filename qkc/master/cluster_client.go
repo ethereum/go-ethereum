@@ -21,6 +21,7 @@ import (
 	"context"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
 	"github.com/holiman/uint256"
 )
@@ -36,6 +37,14 @@ type ClusterClient interface {
 	// root block. If only some hosts acknowledge the block, the caller must
 	// retain it as uncommitted and retry the complete broadcast.
 	BroadcastRootBlock(ctx context.Context, block *qkctypes.RootBlock) error
+
+	// GetUnconfirmedHeaderList collects unconfirmed shard headers from the cluster,
+	// grouped by chainID, for constructing a root block. Each shard's headers are
+	// ordered by increasing height. Master filters out headers not yet reported to
+	// it, as in pyquarkchain. A transport or RPC failure, a nonzero remote ErrorCode
+	// (returned as *wire.RemoteError), or a missing connection is returned as an
+	// error rather than silently omitting headers.
+	GetUnconfirmedHeaderList(ctx context.Context) (map[uint32][]*types.Header, error)
 
 	// GetRootChainStakes asks chainID for the stakes recorded for address at
 	// minorBlockHash. The result is the decoded business response after a

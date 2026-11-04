@@ -274,6 +274,11 @@ func (c *ShardChain) InsertShardBlock(block *types.Block) error {
 	// TODO 1. check shard id here 2. check future block in engine.VerifyBlockHeader
 
 	if c.chain.HasBlock(block.Hash(), block.NumberU64()) {
+		// A previous import may have stored the block but failed in SetCanonical.
+		// The root reference was checked before storage. Retrying the head update
+		// would load the referenced root, call shouldUpdateHead with the current
+		// root tip, and call SetCanonical if selected. This rare case is not
+		// handled here yet.
 		return nil
 	}
 	rootTip := c.rootTip
@@ -744,6 +749,38 @@ func (c *ShardChain) setCanonicalByHead(head *types.Header) error {
 //
 // The lock keeps the confirmation and canonical range consistent. Local headers
 // remain eligible while propagation is incomplete.
+//
+// This query uses the shard's local root tip, not a root hash supplied by master.
+// Root construction assumes the queried shards use the candidate parent's root
+// checkpoint and that the parent stays fixed through collection and building.
+// A stale checkpoint may return already confirmed headers, causing construction
+// to fail or a constructed candidate to fail root validation. The caller must
+// discard that candidate and collect headers again after checkpoint synchronization.
+// Headers not yet reported to master must also be filtered out by master.
+//
+// pyquarkchain writes a committing hash before inserting a root block locally.
+// If the block becomes the new tip, master updates its local root tip before
+// broadcasting the block to all shards. The hash is cleared only after all
+// shards accept the block. If a shard import fails, completed imports are not
+// undone and the committing hash is kept.
+//
+// If propagation cannot finish during normal operation, restart recovery can
+// be used: RootDb selects the parent of the persisted non-genesis root tip.
+// Master initializes the shards from that checkpoint, then rebroadcasts the
+// committing root block. Neither pyquarkchain nor goquarkchain checks committing
+// before root construction.
+//
+// TODO: In master, check that the parent root is fully committed before
+// collecting shard headers. While committing, wait with context cancellation
+// or return an error for the caller to retry, so this problem is caught before
+// building rather than during construction or later validation.
+// Use a lock to keep the parent fixed through header collection and building.
+//
+// Another option is to validate the returned headers against shard root tip.
+// Skip headers already confirmed by that parent, then include only a valid,
+// continuous sequence for each shard. Stop at the first unusable header.
+// This may include fewer headers, but reduces the need to wait for all shards
+// to reach the same root tip.
 func (c *ShardChain) GetUnconfirmedHeaderList() ([]*types.Header, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

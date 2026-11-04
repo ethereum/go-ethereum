@@ -38,11 +38,23 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var _ MinerBackend = (*ShardBackend)(nil)
+var _ MinerBackend = (*Shard)(nil)
 
-// ShardBackend owns its blockchain and consensus engine. Its database and cluster
-// client are borrowed; their caller stops incoming requests before Stop.
-type ShardBackend struct {
+// Shard runs one shard, like eth.Ethereum, pyquarkchain's cluster.shard.Shard,
+// and goquarkchain's ShardBackend. It sets up the shard's components, imports
+// blocks, sends cross-shard lists, and reports block headers to master.
+// ShardChain handles chain rules, root confirmations, and head selection.
+//
+// New creates the blockchain and consensus engine. Init restores the root tip
+// and shard head from master's root checkpoint. Stop releases owned resources.
+// For now, the caller provides and closes the DB. The caller also manages the
+// cluster client and stops incoming requests before Stop. The slave layer
+// manages shared connections, RPC listeners, and the set of shards.
+//
+// TODO: Complete New/Init to create and manage the shard DB,
+// txpool, builder, PoWMiner, and sync worker. Start mining only after Init and
+// sync are ready. Stop running tasks and chain components before closing the DB.
+type Shard struct {
 	chain         *ShardChain
 	engine        consensus.Engine
 	clusterClient ClusterClient
@@ -50,10 +62,10 @@ type ShardBackend struct {
 	stopErr       error
 }
 
-// New constructs a shard backend without selecting a root tip. chainConfig is
+// New constructs a shard without selecting a root tip. chainConfig is
 // authoritative; it is attached to a copy of genesis without changing the caller's
 // genesis. The same borrowed database stores chain data, roots and received deposits.
-func New(chainConfig *params.ChainConfig, genesis *core.Genesis, db ethdb.Database, cache *core.BlockChainConfig, client ClusterClient) (*ShardBackend, error) {
+func New(chainConfig *params.ChainConfig, genesis *core.Genesis, db ethdb.Database, cache *core.BlockChainConfig, client ClusterClient) (*Shard, error) {
 	if chainConfig == nil || chainConfig.QuarkChain == nil {
 		return nil, errNotQuarkChain
 	}
@@ -78,17 +90,22 @@ func New(chainConfig *params.ChainConfig, genesis *core.Genesis, db ethdb.Databa
 		return nil, err
 	}
 	// TODO: Initialize the builder and transaction pool in the unified New/Init flow.
-	return &ShardBackend{chain: NewShardChain(db, chain, nil), engine: engine, clusterClient: client}, nil
+	return &Shard{chain: NewShardChain(db, chain, nil), engine: engine, clusterClient: client}, nil
 }
 
-// Init selects the root checkpoint received from master. Root genesis already
-// contains the shard genesis header, so initialization does not report it again.
-func (s *ShardBackend) Init(root *qkctypes.RootBlock) error {
+// Init uses the checkpoint received from master to set the root tip and restore
+// the shard head to its last confirmed block. Root-chain recovery is responsible
+// for selecting the checkpoint before calling Init. On restart, pyquarkchain's
+// RootDb.__recover_from_db selects the parent of the persisted non-genesis root
+// tip, since the latest root may not have reached every shard.
+func (s *Shard) Init(root *qkctypes.RootBlock) error {
+	// TODO: Implement the one-block rewind in RootChain restart recovery and
+	// have master pass the recovered checkpoint here. This is RootChain's work.
 	return s.chain.Init(root)
 }
 
 // Stop releases owned resources once. The caller retains the database and client.
-func (s *ShardBackend) Stop() error {
+func (s *Shard) Stop() error {
 	s.stopOnce.Do(func() {
 		s.chain.chain.Stop()
 		s.stopErr = s.engine.Close()
@@ -100,7 +117,7 @@ func (s *ShardBackend) Stop() error {
 // coinbase, and returns the adjusted difficulty its seal must meet.
 // It reuses the chain's bound builder. Like pyquarkchain, the timestamp follows
 // the parent even when its next second is ahead of the clock.
-func (s *ShardBackend) CreateBlockToMine(ctx context.Context, coinbase common.Address) (*types.Block, *big.Int, error) {
+func (s *Shard) CreateBlockToMine(ctx context.Context, coinbase common.Address) (*types.Block, *big.Int, error) {
 	bc := s.chain.chain
 	parent := bc.CurrentBlock()
 	block, err := s.chain.BuildBlock(ctx, miner.QKCBlockArgs{
@@ -120,17 +137,17 @@ func (s *ShardBackend) CreateBlockToMine(ctx context.Context, coinbase common.Ad
 
 // InsertMinedBlock imports and propagates a sealed candidate through the same
 // path as a block received from the network.
-func (s *ShardBackend) InsertMinedBlock(block *types.Block) error {
+func (s *Shard) InsertMinedBlock(block *types.Block) error {
 	return s.AddShardBlock(context.Background(), block)
 }
 
 // SubscribeChainHeadEvent registers a subscription for shard head changes.
-func (s *ShardBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+func (s *Shard) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return s.chain.chain.SubscribeChainHeadEvent(ch)
 }
 
 // AddRootBlock imports a root and reports whether it became the root tip.
-func (s *ShardBackend) AddRootBlock(root *qkctypes.RootBlock) (bool, error) {
+func (s *Shard) AddRootBlock(root *qkctypes.RootBlock) (bool, error) {
 	if root == nil {
 		return false, fmt.Errorf("%w: nil root block", ErrInvalidRootBlock)
 	}
@@ -143,7 +160,7 @@ func (s *ShardBackend) AddRootBlock(root *qkctypes.RootBlock) (bool, error) {
 // root that confirms it. Destinations come from config, not from emitted messages.
 // Each ClusterClient call must succeed for all hosts serving that shard. A failure
 // stops delivery; retrying repeats all deliveries by block hash.
-func (s *ShardBackend) BroadcastXShardTxList(ctx context.Context, blockHash common.Hash) error {
+func (s *Shard) BroadcastXShardTxList(ctx context.Context, blockHash common.Hash) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -175,11 +192,28 @@ func (s *ShardBackend) BroadcastXShardTxList(ctx context.Context, blockHash comm
 // waits for every destination to acknowledge its list, including empty lists,
 // before reporting the header, because a root may confirm it afterward.
 //
-// Import and propagation are not atomic: an error may leave the block stored and
-// some recipients notified. A known block must still run both propagation steps
-// on retry. Unlike Python's commit marker and per-block futures, no delivery
-// progress is tracked here; callers retry and recipients accept duplicates.
-func (s *ShardBackend) AddShardBlock(ctx context.Context, block *types.Block) error {
+// Most errors can be resolved through retries or recovery. The main retry
+// paths are:
+//
+//  1. After an error, the caller calls AddShardBlock again with the same block.
+//  2. Once root sync is added, it can call AddShardBlock for the shard blocks
+//     needed before importing a root block.
+//
+// Retry results by failed stage:
+//
+//   - Invalid block: discard it without retrying. If required data is missing,
+//     the caller can sync that data and try again.
+//   - Storage succeeds but SetCanonical fails: a retry skips the known block and
+//     continues broadcasting and reporting without calling SetCanonical again.
+//     A later descendant selected as head, or a root confirming this branch,
+//     may make the stored block canonical.
+//   - Import succeeds but broadcasting fails: a retry skips import, sends all
+//     cross-shard lists again, and reports to master after all sends succeed.
+//     Recipients accept repeated inserts.
+//   - Reporting fails: a retry sends all lists and reports to master again.
+//     Master may already have accepted the earlier report, so recipients must
+//     accept duplicate requests.
+func (s *Shard) AddShardBlock(ctx context.Context, block *types.Block) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -200,12 +234,12 @@ func (s *ShardBackend) AddShardBlock(ctx context.Context, block *types.Block) er
 }
 
 // CurrentBlock returns the canonical shard head.
-func (s *ShardBackend) CurrentBlock() *types.Header {
+func (s *Shard) CurrentBlock() *types.Header {
 	return s.chain.chain.CurrentBlock()
 }
 
 // RootTip returns the root-tip hash, or zero before Init, for mining compatibility.
-func (s *ShardBackend) RootTip() common.Hash {
+func (s *Shard) RootTip() common.Hash {
 	if tip := s.chain.RootTip(); tip != nil {
 		return tip.Hash()
 	}
@@ -214,7 +248,7 @@ func (s *ShardBackend) RootTip() common.Hash {
 
 // GetRootChainStakes reads stakes at the requested shard block. Only shard zero
 // serves root-chain stakes; the blockchain enforces that restriction.
-func (s *ShardBackend) GetRootChainStakes(address common.Address, shardBlockHash common.Hash) (*uint256.Int, common.Address, error) {
+func (s *Shard) GetRootChainStakes(address common.Address, shardBlockHash common.Hash) (*uint256.Int, common.Address, error) {
 	header := s.chain.chain.GetHeaderByHash(shardBlockHash)
 	if header == nil {
 		return nil, common.Address{}, fmt.Errorf("shard block header %s not found", shardBlockHash.Hex())
@@ -225,7 +259,7 @@ func (s *ShardBackend) GetRootChainStakes(address common.Address, shardBlockHash
 // AddXshardTxList stores a validated remote block's deposits. An empty list is
 // still RLP-encoded and written, distinguishing it from a list not yet received.
 // The remote shard validates the list; repeated deliveries overwrite the same key.
-func (s *ShardBackend) AddXshardTxList(shardBlockHash common.Hash, deposits []*types.DepositTx) error {
+func (s *Shard) AddXshardTxList(shardBlockHash common.Hash, deposits []*types.DepositTx) error {
 	if err := rawdb.WriteXShardDepositsWithError(s.chain.db, shardBlockHash, deposits); err != nil {
 		return fmt.Errorf("store block %x cross-shard deposits: %w", shardBlockHash, err)
 	}
@@ -234,6 +268,6 @@ func (s *ShardBackend) AddXshardTxList(shardBlockHash common.Hash, deposits []*t
 
 // GetUnconfirmedHeaderList returns the earliest unconfirmed canonical headers
 // selected by ShardChain, independently of propagation status.
-func (s *ShardBackend) GetUnconfirmedHeaderList() ([]*types.Header, error) {
+func (s *Shard) GetUnconfirmedHeaderList() ([]*types.Header, error) {
 	return s.chain.GetUnconfirmedHeaderList()
 }
