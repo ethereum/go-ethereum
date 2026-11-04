@@ -1,4 +1,18 @@
-// Copyright 2026-2027, QuarkChain.
+// Copyright 2026-2027 The quarkchain Authors
+// This file is part of the quarkchain library.
+//
+// The quarkchain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The quarkchain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package conn provides the generic RPC engine used by cluster connection
 // implementations.
@@ -24,46 +38,35 @@ import (
 // panic is fatal to the connection. Non-RPC handlers may return a nil response.
 // Handlers run concurrently, without an execution-order guarantee, and are
 // neither canceled nor awaited by Close.
-type TypedHandler func(req any) (resp any, err error)
+type TypedHandler func(req wire.SSZMessage) (resp wire.SSZMessage, err error)
 
 // OpSerializer describes how to deserialize a request and serialize a response
 // for a specific opcode.
 type OpSerializer struct {
-	NewRequest     func() any
-	NewResponse    func() any
-	Deserialize    func([]byte, any) error
-	Serialize      func(any) ([]byte, error)
+	NewRequest     func() wire.SSZMessage
+	NewResponse    func() wire.SSZMessage
 	ResponseOpCode byte
+}
+
+// sszPointer constrains a pointer to a message type to implement wire.SSZMessage.
+type sszPointer[T any] interface {
+	*T
+	wire.SSZMessage
 }
 
 // OpSerializerFor creates an OpSerializer for request type R and response type
 // S, with the response opcode set to respOp.
-// Its Serialize callback accepts both requests and responses.
-func OpSerializerFor[R, S any](respOp byte) *OpSerializer {
+func OpSerializerFor[R, S any, RP sszPointer[R], SP sszPointer[S]](respOp byte) *OpSerializer {
 	return &OpSerializer{
-		NewRequest:  func() any { return new(R) },
-		NewResponse: func() any { return new(S) },
-		Deserialize: func(p []byte, v any) error {
-			msg, ok := v.(wire.SSZMessage)
-			if !ok {
-				return fmt.Errorf("%T does not implement wire.SSZMessage", v)
-			}
-			return msg.UnmarshalSSZ(p)
-		},
-		Serialize: func(v any) ([]byte, error) {
-			msg, ok := v.(wire.SSZMessage)
-			if !ok {
-				return nil, fmt.Errorf("%T does not implement wire.SSZMessage", v)
-			}
-			return msg.MarshalSSZ()
-		},
+		NewRequest:     func() wire.SSZMessage { return RP(new(R)) },
+		NewResponse:    func() wire.SSZMessage { return SP(new(S)) },
 		ResponseOpCode: respOp,
 	}
 }
 
 // pendingRPC represents an in-flight RPC call waiting for its response.
 type pendingRPC struct {
-	result     chan any // cap 1
+	result     chan wire.SSZMessage // cap 1
 	expectedOp byte
 }
 
@@ -96,6 +99,8 @@ const (
 //   - writeMu may be acquired before mu.
 //   - mu must never be held while acquiring writeMu.
 //   - mu must never be held during network I/O.
+//   - A failed write calls shutdown with writeMu held, so neither shutdown nor
+//     FrameTransport.Close may acquire writeMu.
 //
 // Invariants:
 //
@@ -210,27 +215,24 @@ func (c *BaseConn) Close() {
 	c.shutdown(nil)
 }
 
-// SendRPC sends a request with ClusterPeerID zero and waits for its response.
-func (c *BaseConn) SendRPC(ctx context.Context, opcode byte, payload []byte) (any, error) {
-	return c.SendRPCWithPeerID(ctx, opcode, payload, 0)
-}
-
-// SendRPCWithPeerID sends a request with a cluster peer routing ID and waits
-// for its response. Returns the deserialized response object.
+// SendRPC serializes a request with ClusterPeerID zero and waits for its response.
+// Serialization errors are returned without closing the connection.
 // ctx controls response waiting; it does not interrupt lock waits or writes.
-func (c *BaseConn) SendRPCWithPeerID(
-	ctx context.Context,
-	opcode byte,
-	payload []byte,
-	clusterPeerID uint64,
-) (any, error) {
+func (c *BaseConn) SendRPC(ctx context.Context, opcode byte, req wire.SSZMessage) (wire.SSZMessage, error) {
 	ser, ok := c.requestSerializers[opcode]
 	_, nonRPC := c.nonRPCOps[opcode]
 	if !ok || nonRPC {
 		return nil, fmt.Errorf("unknown rpc request opcode 0x%x", opcode)
 	}
+	if req == nil {
+		return nil, fmt.Errorf("nil rpc request")
+	}
+	payload, err := req.MarshalSSZ()
+	if err != nil {
+		return nil, fmt.Errorf("serialize rpc request: %w", err)
+	}
 	call := &pendingRPC{
-		result:     make(chan any, 1),
+		result:     make(chan wire.SSZMessage, 1),
 		expectedOp: ser.ResponseOpCode,
 	}
 
@@ -252,11 +254,10 @@ func (c *BaseConn) SendRPCWithPeerID(
 	c.pending[rpcID] = call
 	c.mu.Unlock()
 
-	err := c.writeFrameLocked(&wire.ClusterFrame{
-		ClusterPeerID: clusterPeerID,
-		Opcode:        opcode,
-		RPCID:         rpcID,
-		Payload:       payload,
+	err = c.writeFrameLocked(&wire.ClusterFrame{
+		Opcode:  opcode,
+		RPCID:   rpcID,
+		Payload: payload,
 	})
 	c.writeMu.Unlock()
 
@@ -267,11 +268,7 @@ func (c *BaseConn) SendRPCWithPeerID(
 	}()
 
 	if err != nil {
-		if errors.Is(err, wire.ErrInvalidClusterFrame) {
-			return nil, err
-		}
-		c.shutdown(fmt.Errorf("write frame rpc=%d: %w", rpcID, err))
-		return nil, ErrConnectionClosed
+		return nil, err
 	}
 
 	select {
@@ -290,22 +287,24 @@ func (c *BaseConn) SendRPCWithPeerID(
 	}
 }
 
-// SendCommand sends a fire-and-forget command with ClusterPeerID zero.
-func (c *BaseConn) SendCommand(opcode byte, payload []byte) error {
-	return c.SendCommandWithPeerID(opcode, payload, 0)
-}
-
-// SendCommandWithPeerID sends a fire-and-forget command with a cluster peer
-// routing ID. The opcode must be registered in Config.NonRPCOps.
-func (c *BaseConn) SendCommandWithPeerID(opcode byte, payload []byte, clusterPeerID uint64) error {
+// SendCommand serializes a fire-and-forget command with ClusterPeerID zero.
+// The opcode must be registered in Config.NonRPCOps.
+// Serialization errors are returned without closing the connection.
+func (c *BaseConn) SendCommand(opcode byte, cmd wire.SSZMessage) error {
 	if _, ok := c.nonRPCOps[opcode]; !ok {
 		return fmt.Errorf("unknown command opcode 0x%x", opcode)
 	}
+	if cmd == nil {
+		return fmt.Errorf("nil command")
+	}
+	payload, err := cmd.MarshalSSZ()
+	if err != nil {
+		return fmt.Errorf("serialize command: %w", err)
+	}
 	frame := &wire.ClusterFrame{
-		ClusterPeerID: clusterPeerID,
-		Opcode:        opcode,
-		RPCID:         0,
-		Payload:       payload,
+		Opcode:  opcode,
+		RPCID:   0,
+		Payload: payload,
 	}
 	return c.writeFrame(frame)
 }
@@ -383,8 +382,7 @@ func (c *BaseConn) checkActiveLocked() error {
 
 // -- Write path ---------------------------------------------------------------
 //
-// writeFrame writes a pre-built frame. Failures are recorded before releasing
-// writeMu so queued writers cannot use a damaged stream before shutdown.
+// writeFrame writes a pre-built frame, serialized with all other writes.
 func (c *BaseConn) writeFrame(f *wire.ClusterFrame) error {
 	c.writeMu.Lock()
 	c.mu.RLock()
@@ -398,25 +396,20 @@ func (c *BaseConn) writeFrame(f *wire.ClusterFrame) error {
 	err := c.writeFrameLocked(f)
 	c.writeMu.Unlock()
 
-	if err != nil && !errors.Is(err, wire.ErrInvalidClusterFrame) {
-		c.shutdown(fmt.Errorf("write frame: %w", err))
-	}
 	return err
 }
 
 // writeFrameLocked requires writeMu. Except for validation errors, a failed or
-// panicked write marks the connection Closed before releasing writeMu to prevent
-// further writes. The caller completes shutdown after releasing writeMu.
+// panicked write shuts down the connection before releasing writeMu to prevent
+// further writes.
 func (c *BaseConn) writeFrameLocked(f *wire.ClusterFrame) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("transport write panic: %v", r)
 		}
 		if err != nil && !errors.Is(err, wire.ErrInvalidClusterFrame) {
-			c.mu.Lock()
-			// Reject further writes now; shutdown performs cleanup after writeMu is released.
-			c.state = ConnectionStateClosed
-			c.mu.Unlock()
+			c.shutdown(fmt.Errorf("write frame: %w", err))
+			err = fmt.Errorf("%w: %w", ErrConnectionClosed, err)
 		}
 	}()
 	return c.transport.WriteFrame(f)
@@ -509,7 +502,7 @@ func (c *BaseConn) handleResponse(frame *wire.ClusterFrame, ser *OpSerializer) {
 	}
 
 	resp := ser.NewResponse()
-	if err := ser.Deserialize(frame.Payload, resp); err != nil {
+	if err := resp.UnmarshalSSZ(frame.Payload); err != nil {
 		c.log.Warn("malformed response payload", "opcode", frame.Opcode, "err", err)
 		c.shutdown(fmt.Errorf("malformed response payload for opcode 0x%x: %w", frame.Opcode, err))
 		return
@@ -551,7 +544,7 @@ func (c *BaseConn) dispatch(frame *wire.ClusterFrame, handler TypedHandler, ser 
 	}()
 
 	req := ser.NewRequest()
-	if err := ser.Deserialize(frame.Payload, req); err != nil {
+	if err := req.UnmarshalSSZ(frame.Payload); err != nil {
 		c.shutdown(fmt.Errorf("deserialize failed: %w", err))
 		return
 	}
@@ -566,7 +559,7 @@ func (c *BaseConn) dispatch(frame *wire.ClusterFrame, handler TypedHandler, ser 
 	if frame.RPCID == 0 {
 		return
 	}
-	respPayload, err := ser.Serialize(resp)
+	respPayload, err := resp.MarshalSSZ()
 	if err != nil {
 		c.shutdown(fmt.Errorf("serialize response failed: %w", err))
 		return

@@ -30,16 +30,14 @@ import (
 // select the current shard head and root tip, respectively. These references are
 // fixed before execution, so a concurrent head update cannot change the candidate.
 // Pool transactions follow mandatory deposits; NoTxs skips only pool transactions.
-// The builder must be the node's miner for this shard's underlying blockchain;
-// reuse it so runtime miner settings apply. The caller seals and imports the result.
-//
-// TODO: Bind eth.Miner() at ShardChain initialization when node wiring is added.
-func (c *ShardChain) BuildBlock(ctx context.Context, builder *miner.Miner, args miner.QKCBlockArgs) (*types.Block, error) {
+// Construction reuses the node's bound builder and its runtime settings. The caller
+// seals and imports the result.
+func (c *ShardChain) BuildBlock(ctx context.Context, args miner.QKCBlockArgs) (*types.Block, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if builder == nil {
-		return nil, errors.New("miner not configured")
+	if c.builder == nil {
+		return nil, errors.New("block builder not configured")
 	}
 	// Select both tips under the lock shared with head updates.
 	c.mu.Lock()
@@ -65,5 +63,5 @@ func (c *ShardChain) BuildBlock(ctx context.Context, builder *miner.Miner, args 
 	if _, err := c.validateRootReference(header, parent); err != nil {
 		return nil, err
 	}
-	return builder.BuildQKCBlock(ctx, args)
+	return c.builder.BuildQKCBlock(ctx, args)
 }

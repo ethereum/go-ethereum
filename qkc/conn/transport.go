@@ -1,4 +1,18 @@
-// Copyright 2026-2027, QuarkChain.
+// Copyright 2026-2027 The quarkchain Authors
+// This file is part of the quarkchain library.
+//
+// The quarkchain library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The quarkchain library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
 package conn
 
@@ -26,6 +40,9 @@ var frameWriteTimeout = 20 * time.Second
 //
 // Close must be safe to call concurrently with ReadFrame/WriteFrame and must
 // unblock any currently blocked I/O operation.
+// BaseConn may call Close while holding writeMu after a write failure. Close
+// must not acquire that lock, directly or indirectly, or wait for work that
+// requires it (for example, by writing through the same BaseConn).
 // A virtual transport's Close must close only that virtual connection and leave
 // the shared physical transport available to other routes.
 // WriteFrame may return wire.ErrInvalidClusterFrame only if no frame bytes were
