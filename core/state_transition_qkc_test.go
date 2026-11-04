@@ -73,8 +73,8 @@ func testDepositExecution(t *testing.T, amsterdam bool) {
 	if amsterdam {
 		config.AmsterdamTime = new(uint64)
 	}
-	ethConfig := config
 	config.ChainID = big.NewInt(10002)
+	ethConfig := config
 	config.QuarkChain = params.NewTestQuarkChainConfig(10002, 10001, 10002).QuarkChain
 	gspec := &Genesis{
 		Config: &config,
