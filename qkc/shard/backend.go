@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -30,11 +31,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/qkc/rawdb"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
 	"github.com/holiman/uint256"
 )
+
+var _ MinerBackend = (*ShardBackend)(nil)
 
 // ShardBackend owns its blockchain and consensus engine. Its database and cluster
 // client are borrowed; their caller stops incoming requests before Stop.
@@ -73,7 +77,8 @@ func New(chainConfig *params.ChainConfig, genesis *core.Genesis, db ethdb.Databa
 		engine.Close()
 		return nil, err
 	}
-	return &ShardBackend{chain: NewShardChain(db, chain), engine: engine, clusterClient: client}, nil
+	// TODO: Initialize the builder and transaction pool in the unified New/Init flow.
+	return &ShardBackend{chain: NewShardChain(db, chain, nil), engine: engine, clusterClient: client}, nil
 }
 
 // Init selects the root checkpoint received from master. Root genesis already
@@ -93,25 +98,35 @@ func (s *ShardBackend) Stop() error {
 
 // CreateBlockToMine builds an unsealed candidate on the shard head, paying
 // coinbase, and returns the adjusted difficulty its seal must meet.
-// TODO(Lun): Reuse the shard block builder and parent-state PoSW calculation.
+// It reuses the chain's bound builder. Like pyquarkchain, the timestamp follows
+// the parent even when its next second is ahead of the clock.
 func (s *ShardBackend) CreateBlockToMine(ctx context.Context, coinbase common.Address) (*types.Block, *big.Int, error) {
-	return nil, nil, errors.New("CreateBlockToMine not implemented")
+	bc := s.chain.chain
+	parent := bc.CurrentBlock()
+	block, err := s.chain.BuildBlock(ctx, miner.QKCBlockArgs{
+		Parent:       parent.Hash(),
+		Timestamp:    max(uint64(time.Now().Unix()), parent.Time+1),
+		FeeRecipient: coinbase,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	diff, err := posw.GetAdjustedDifficulty(bc.Config().QuarkChain.PoSW, bc, block.Header())
+	if err != nil {
+		return nil, nil, err
+	}
+	return block, diff, nil
 }
 
-// InsertMinedBlock imports a sealed candidate through AddShardBlock so mined
-// and received blocks follow the same cross-shard delivery and reporting path.
-// TODO(Lun): Integrate mined-block insertion with the mining lifecycle.
+// InsertMinedBlock imports and propagates a sealed candidate through the same
+// path as a block received from the network.
 func (s *ShardBackend) InsertMinedBlock(block *types.Block) error {
-	return errors.New("InsertMinedBlock not implemented")
+	return s.AddShardBlock(context.Background(), block)
 }
 
 // SubscribeChainHeadEvent registers a subscription for shard head changes.
-// Until implemented, the subscription reports its error through Err().
-// TODO(Lun): Delegate to BlockChain and integrate the subscription with mining.
 func (s *ShardBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
-	return event.NewSubscription(func(<-chan struct{}) error {
-		return errors.New("SubscribeChainHeadEvent not implemented")
-	})
+	return s.chain.chain.SubscribeChainHeadEvent(ch)
 }
 
 // AddRootBlock imports a root and reports whether it became the root tip.
@@ -191,7 +206,10 @@ func (s *ShardBackend) CurrentBlock() *types.Header {
 
 // RootTip returns the root-tip hash, or zero before Init, for mining compatibility.
 func (s *ShardBackend) RootTip() common.Hash {
-	return s.chain.RootTip()
+	if tip := s.chain.RootTip(); tip != nil {
+		return tip.Hash()
+	}
+	return common.Hash{}
 }
 
 // GetRootChainStakes reads stakes at the requested shard block. Only shard zero

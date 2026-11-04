@@ -737,16 +737,6 @@ func (c *ShardChain) setCanonicalByHead(head *types.Header) error {
 	return nil
 }
 
-// RootTip returns the selected root-tip hash, or zero before Init succeeds.
-func (c *ShardChain) RootTip() common.Hash {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.rootTip == nil {
-		return common.Hash{}
-	}
-	return c.rootTip.Hash()
-}
-
 // GetUnconfirmedHeaderList returns the earliest canonical shard headers after
 // the current root tip's last confirmation, in ascending height order. The list
 // is capped by MaxBlocksPerRootBlock (zero means unlimited). Shard genesis

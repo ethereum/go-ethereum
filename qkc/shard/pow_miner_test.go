@@ -40,9 +40,17 @@ func testPoWMiner(t *testing.T, test func(*testing.T)) {
 func newPoWMinerEnv(t *testing.T, config PoWMinerConfig) (*testEnv, *PoWMiner) {
 	t.Helper()
 	env, _, _ := newMiningEnv(t, 1)
-	m := NewPoWMiner(NewShard(env.sc), config)
+	m := NewPoWMiner(newMiningShardBackend(env.sc), config)
 	t.Cleanup(m.StopLocalMining)
 	return env, m
+}
+
+// newMiningShardBackend acknowledges cluster delivery for the mining tests.
+func newMiningShardBackend(chain *ShardChain) *ShardBackend {
+	return &ShardBackend{chain: chain, clusterClient: &backendClusterClient{
+		broadcast: func(context.Context, uint32, common.Hash, []*types.DepositTx) error { return nil },
+		report:    func(context.Context, *types.Header, *uint256.Int) error { return nil },
+	}}
 }
 
 // servedBlock returns the served candidate with the given seal hash.
@@ -168,7 +176,7 @@ func TestPoWMinerSubmitWork(t *testing.T) {
 
 // failingShard is a shard layer whose imports fail while err is set.
 type failingShard struct {
-	*Shard
+	*ShardBackend
 	err error
 }
 
@@ -176,14 +184,14 @@ func (s *failingShard) InsertMinedBlock(block *types.Block) error {
 	if s.err != nil {
 		return s.err
 	}
-	return s.Shard.InsertMinedBlock(block)
+	return s.ShardBackend.InsertMinedBlock(block)
 }
 
 func TestPoWMinerSubmitWorkInsertFailure(t *testing.T) {
 	testPoWMiner(t, func(t *testing.T) {
 		env, _, _ := newMiningEnv(t, 1)
 		insertErr := errors.New("insert failed")
-		backend := &failingShard{Shard: NewShard(env.sc), err: insertErr}
+		backend := &failingShard{ShardBackend: newMiningShardBackend(env.sc), err: insertErr}
 		m := NewPoWMiner(backend, PoWMinerConfig{})
 		work := getWork(t, m, common.Address{0xaa})
 		if err := m.SubmitWork(work.SealHash, types.EncodeNonce(1), common.Hash{}); !errors.Is(err, insertErr) {
