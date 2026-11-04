@@ -39,7 +39,7 @@ func TestSimulateVerifySeal(t *testing.T) {
 			config := chain.config.QuarkChain.PoSW
 			config.StakingEnabled, config.WindowSize, config.DiffDivider, config.StakePerBlock = test.staking, 3, 100, big.NewInt(100)
 			chain.stakes[parent.Hash()] = uint256.NewInt(100)
-			engine, err := NewSimulate(chain.config.QuarkChain, parent)
+			engine, err := NewSimulate(chain.config, parent)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -102,7 +102,7 @@ func TestNewSimulateValidation(t *testing.T) {
 	if engine, err := NewSimulate(nil, genesis); err == nil || engine != nil {
 		t.Fatalf("accepted missing configuration: %v, %v", engine, err)
 	}
-	if engine, err := NewSimulate(chain.config.QuarkChain, nil); err == nil || engine != nil {
+	if engine, err := NewSimulate(chain.config, nil); err == nil || engine != nil {
 		t.Fatalf("accepted missing genesis: %v, %v", engine, err)
 	}
 }
