@@ -157,7 +157,8 @@ func TestQuarkChainConfigEqual(t *testing.T) {
 }
 
 // TestQuarkChainConfigTaxValidation checks the tax at initialization alongside
-// PoSW parameters; a missing rate must not silently become zero tax.
+// PoSW parameters; missing and endpoint rates must be rejected before root
+// reward reconstruction can divide by zero.
 func TestQuarkChainConfigTaxValidation(t *testing.T) {
 	for _, test := range []struct {
 		name string
@@ -165,6 +166,8 @@ func TestQuarkChainConfigTaxValidation(t *testing.T) {
 	}{
 		{"missing", nil},
 		{"negative", big.NewRat(-1, 2)},
+		{"zero", new(big.Rat)},
+		{"one", big.NewRat(1, 1)},
 		{"above one", big.NewRat(3, 2)},
 		{"denominator", big.NewRat(1, 1000)},
 		{"repeating decimal", big.NewRat(1, 3)},
@@ -177,7 +180,7 @@ func TestQuarkChainConfigTaxValidation(t *testing.T) {
 			}
 		})
 	}
-	for _, tax := range []*big.Rat{new(big.Rat), big.NewRat(1, 8), big.NewRat(1, 2), big.NewRat(99, 100), big.NewRat(1, 1)} {
+	for _, tax := range []*big.Rat{big.NewRat(1, 100), big.NewRat(1, 8), big.NewRat(1, 2), big.NewRat(99, 100)} {
 		config := validQuarkChainConfig()
 		config.RewardTaxRate = tax
 		if err := config.Check(); err != nil {

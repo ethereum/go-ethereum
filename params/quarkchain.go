@@ -55,8 +55,10 @@ type QuarkChainConfig struct {
 
 	PoSW *PoSWConfig `json:"posw"` // Required consensus configuration for this shard.
 	// RewardTaxRate is the fraction of the decayed subsidy and each miner fee
-	// shared with root. Check requires a finite decimal in [0, 1] with a reduced
+	// shared with root. Check requires a finite decimal in (0, 1) with a reduced
 	// denominator no greater than 100. AfterTax returns the retained share.
+	// TODO: Defer decimal JSON support to the upcoming config work; the config file
+	// format and how QuarkChainConfig is constructed are not yet decided.
 	RewardTaxRate *big.Rat `json:"rewardTaxRate"`
 	// MaxBlocksPerRootBlock caps the number of blocks of this shard a root
 	// block can confirm, as max_blocks_per_shard_in_one_root_block in
@@ -84,8 +86,9 @@ func (c *QuarkChainConfig) Check() error {
 	if err := c.PoSW.Check(); err != nil {
 		return err
 	}
-	if c.RewardTaxRate == nil || c.RewardTaxRate.Sign() < 0 || c.RewardTaxRate.Cmp(big.NewRat(1, 1)) > 0 {
-		return errors.New("quarkchain: reward tax rate must be between zero and one")
+	// Python's root reward reconstruction divides by the tax rate and the retained share.
+	if c.RewardTaxRate == nil || c.RewardTaxRate.Sign() <= 0 || c.RewardTaxRate.Cmp(big.NewRat(1, 1)) >= 0 {
+		return errors.New("quarkchain: reward tax rate must be greater than zero and less than one")
 	}
 	// Match pyquarkchain's reward_tax_rate denominator limit.
 	if c.RewardTaxRate.Denom().Cmp(big.NewInt(100)) > 0 {

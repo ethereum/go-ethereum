@@ -516,9 +516,6 @@ func TestRewardDecay(t *testing.T) {
 		epoch  uint64
 		want   uint64
 	}{
-		{"root before decay", "0.88", "0", 100, 0, 100},
-		{"root first epoch", "0.88", "0", 100, 1, 88},
-		{"root second epoch", "0.88", "0", 100, 2, 77},
 		{"before decay", "0.88", "0.5", 100, 0, 50},
 		{"first epoch", "0.88", "0.5", 100, 1, 44},
 		{"second epoch", "0.88", "0.5", 100, 2, 38},
@@ -531,8 +528,6 @@ func TestRewardDecay(t *testing.T) {
 		{"zero factor before decay", "0", "0.5", 100, 0, 50},
 		{"zero factor after decay", "0", "0.5", 100, 1, 0},
 		{"zero subsidy", "0.88", "0.5", 0, 0, 0},
-		{"full tax before decay", "0.88", "1", 100, 0, 0},
-		{"full tax after decay", "0.88", "1", 100, 1, 0},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			factor, ok := new(big.Rat).SetString(test.factor)
