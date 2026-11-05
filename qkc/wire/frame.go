@@ -23,15 +23,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
+	"math/big"
 )
 
-// RootChainID is reserved for root-chain traffic handled by the Master. It is
-// never a valid chain ID.
-const RootChainID uint32 = math.MaxUint32
+// RootChainID returns a fresh zero ID for root-chain traffic handled by the
+// Master. Zero is never a valid shard chain ID.
+func RootChainID() *big.Int {
+	return new(big.Int)
+}
 
 const (
-	chainIDSize       = 4
+	chainIDSize       = 32
 	clusterPeerIDSize = 8
 	opcodeSize        = 1
 	rpcIDSize         = 8
@@ -50,11 +52,11 @@ const MaxFramePayloadLen = 16 << 20
 //
 // Wire layout:
 //
-//	[4B payload_len][8B cluster_peer_id, Master↔chain only][1B opcode][8B rpc_id][payload]
+//	[4B payload_len][8B cluster_peer_id, Master↔slave only][1B opcode][8B rpc_id][payload]
 //
 // payload_len counts only payload. ClusterPeerID routes traffic through a
-// virtual peer connection on Master↔chain links; it is zero for ordinary
-// cluster traffic and is omitted entirely on direct chain↔chain links.
+// virtual peer connection on Master↔slave links; it is zero for ordinary
+// cluster traffic and is omitted entirely on direct slave↔slave links.
 //
 // The codec selected for the connection determines whether ClusterPeerID is
 // present on the wire.
@@ -68,36 +70,36 @@ type ClusterFrame struct {
 // P2PFrame is an external cluster↔cluster message carried as one devp2p
 // protocol message. The devp2p message boundary supplies the frame length.
 //
-// Wire payload: [4B chain_id][1B opcode][8B rpc_id][payload].
+// Wire payload: [32B chain_id][1B opcode][8B rpc_id][payload].
 type P2PFrame struct {
 	// ChainID selects the destination chain. RootChainID routes root-chain
 	// traffic to the Master.
-	ChainID uint32
+	ChainID *big.Int
 	Opcode  byte
 	RPCID   uint64
 	Payload []byte
 }
 
-// ReadClusterFrame reads one direct chain↔chain internal TCP frame, which does
+// ReadClusterFrame reads one direct slave↔slave internal TCP frame, which does
 // not carry a ClusterPeerID. maxPayloadLen must be in [1, MaxFramePayloadLen].
 func ReadClusterFrame(r io.Reader, maxPayloadLen uint32) (*ClusterFrame, error) {
 	return readClusterFrame(r, maxPayloadLen, false)
 }
 
-// WriteClusterFrame writes one direct chain↔chain internal TCP frame, which
+// WriteClusterFrame writes one direct slave↔slave internal TCP frame, which
 // does not carry a ClusterPeerID.
 func WriteClusterFrame(w io.Writer, frame *ClusterFrame) error {
 	return writeClusterFrame(w, frame, false)
 }
 
-// ReadClusterFrameWithPeerID reads one Master↔chain internal TCP frame. The
+// ReadClusterFrameWithPeerID reads one Master↔slave internal TCP frame. The
 // 8-byte ClusterPeerID routes a virtual peer command through the connection.
 // maxPayloadLen must be in [1, MaxFramePayloadLen].
 func ReadClusterFrameWithPeerID(r io.Reader, maxPayloadLen uint32) (*ClusterFrame, error) {
 	return readClusterFrame(r, maxPayloadLen, true)
 }
 
-// WriteClusterFrameWithPeerID writes one Master↔chain internal TCP frame.
+// WriteClusterFrameWithPeerID writes one Master↔slave internal TCP frame.
 func WriteClusterFrameWithPeerID(w io.Writer, frame *ClusterFrame) error {
 	return writeClusterFrame(w, frame, true)
 }
@@ -171,7 +173,7 @@ func DecodeP2PFrame(data []byte) (*P2PFrame, error) {
 
 	body := data[chainIDSize:]
 	return &P2PFrame{
-		ChainID: binary.BigEndian.Uint32(data[:chainIDSize]),
+		ChainID: new(big.Int).SetBytes(data[:chainIDSize]),
 		Opcode:  body[0],
 		RPCID:   binary.BigEndian.Uint64(body[1:frameBodyHeader]),
 		Payload: body[frameBodyHeader:],
@@ -185,8 +187,11 @@ func EncodeP2PFrame(frame *P2PFrame) ([]byte, error) {
 	if frame == nil {
 		return nil, errors.New("nil P2P frame")
 	}
+	if frame.ChainID == nil || frame.ChainID.Sign() < 0 || frame.ChainID.BitLen() > 256 {
+		return nil, fmt.Errorf("invalid routing chain ID: %v", frame.ChainID)
+	}
 	buf := make([]byte, chainIDSize+frameBodyHeader+len(frame.Payload))
-	binary.BigEndian.PutUint32(buf[:chainIDSize], frame.ChainID)
+	frame.ChainID.FillBytes(buf[:chainIDSize])
 	buf[chainIDSize] = frame.Opcode
 	binary.BigEndian.PutUint64(buf[chainIDSize+opcodeSize:chainIDSize+frameBodyHeader], frame.RPCID)
 	copy(buf[chainIDSize+frameBodyHeader:], frame.Payload)
