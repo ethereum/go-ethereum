@@ -275,6 +275,9 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 			if !failReport && reports != 0 {
 				t.Fatal("broadcast failure still reported to master")
 			}
+			if committed, err := qkcrawdb.IsShardBlockCommitted(env.db, block.Hash()); err != nil || committed {
+				t.Fatalf("failed delivery committed: %v, %v", committed, err)
+			}
 			fail, reports, delivered = false, 0, make(map[string]bool)
 			// A fresh wrapper has no in-memory delivery progress to rely on.
 			s = &Shard{chain: env.sc, clusterClient: client}
@@ -284,14 +287,106 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 			if len(delivered) != 2 || reports != 1 {
 				t.Fatalf("retry deliveries %v, master reports %d", delivered, reports)
 			}
+			// Completion survives replacing the backend and suppresses future RPCs.
+			if committed, err := qkcrawdb.IsShardBlockCommitted(env.db, block.Hash()); err != nil || !committed {
+				t.Fatalf("successful delivery not committed: %v, %v", committed, err)
+			}
+			s = &Shard{chain: env.sc, clusterClient: &backendClusterClient{}}
+			if err := s.AddShardBlock(context.Background(), block); err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 }
 
-// failingDepositDB injects a write error before changing the stored deposit list.
+// Mining submissions bound either RPC stage without changing the miner interface.
+func TestBackendInsertMinedBlockTimeout(t *testing.T) {
+	for _, stage := range []string{"broadcast", "report"} {
+		t.Run(stage, func(t *testing.T) {
+			testPoWMiner(t, func(t *testing.T) {
+				env := newTestEnv(t)
+				block := env.makeBlocks(env.genesis, 1, env.rootGenesis, 1)[0]
+				wait := func(ctx context.Context) error { <-ctx.Done(); return ctx.Err() }
+				s := &Shard{chain: env.sc, clusterClient: &backendClusterClient{
+					broadcast: func(ctx context.Context, _ *big.Int, _ common.Hash, _ []*types.DepositTx) error {
+						if stage == "broadcast" {
+							return wait(ctx)
+						}
+						return nil
+					},
+					report: func(ctx context.Context, _ *types.Header, _ *uint256.Int) error { return wait(ctx) },
+				}}
+				if err := s.InsertMinedBlock(block); !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("hung %s: %v", stage, err)
+				}
+				if committed, err := qkcrawdb.IsShardBlockCommitted(env.db, block.Hash()); err != nil || committed {
+					t.Fatalf("timed-out delivery committed: %v, %v", committed, err)
+				}
+			})
+		})
+	}
+}
+
+// TestBackendCommitStorageFailure keeps read/write errors retryable rather than
+// mistaking a failed marker write for successful delivery.
+func TestBackendCommitStorageFailure(t *testing.T) {
+	for _, writeFailure := range []bool{false, true} {
+		name := "read failure"
+		if writeFailure {
+			name = "write failure"
+		}
+		t.Run(name, func(t *testing.T) {
+			env := newTestEnv(t)
+			block := env.makeBlocks(env.genesis, 1, env.rootGenesis, 1)[0]
+			failure := errors.New("commit database failed")
+			db := &failingDepositDB{KeyValueStore: env.db}
+			if writeFailure {
+				db.err = failure
+			} else {
+				db.hasErr = failure
+			}
+			env.sc.db = db
+			reports := 0
+			s := &Shard{chain: env.sc, clusterClient: &backendClusterClient{
+				broadcast: func(context.Context, *big.Int, common.Hash, []*types.DepositTx) error { return nil },
+				report:    func(context.Context, *types.Header, *uint256.Int) error { reports++; return nil },
+			}}
+			if err := s.AddShardBlock(context.Background(), block); !errors.Is(err, failure) {
+				t.Fatalf("storage error: %v", err)
+			}
+			wantReports := 0
+			if writeFailure {
+				wantReports = 1
+			}
+			if reports != wantReports {
+				t.Fatalf("reports before retry = %d, want %d", reports, wantReports)
+			}
+			if committed, _ := qkcrawdb.IsShardBlockCommitted(env.db, block.Hash()); committed {
+				t.Fatal("failed operation committed")
+			}
+			db.err, db.hasErr = nil, nil
+			if err := s.AddShardBlock(context.Background(), block); err != nil {
+				t.Fatal(err)
+			}
+			if reports != wantReports+1 {
+				t.Fatal("retry did not report to master")
+			}
+		})
+	}
+}
+
+// failingDepositDB injects storage errors without changing the underlying data.
 type failingDepositDB struct {
 	ethdb.KeyValueStore
-	err error
+	err    error
+	hasErr error
+}
+
+func (db *failingDepositDB) Has(key []byte) (bool, error) {
+	if db.hasErr != nil {
+		return false, db.hasErr
+	}
+	return db.KeyValueStore.Has(key)
 }
 
 func (db *failingDepositDB) Put(key, value []byte) error {

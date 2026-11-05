@@ -136,3 +136,15 @@ func WriteXShardDepositsWithError(db ethdb.KeyValueWriter, hash common.Hash, dep
 	}
 	return db.Put(xShardDepositsKey(hash), data)
 }
+
+// IsShardBlockCommitted reports whether all cross-shard lists and the header
+// have been acknowledged. Read errors must not be mistaken for a missing marker.
+func IsShardBlockCommitted(db ethdb.KeyValueReader, hash common.Hash) (bool, error) {
+	return db.Has(shardBlockCommitKey(hash))
+}
+
+// WriteShardBlockCommit records completed delivery, as pyquarkchain's commit_ key.
+// Call only after master acknowledges the header; a failed write permits retry.
+func WriteShardBlockCommit(db ethdb.KeyValueWriter, hash common.Hash) error {
+	return db.Put(shardBlockCommitKey(hash), []byte{1})
+}

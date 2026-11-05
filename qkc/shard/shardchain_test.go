@@ -1388,8 +1388,9 @@ func TestShardChainUnconfirmedHeaders(t *testing.T) {
 	root = newRoot(root, 1)
 	env.insertRoot(root, true)
 	t.Run("parent hash traversal", func(t *testing.T) {
+		limit := env.chain.Config().QuarkChain.MaxBlocksPerRootBlock
 		env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = 2
-		defer func() { env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = 0 }()
+		defer func() { env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = limit }()
 		// Only the endpoint uses its height index; an interior index must not
 		// redirect the parent-hash traversal onto a stored fork.
 		fork := env.makeBlocks(blocks[1], 1, env.rootGenesis, 2)[0]
@@ -1410,22 +1411,23 @@ func TestShardChainUnconfirmedHeaders(t *testing.T) {
 	t.Run("missing canonical endpoint", func(t *testing.T) {
 		// The limited range ends at height four; a missing canonical endpoint
 		// is a local inconsistency rather than an empty result or a fallback fork.
+		limit := env.chain.Config().QuarkChain.MaxBlocksPerRootBlock
 		env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = 2
-		defer func() { env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = 0 }()
+		defer func() { env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = limit }()
 		rawdb.DeleteCanonicalHash(env.db, blocks[3].NumberU64())
 		defer rawdb.WriteCanonicalHash(env.db, blocks[3].Hash(), blocks[3].NumberU64())
 		if headers, err := env.sc.GetUnconfirmedHeaderList(); !errors.Is(err, ErrShardStateInconsistency) || headers != nil {
 			t.Fatalf("missing canonical endpoint: %v, error %v", headers, err)
 		}
 	})
-	for _, limit := range []uint64{0, 1, 2, 3, 9} {
+	for _, limit := range []uint64{1, 2, 3, 9} {
 		env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = limit
 		headers, err := env.sc.GetUnconfirmedHeaderList()
 		if err != nil {
 			t.Fatal(err)
 		}
 		count := 3
-		if limit != 0 && limit < uint64(count) {
+		if limit < uint64(count) {
 			count = int(limit)
 		}
 		if len(headers) != count {

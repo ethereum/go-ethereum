@@ -40,12 +40,12 @@ type ClusterClient interface {
 	BroadcastRootBlock(ctx context.Context, block *qkctypes.RootBlock) error
 
 	// GetUnconfirmedHeaderList collects unconfirmed shard headers from the cluster,
-	// grouped by chainID, for constructing a root block. Each shard's headers are
+	// grouped by decimal chainID strings, for constructing a root block. Each shard's headers are
 	// ordered by increasing height. Master filters out headers not yet reported to
 	// it, as in pyquarkchain. A transport or RPC failure, a nonzero remote ErrorCode
 	// (returned as *wire.RemoteError), or a missing connection is returned as an
 	// error rather than silently omitting headers.
-	GetUnconfirmedHeaderList(ctx context.Context) (map[uint32][]*types.Header, error)
+	GetUnconfirmedHeaderList(ctx context.Context) (map[string][]*types.Header, error)
 
 	// GetRootChainStakes asks chainID for the stakes recorded for address at
 	// minorBlockHash. The result is the decoded business response after a

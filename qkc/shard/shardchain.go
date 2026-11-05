@@ -592,7 +592,7 @@ func (c *ShardChain) validateRootBlock(root *qkctypes.RootBlock) (*types.Header,
 		}
 		blocks = append(blocks, block)
 	}
-	if limit := config.QuarkChain.MaxBlocksPerRootBlock; limit != 0 && uint64(len(blocks)) > limit {
+	if limit := config.QuarkChain.MaxBlocksPerRootBlock; uint64(len(blocks)) > limit {
 		return nil, fmt.Errorf("%w: %d, max %d", ErrTooManyConfirmedBlocks, len(blocks), limit)
 	}
 	// Rule 3 local continuity check. The master must validate the complete
@@ -744,7 +744,7 @@ func (c *ShardChain) setCanonicalByHead(head *types.Header) error {
 
 // GetUnconfirmedHeaderList returns the earliest canonical shard headers after
 // the current root tip's last confirmation, in ascending height order. The list
-// is capped by MaxBlocksPerRootBlock (zero means unlimited). Shard genesis
+// is capped by the required positive MaxBlocksPerRootBlock. Shard genesis
 // is already confirmed and excluded.
 //
 // The lock keeps the confirmation and canonical range consistent. Local headers
@@ -796,9 +796,9 @@ func (c *ShardChain) GetUnconfirmedHeaderList() ([]*types.Header, error) {
 	if start > end {
 		return nil, fmt.Errorf("%w: root confirmation is above the shard head", ErrShardStateInconsistency)
 	}
-	if limit := c.chain.Config().QuarkChain.MaxBlocksPerRootBlock; limit != 0 && end-start > limit {
+	if limit := c.chain.Config().QuarkChain.MaxBlocksPerRootBlock; end-start > limit {
 		// Keep the earliest pending headers so the next root extends its parent's
-		// confirmation without gaps. Zero means unlimited in the Go config.
+		// confirmation without gaps.
 		end = start + limit
 		// Holding mu prevents ShardChain's head updates, so this canonical header
 		// belongs to the same chain as the CurrentBlock captured above.

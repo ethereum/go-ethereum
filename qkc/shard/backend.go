@@ -62,6 +62,9 @@ type Shard struct {
 	stopErr       error
 }
 
+// minedBlockDeliveryTimeout bounds RPC delivery for mining submissions.
+const minedBlockDeliveryTimeout = 30 * time.Second
+
 // New constructs a shard without selecting a root tip. chainConfig is
 // authoritative; it is attached to a copy of genesis without changing the caller's
 // genesis. The same borrowed database stores chain data, roots and received deposits.
@@ -140,7 +143,9 @@ func (s *Shard) CreateBlockToMine(ctx context.Context, coinbase common.Address) 
 // InsertMinedBlock imports and propagates a sealed candidate through the same
 // path as a block received from the network.
 func (s *Shard) InsertMinedBlock(block *types.Block) error {
-	return s.AddShardBlock(context.Background(), block)
+	ctx, cancel := context.WithTimeout(context.Background(), minedBlockDeliveryTimeout)
+	defer cancel()
+	return s.AddShardBlock(ctx, block)
 }
 
 // SubscribeChainHeadEvent registers a subscription for shard head changes.
@@ -212,15 +217,32 @@ func (s *Shard) BroadcastXShardTxList(ctx context.Context, blockHash common.Hash
 //   - Import succeeds but broadcasting fails: a retry skips import, sends all
 //     cross-shard lists again, and reports to master after all sends succeed.
 //     Recipients accept repeated inserts.
-//   - Reporting fails: a retry sends all lists and reports to master again.
-//     Master may already have accepted the earlier report, so recipients must
-//     accept duplicate requests.
+//   - Reporting or the commit-marker write fails: a retry sends all lists and
+//     reports to master again. Master may already have accepted the earlier
+//     report, so recipients must accept duplicate requests.
+//
+// A persisted commit marker skips completed blocks, including after restart.
+// Concurrent calls may repeat delivery before the marker is stored; recipients
+// must handle duplicates just as they do for retries.
+// TODO(sync): Network handlers must skip only committed blocks, so receiving an
+// uncommitted known block retries delivery. Also retry uncommitted blocks in the
+// unconfirmed range in a background loop, including failed mined blocks and
+// single-cluster setups where root-sync recovery cannot trigger a retry.
 func (s *Shard) AddShardBlock(ctx context.Context, block *types.Block) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if block == nil {
 		return errors.New("nil shard block")
+	}
+	// Skip completed deliveries so replaying old blocks cannot repeatedly amplify
+	// traffic into cross-shard broadcasts and master reports.
+	committed, err := rawdb.IsShardBlockCommitted(s.chain.db, block.Hash())
+	if err != nil {
+		return fmt.Errorf("read block %x commit marker: %w", block.Hash(), err)
+	}
+	if committed {
+		return nil
 	}
 	if err := s.chain.InsertShardBlock(block); err != nil {
 		return err
@@ -231,6 +253,9 @@ func (s *Shard) AddShardBlock(ctx context.Context, block *types.Block) error {
 	// TODO: Replace zero with the actual coinbase amount: reward plus ordinary and cross-shard fees.
 	if err := s.clusterClient.SendMinorBlockHeaderToMaster(ctx, block.Header(), new(uint256.Int)); err != nil {
 		return fmt.Errorf("report block %x to master: %w", block.Hash(), err)
+	}
+	if err := rawdb.WriteShardBlockCommit(s.chain.db, block.Hash()); err != nil {
+		return fmt.Errorf("commit block %x delivery: %w", block.Hash(), err)
 	}
 	return nil
 }
@@ -248,8 +273,8 @@ func (s *Shard) RootTip() common.Hash {
 	return common.Hash{}
 }
 
-// GetRootChainStakes reads stakes at the requested shard block. Only shard zero
-// serves root-chain stakes; the blockchain enforces that restriction.
+// GetRootChainStakes reads stakes at the requested shard block. Only the first
+// configured chain serves root-chain stakes; the blockchain enforces that restriction.
 func (s *Shard) GetRootChainStakes(address common.Address, shardBlockHash common.Hash) (*uint256.Int, common.Address, error) {
 	header := s.chain.chain.GetHeaderByHash(shardBlockHash)
 	if header == nil {
