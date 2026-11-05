@@ -173,17 +173,17 @@ func TestQuarkChainConfigTaxValidation(t *testing.T) {
 		{"repeating decimal", big.NewRat(1, 3)},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			config := validQuarkChainConfig()
-			config.RewardTaxRate = test.tax
-			if config.Check() == nil || (&ChainConfig{QuarkChain: config}).CheckConfigForkOrder() == nil {
+			config := NewTestQuarkChainConfig(10001)
+			config.QuarkChain.RewardTaxRate = test.tax
+			if config.CheckConfigForkOrder() == nil {
 				t.Fatal("invalid tax accepted during initialization")
 			}
 		})
 	}
 	for _, tax := range []*big.Rat{big.NewRat(1, 100), big.NewRat(1, 8), big.NewRat(1, 2), big.NewRat(99, 100)} {
-		config := validQuarkChainConfig()
-		config.RewardTaxRate = tax
-		if err := config.Check(); err != nil {
+		config := NewTestQuarkChainConfig(10001)
+		config.QuarkChain.RewardTaxRate = tax
+		if err := config.CheckConfigForkOrder(); err != nil {
 			t.Fatalf("valid tax %s rejected: %v", tax, err)
 		}
 	}

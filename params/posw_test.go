@@ -32,7 +32,10 @@ func validPoSWConfig() *PoSWConfig {
 }
 
 func validQuarkChainConfig() *QuarkChainConfig {
-	return &QuarkChainConfig{PoSW: validPoSWConfig(), RewardTaxRate: big.NewRat(1, 2)}
+	return &QuarkChainConfig{
+		ChainIDs: []*big.Int{big.NewInt(10001)},
+		PoSW:     validPoSWConfig(), RewardTaxRate: big.NewRat(1, 2),
+	}
 }
 
 func TestPoSWConfigEqual(t *testing.T) {
@@ -538,7 +541,7 @@ func TestRewardDecay(t *testing.T) {
 			if !ok {
 				t.Fatal("invalid test tax rate", test.tax)
 			}
-			config := &QuarkChainConfig{RewardTaxRate: new(big.Rat).Set(tax), PoSW: &PoSWConfig{
+			config := &QuarkChainConfig{ChainIDs: []*big.Int{big.NewInt(10001)}, RewardTaxRate: new(big.Rat).Set(tax), PoSW: &PoSWConfig{
 				AdjustmentCutoff: 7, AdjustmentFactor: 512, MinimumDifficulty: big.NewInt(1),
 				CoinbaseAmount: new(big.Int).SetUint64(test.amount), EpochInterval: 1,
 				DecayFactor:         new(big.Rat).Set(factor),

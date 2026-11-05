@@ -75,13 +75,24 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 		c.MaxBlocksPerRootBlock == other.MaxBlocksPerRootBlock
 }
 
-// Check validates consensus parameters and the shared reward/fee tax rule.
+// Check validates network members, consensus parameters and the shared reward/fee tax rule.
+// ChainConfig.CheckQuarkChain additionally validates local chain identity and membership.
 func (c *QuarkChainConfig) Check() error {
 	if c == nil {
 		return errors.New("quarkchain: missing shard configuration")
 	}
-	if err := c.PoSW.Check(); err != nil {
-		return err
+	if len(c.ChainIDs) == 0 {
+		return fmt.Errorf("chain IDs must not be empty")
+	}
+	seen := make(map[string]bool, len(c.ChainIDs))
+	for _, id := range c.ChainIDs {
+		if id == nil || id.Sign() <= 0 || id.BitLen() > 256 {
+			return fmt.Errorf("invalid member chain ID: %v", id)
+		}
+		if seen[id.String()] {
+			return fmt.Errorf("duplicate chain ID: %v", id)
+		}
+		seen[id.String()] = true
 	}
 	// Python's root reward reconstruction divides by the tax rate and the retained share.
 	if c.RewardTaxRate == nil || c.RewardTaxRate.Sign() <= 0 || c.RewardTaxRate.Cmp(big.NewRat(1, 1)) >= 0 {
@@ -94,7 +105,7 @@ func (c *QuarkChainConfig) Check() error {
 	if _, exact := c.RewardTaxRate.FloatPrec(); !exact {
 		return errors.New("quarkchain: reward tax rate must have a finite decimal representation")
 	}
-	return nil
+	return c.PoSW.Check()
 }
 
 // AfterTax returns floor(amount * (1 - RewardTaxRate)) as a new integer.
@@ -133,26 +144,14 @@ func (c *ChainConfig) CheckQuarkChain() error {
 	if c.QuarkChain == nil {
 		return nil
 	}
-	validID := func(id *big.Int) bool { return id != nil && id.Sign() > 0 && id.BitLen() <= 256 }
-	if !validID(c.ChainID) {
+	if c.ChainID == nil || c.ChainID.Sign() <= 0 || c.ChainID.BitLen() > 256 {
 		return fmt.Errorf("invalid QuarkChain chain ID: %v", c.ChainID)
 	}
-	q := c.QuarkChain
-	if len(q.ChainIDs) == 0 {
-		return fmt.Errorf("chain IDs must not be empty")
+	if err := c.QuarkChain.Check(); err != nil {
+		return err
 	}
-	seen := make(map[string]bool, len(q.ChainIDs))
-	for _, id := range q.ChainIDs {
-		if !validID(id) {
-			return fmt.Errorf("invalid member chain ID: %v", id)
-		}
-		if seen[id.String()] {
-			return fmt.Errorf("duplicate chain ID: %v", id)
-		}
-		seen[id.String()] = true
-	}
-	if !seen[c.ChainID.String()] {
+	if !slices.ContainsFunc(c.QuarkChain.ChainIDs, func(id *big.Int) bool { return configBlockEqual(id, c.ChainID) }) {
 		return fmt.Errorf("chain IDs must include local chain %v", c.ChainID)
 	}
-	return q.PoSW.Check()
+	return nil
 }
