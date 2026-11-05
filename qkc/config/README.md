@@ -87,7 +87,7 @@ block subsidies, and the optional staking discount. Each section requires:
 | `AdjustmentFactor` | Divides the parent difficulty to determine the size of one adjustment step. | Greater than zero. |
 | `MinimumDifficulty` | Minimum PoW difficulty before staking discounts. | Greater than zero. |
 | `CoinbaseAmount` | Initial block subsidy, before decay and reward tax. | Zero or greater; zero disables the subsidy. |
-| `RewardTaxRate` | Fraction of the decayed subsidy shared with root; use `"0"` for the root chain. | From `0` to `1`, inclusive. |
+| `RewardTaxRate` | Fraction of the decayed subsidy shared with root. | `0` for root; from `0` to `1`, inclusive, for shards. |
 | `EpochInterval` | Number of blocks in one reward and staking decay period (epoch). | Greater than zero. |
 | `DecayFactor` | Fraction retained each epoch; `"0.88"` retains 88%. | From `0` to `1`, inclusive. |
 

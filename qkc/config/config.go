@@ -438,6 +438,9 @@ func (c *NetworkConfig) Validate() error {
 	if err := c.Root.PoSW.Check(); err != nil {
 		return fmt.Errorf("Root: %w", err)
 	}
+	if c.Root.PoSW.RewardTaxRate.Sign() != 0 {
+		return errors.New("Root.PoSW.RewardTaxRate must be zero: root chain has no parent")
+	}
 	if len(c.Shards) == 0 {
 		return errors.New("network must define at least one shard")
 	}

@@ -135,6 +135,60 @@ func TestNetworkValidation(t *testing.T) {
 	}
 }
 
+func TestNetworkRootRewardTaxRate(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		rate      *big.Rat
+		coinbase  int64
+		staking   bool
+		wantError string
+	}{
+		{"zero", new(big.Rat), 100, true, ""},
+		{"small nonzero with zero subsidy", big.NewRat(1, 100), 0, true, "Root.PoSW.RewardTaxRate must be zero"},
+		{"half with staking disabled", big.NewRat(1, 2), 100, false, "Root.PoSW.RewardTaxRate must be zero"},
+		{"whole", big.NewRat(1, 1), 100, true, "Root.PoSW.RewardTaxRate must be zero"},
+		{"missing", nil, 100, true, "Root: posw: reward tax rate"},
+		{"negative", big.NewRat(-1, 2), 100, true, "Root: posw: reward tax rate"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cfg := exampleNetwork(t)
+			cfg.Root.PoSW.RewardTaxRate = test.rate
+			cfg.Root.PoSW.CoinbaseAmount.SetInt64(test.coinbase)
+			cfg.Root.PoSW.StakingEnabled = test.staking
+			err := cfg.Validate()
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("have %v, want error containing %q", err, test.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if reward := cfg.Root.PoSW.BlockRewardAt(big.NewInt(1)); reward.Cmp(big.NewInt(100)) != 0 {
+				t.Fatalf("root reward = %v, want 100", reward)
+			}
+			cfg.Shards[0].QuarkChain.PoSW.CoinbaseAmount.SetInt64(100)
+			if reward := cfg.Shards[0].QuarkChain.PoSW.BlockRewardAt(big.NewInt(1)); reward.Cmp(big.NewInt(50)) != 0 {
+				t.Fatalf("shard reward = %v, want 50", reward)
+			}
+		})
+	}
+}
+
+func TestLoadNetworkRejectsRootRewardTax(t *testing.T) {
+	input, err := os.ReadFile("examples/network.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := strings.Replace(string(input), `CoinbaseAmount = "0"`, `CoinbaseAmount = "100"`, 1)
+	content = strings.Replace(content, `RewardTaxRate = "0"`, `RewardTaxRate = "0.5"`, 1)
+	file := writeConfig(t, []byte(content))
+	if _, err := LoadNetwork(file); err == nil || !strings.Contains(err.Error(), file+": Root.PoSW.RewardTaxRate must be zero") {
+		t.Fatalf("nonzero root reward tax accepted or error lacks context: %v", err)
+	}
+}
+
 func TestNetworkConsensusTypes(t *testing.T) {
 	for _, algorithm := range []params.ConsensusType{params.ConsensusEthash, params.ConsensusSimulate} {
 		t.Run(string(algorithm), func(t *testing.T) {
