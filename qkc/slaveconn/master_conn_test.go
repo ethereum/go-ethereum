@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math/big"
 	"net"
 	"testing"
 	"time"
@@ -33,7 +34,7 @@ import (
 type masterTestHandler struct {
 	roots  chan *types.RootBlock
 	addErr error
-	pool   *XshardPool
+	pool   *XshardConnManager
 }
 
 func (h *masterTestHandler) CreateShards(root *types.RootBlock) error { h.roots <- root; return nil }
@@ -56,15 +57,15 @@ func (h *masterTestHandler) GetRootChainStakes(req *wire.GetRootChainStakesReque
 	return &wire.GetRootChainStakesResponse{ErrorCode: 8}, nil
 }
 
-func masterTestPair(t *testing.T, h *masterTestHandler, headerCode uint32) (*MasterConn, *conn.BaseConn, *XshardPool) {
+func masterTestPair(t *testing.T, h *masterTestHandler, headerCode uint32, chainID *big.Int) (*MasterConn, *conn.BaseConn, *XshardConnManager) {
 	t.Helper()
-	pool, err := NewXshardPool(1, []uint32{1, 2}, 0, &testXshardHandler{}, nil)
+	pool, err := NewXshardConnManager(chainID, []*big.Int{chainID, big.NewInt(2)}, 0, &testXshardHandler{}, noopShutdown, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	h.pool = pool
 	a, b := net.Pipe()
-	mc, err := NewMasterConn(MasterConnConfig{Conn: a, LocalChainID: 1, Handler: h})
+	mc, err := NewMasterConn(MasterConnConfig{Conn: a, LocalChainID: chainID, Handler: h})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,13 +87,32 @@ func masterTestPair(t *testing.T, h *masterTestHandler, headerCode uint32) (*Mas
 	return mc, remote, pool
 }
 
+func TestMasterConnRejectsInvalidChainIDs(t *testing.T) {
+	for _, chainID := range []*big.Int{nil, new(big.Int), big.NewInt(-1), new(big.Int).Lsh(big.NewInt(1), 256)} {
+		local, remote := net.Pipe()
+		mc, err := NewMasterConn(MasterConnConfig{Conn: local, LocalChainID: chainID, Handler: &masterTestHandler{}})
+		local.Close()
+		remote.Close()
+		if err == nil {
+			mc.Close()
+			t.Fatalf("accepted invalid chain ID %v", chainID)
+		}
+	}
+}
+
 func TestMasterConnRPC(t *testing.T) {
 	h := &masterTestHandler{roots: make(chan *types.RootBlock, 1)}
-	mc, remote, _ := masterTestPair(t, h, 9)
+	chainID := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 100), big.NewInt(258))
+	encodedID, err := wire.ChainIDToSSZ(chainID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mc, remote, _ := masterTestPair(t, h, 9, chainID)
+	chainID.SetInt64(0)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	resp, err := remote.SendRPC(ctx, byte(wire.ClusterOpPing), &wire.PingRequest{})
-	if err != nil || resp.(*wire.PongResponse).ChainID != 1 {
+	if err != nil || resp.(*wire.PongResponse).ChainID != encodedID {
 		t.Fatalf("ping response %v error %v", resp, err)
 	}
 	root := types.NewRootBlockWithHeader(&types.RootBlockHeader{})
@@ -109,7 +129,7 @@ func TestMasterConnRPC(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("root tip not handled")
 	}
-	resp, err = remote.SendRPC(ctx, byte(wire.ClusterOpConnectToSlavesRequest), &wire.ConnectToSlavesRequest{SlaveInfoList: []wire.SlaveInfo{{ChainID: 1}, {ChainID: 3}}})
+	resp, err = remote.SendRPC(ctx, byte(wire.ClusterOpConnectToSlavesRequest), &wire.ConnectToSlavesRequest{SlaveInfoList: []wire.SlaveInfo{{ChainID: encodedID}, {ChainID: [wire.UInt256Length]byte{3}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +156,7 @@ func TestMasterConnRPC(t *testing.T) {
 }
 
 func TestMasterConnHandlerErrorClosesConnection(t *testing.T) {
-	mc, remote, _ := masterTestPair(t, &masterTestHandler{addErr: errors.New("failure")}, 0)
+	mc, remote, _ := masterTestPair(t, &masterTestHandler{addErr: errors.New("failure")}, 0, big.NewInt(1))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if _, err := remote.SendRPC(ctx, byte(wire.ClusterOpAddRootBlockRequest), &wire.AddRootBlockRequest{}); err == nil {
@@ -152,7 +172,7 @@ func TestMasterConnHandlerErrorClosesConnection(t *testing.T) {
 func TestMasterConnIgnoresPeerFrames(t *testing.T) {
 	a, b := net.Pipe()
 	defer b.Close()
-	mc, err := NewMasterConn(MasterConnConfig{Conn: a, LocalChainID: 1, Handler: &masterTestHandler{}})
+	mc, err := NewMasterConn(MasterConnConfig{Conn: a, LocalChainID: big.NewInt(1), Handler: &masterTestHandler{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +203,7 @@ func TestMasterConnIgnoresPeerFrames(t *testing.T) {
 func TestMasterConnWritesPeerFrame(t *testing.T) {
 	a, b := net.Pipe()
 	defer b.Close()
-	mc, err := NewMasterConn(MasterConnConfig{Conn: a, LocalChainID: 1, Handler: &masterTestHandler{}})
+	mc, err := NewMasterConn(MasterConnConfig{Conn: a, LocalChainID: big.NewInt(1), Handler: &masterTestHandler{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,8 +229,8 @@ func TestMasterConnWritesPeerFrame(t *testing.T) {
 }
 
 func TestMasterConnConnectToSlaves(t *testing.T) {
-	_, remote, pool := masterTestPair(t, &masterTestHandler{}, 0)
-	other, err := NewXshardPool(2, []uint32{1, 2}, 0, &testXshardHandler{}, nil)
+	_, remote, pool := masterTestPair(t, &masterTestHandler{}, 0, big.NewInt(1))
+	other, err := NewXshardConnManager(big.NewInt(2), []*big.Int{big.NewInt(1), big.NewInt(2)}, 0, &testXshardHandler{}, noopShutdown, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +251,7 @@ func TestMasterConnConnectToSlaves(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	resp, err := remote.SendRPC(ctx, byte(wire.ClusterOpConnectToSlavesRequest), &wire.ConnectToSlavesRequest{SlaveInfoList: []wire.SlaveInfo{
-		{ChainID: 1}, {ChainID: 2, Host: []byte("127.0.0.1"), Port: uint16(addr.Port)},
+		{ChainID: [wire.UInt256Length]byte{1}}, {ChainID: [wire.UInt256Length]byte{2}, Host: []byte("127.0.0.1"), Port: uint16(addr.Port)},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -240,7 +260,7 @@ func TestMasterConnConnectToSlaves(t *testing.T) {
 	if len(results) != 2 || len(results[0]) != 0 || len(results[1]) != 0 {
 		t.Fatalf("unexpected connection results: %q", results)
 	}
-	if len(pool.Lookup(2)) != 1 || len(other.Lookup(1)) != 1 {
+	if pool.Lookup(big.NewInt(2)) == nil || other.Lookup(big.NewInt(1)) == nil {
 		t.Fatal("both sides should have registered the connection")
 	}
 	select {

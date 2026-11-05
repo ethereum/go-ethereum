@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -36,7 +37,7 @@ import (
 type MasterHandler interface {
 	CreateShards(rootTip *types.RootBlock) error
 
-	// ConnectToSlaves connects the advertised slaves through the node's pool.
+	// ConnectToSlaves connects the advertised slaves through the node's connection manager.
 	ConnectToSlaves(req *wire.ConnectToSlavesRequest) (*wire.ConnectToSlavesResponse, error)
 
 	AddRootBlock(req *wire.AddRootBlockRequest) (*wire.AddRootBlockResponse, error)
@@ -46,7 +47,7 @@ type MasterHandler interface {
 // MasterConnConfig configures the slave's connection to its master.
 type MasterConnConfig struct {
 	Conn           net.Conn
-	LocalChainID   uint32
+	LocalChainID   *big.Int
 	MaxPayloadSize uint32 // Zero uses the protocol maximum.
 	Handler        MasterHandler
 	Logger         log.Logger
@@ -59,7 +60,7 @@ type MasterConn struct {
 	*conn.BaseConn
 
 	handler      MasterHandler
-	localChainID uint32
+	localChainID *big.Int
 }
 
 // NewMasterConn wraps an accepted master connection; the caller starts it with Start.
@@ -70,15 +71,17 @@ func NewMasterConn(cfg MasterConnConfig) (*MasterConn, error) {
 	if cfg.Handler == nil {
 		return nil, errors.New("master handler must not be nil")
 	}
-	if cfg.MaxPayloadSize > wire.MaxFramePayloadLen {
-		return nil, fmt.Errorf("max payload size %d exceeds protocol limit %d", cfg.MaxPayloadSize, wire.MaxFramePayloadLen)
+	if cfg.LocalChainID == nil || cfg.LocalChainID.Sign() <= 0 || cfg.LocalChainID.BitLen() > 256 {
+		return nil, fmt.Errorf("invalid slave chain ID: %v", cfg.LocalChainID)
 	}
 	maxPayloadSize := cfg.MaxPayloadSize
 	if maxPayloadSize == 0 {
 		maxPayloadSize = wire.MaxFramePayloadLen
+	} else if maxPayloadSize > wire.MaxFramePayloadLen {
+		return nil, fmt.Errorf("max payload size %d exceeds protocol limit %d", maxPayloadSize, wire.MaxFramePayloadLen)
 	}
 
-	mc := &MasterConn{handler: cfg.Handler, localChainID: cfg.LocalChainID}
+	mc := &MasterConn{handler: cfg.Handler, localChainID: new(big.Int).Set(cfg.LocalChainID)}
 
 	// The forwarder runs on the reader goroutine and must not block it.
 	forwarder := mc.routeFrame
@@ -151,7 +154,11 @@ func (mc *MasterConn) handlePing(req wire.SSZMessage) (wire.SSZMessage, error) {
 			return nil, err
 		}
 	}
-	return &wire.PongResponse{ChainID: mc.localChainID}, nil
+	chainID, err := wire.ChainIDToSSZ(mc.localChainID)
+	if err != nil {
+		return nil, err
+	}
+	return &wire.PongResponse{ChainID: chainID}, nil
 }
 
 // handleConnectToSlaves connects to the slaves advertised by the master.
