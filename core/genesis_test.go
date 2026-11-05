@@ -54,15 +54,22 @@ func TestSetupGenesisQuarkChainConfig(t *testing.T) {
 			}{
 				{"unchanged", func(c *params.ChainConfig) {}, false, false},
 				{"coinbaseAmount", func(c *params.ChainConfig) { c.QuarkChain.PoSW.CoinbaseAmount.SetInt64(200) }, false, true},
-				{"shardId", func(c *params.ChainConfig) { c.QuarkChain.ShardID = 1 }, false, true},
-				{"shardIds", func(c *params.ChainConfig) { c.QuarkChain.ShardIDs = []uint32{0, 1} }, false, true},
+				{"chainId", func(c *params.ChainConfig) { c.ChainID = big.NewInt(10002) }, false, true},
+				{"chainIds", func(c *params.ChainConfig) {
+					c.QuarkChain.ChainIDs = []*big.Int{big.NewInt(10001), big.NewInt(10002), big.NewInt(10003)}
+				}, false, true},
+				{"chainIds order", func(c *params.ChainConfig) {
+					c.QuarkChain.ChainIDs[0], c.QuarkChain.ChainIDs[1] = c.QuarkChain.ChainIDs[1], c.QuarkChain.ChainIDs[0]
+				}, false, true},
 				{"maxBlocksPerRootBlock", func(c *params.ChainConfig) { c.QuarkChain.MaxBlocksPerRootBlock = 12 }, false, true},
 				{"remove config", func(c *params.ChainConfig) { c.QuarkChain = nil }, false, true},
-				{"add config", func(c *params.ChainConfig) { c.QuarkChain = params.NewTestQuarkChainConfig(0) }, true, true},
+				{"add config", func(c *params.ChainConfig) {
+					c.QuarkChain = params.NewTestQuarkChainConfig(10001, 10001, 10002).QuarkChain
+				}, true, true},
 				{"ethereum unchanged", func(c *params.ChainConfig) {}, true, false},
 				{"ethereum fork conflict", func(c *params.ChainConfig) {
 					c.QuarkChain.PoSW.CoinbaseAmount.SetInt64(200)
-					c.ChainID = big.NewInt(2)
+					c.ChainID = big.NewInt(10002)
 				}, false, true},
 			} {
 				t.Run(scheme+"/"+strconv.FormatUint(height, 10)+"/"+test.name, func(t *testing.T) {
@@ -71,8 +78,8 @@ func TestSetupGenesisQuarkChainConfig(t *testing.T) {
 					tdb := triedb.NewDatabase(db, newDbConfig(scheme))
 					defer tdb.Close()
 					genesis := &Genesis{
-						Config: genesisConfig(0), GasLimit: 12_000_000,
-						Difficulty: big.NewInt(1), Alloc: PoSWStakingContractAllocs(0),
+						Config: genesisConfig(10001), GasLimit: 12_000_000,
+						Difficulty: big.NewInt(1), Alloc: PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(10001)),
 					}
 					genesis.Config.QuarkChain.PoSW.CoinbaseAmount.SetInt64(100)
 					if test.ethereum {
@@ -87,7 +94,7 @@ func TestSetupGenesisQuarkChainConfig(t *testing.T) {
 						rawdb.WriteHeadHeaderHash(db, head.Hash())
 					}
 					next := *genesis
-					next.Config = genesisConfig(0)
+					next.Config = genesisConfig(10001)
 					next.Config.QuarkChain.PoSW.CoinbaseAmount.SetInt64(100)
 					if test.ethereum {
 						next.Config.QuarkChain = nil
@@ -132,7 +139,7 @@ func TestSetupGenesisQuarkChainConfig(t *testing.T) {
 			defer db.Close()
 			tdb := triedb.NewDatabase(db, newDbConfig(scheme))
 			defer tdb.Close()
-			genesis := &Genesis{Config: genesisConfig(0), GasLimit: 12_000_000, Difficulty: big.NewInt(1), Alloc: PoSWStakingContractAllocs(0)}
+			genesis := &Genesis{Config: genesisConfig(10001), GasLimit: 12_000_000, Difficulty: big.NewInt(1), Alloc: PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(10001))}
 			genesis.Config.QuarkChain.PoSW.CoinbaseAmount.SetInt64(200)
 			_, hash, compatErr, err := SetupGenesisBlock(db, tdb, genesis)
 			if err != nil || compatErr != nil {
@@ -442,9 +449,10 @@ func TestBinaryGenesisCommit(t *testing.T) {
 	}
 }
 
-func genesisConfig(shardID uint32) *params.ChainConfig {
+func genesisConfig(chainID int64) *params.ChainConfig {
 	config := *params.AllEthashProtocolChanges
-	config.QuarkChain = params.NewTestQuarkChainConfig(shardID)
+	config.ChainID = big.NewInt(chainID)
+	config.QuarkChain = params.NewTestQuarkChainConfig(chainID, 10001, 10002).QuarkChain
 	return &config
 }
 
@@ -469,40 +477,40 @@ func TestGenesisQKCSlotNumber(t *testing.T) {
 func TestStakingGenesisAlloc(t *testing.T) {
 	root := common.HexToAddress("0x514b430000000000000000000000000000000001")
 	shard := common.HexToAddress("0x514b430000000000000000000000000000000002")
-	for _, shardID := range []uint32{0, 1, 9} {
-		alloc := PoSWStakingContractAllocs(shardID)
+	for _, chainID := range []int64{10001, 10002, 10010} {
+		alloc := PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(chainID))
 		want := []common.Address{shard}
-		if shardID == 0 {
+		if chainID == 10001 {
 			want = append(want, root)
 		}
 		if len(alloc) != len(want) {
-			t.Fatalf("shard %d: %d contracts, want %d", shardID, len(alloc), len(want))
+			t.Fatalf("shard %d: %d contracts, want %d", chainID, len(alloc), len(want))
 		}
 		for _, address := range want {
 			account := alloc[address]
 			if account.Nonce != 1 || account.Balance == nil || account.Balance.Sign() != 0 || len(account.Storage) != 0 || !bytes.Equal(account.Code, params.PoSWStakingRuntimeCode) {
-				t.Fatalf("shard %d: invalid staking account at %s", shardID, address)
+				t.Fatalf("shard %d: invalid staking account at %s", chainID, address)
 			}
 		}
 	}
-	alloc := PoSWStakingContractAllocs(0)
+	alloc := PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(10001))
 	alloc[shard].Code[0] ^= 1
-	if !bytes.Equal(alloc[root].Code, params.PoSWStakingRuntimeCode) || !bytes.Equal(PoSWStakingContractAllocs(0)[shard].Code, params.PoSWStakingRuntimeCode) {
+	if !bytes.Equal(alloc[root].Code, params.PoSWStakingRuntimeCode) || !bytes.Equal(PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(10001))[shard].Code, params.PoSWStakingRuntimeCode) {
 		t.Fatal("generated allocations share mutable runtime code")
 	}
 }
 
 func TestStakingGenesisFromConfig(t *testing.T) {
 	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
-		for _, shardID := range []uint32{0, 1} {
-			t.Run(scheme+"/"+strconv.FormatUint(uint64(shardID), 10), func(t *testing.T) {
+		for _, chainID := range []int64{10001, 10002} {
+			t.Run(scheme+"/"+strconv.FormatUint(uint64(chainID), 10), func(t *testing.T) {
 				for _, stakingEnabled := range []bool{false, true} {
-					config := genesisConfig(shardID)
+					config := genesisConfig(chainID)
 					config.QuarkChain.PoSW.StakingEnabled = stakingEnabled
 					config.QuarkChain.PoSW.WindowSize = 256
 					config.QuarkChain.PoSW.StakePerBlock = big.NewInt(100)
 					config.QuarkChain.PoSW.DiffDivider = 20
-					alloc := PoSWStakingContractAllocs(shardID)
+					alloc := PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(chainID))
 					funded := common.HexToAddress("0xabcd")
 					alloc[funded] = types.Account{Balance: big.NewInt(42)}
 					// These fields belong to genesis.json. Startup must preserve
@@ -549,13 +557,13 @@ func TestStakingGenesisFromConfig(t *testing.T) {
 					if statedb.GetNonce(address) != 7 || statedb.GetBalance(address).Uint64() != 123 || statedb.GetState(address, common.Hash{1}) != (common.Hash{2}) || statedb.GetBalance(funded).Uint64() != 42 {
 						t.Fatal("configured account state was overwritten")
 					}
-					for expectedAddress, expected := range PoSWStakingContractAllocs(shardID) {
+					for expectedAddress, expected := range PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(chainID)) {
 						if !bytes.Equal(statedb.GetCode(expectedAddress), expected.Code) {
 							t.Fatalf("configured runtime missing at %s", expectedAddress)
 						}
 					}
-					if shardID != 0 && len(statedb.GetCode(params.RootStakingContractAddress)) != 0 {
-						t.Fatal("root staking deployed outside shard zero")
+					if chainID != 10001 && len(statedb.GetCode(params.RootStakingContractAddress)) != 0 {
+						t.Fatal("root staking deployed outside the configured root coinbase chain")
 					}
 					stored, err := ReadGenesis(db)
 					if err != nil {
@@ -584,11 +592,11 @@ func TestStakingGenesisValidation(t *testing.T) {
 		{"unexpected code", func(_ *params.ChainConfig, a types.GenesisAlloc) {
 			a[params.ShardStakingContractAddress] = types.Account{Code: []byte{0}, Balance: new(big.Int)}
 		}, "unexpected genesis code hash"},
-		{"wrong shard", func(c *params.ChainConfig, _ types.GenesisAlloc) { c.QuarkChain.ShardID = 1 }, "only be deployed on shard 0"},
+		{"wrong shard", func(c *params.ChainConfig, _ types.GenesisAlloc) { c.ChainID = big.NewInt(10002) }, "only be deployed on the root coinbase chain"},
 		{"unsupported EVM", func(c *params.ChainConfig, _ types.GenesisAlloc) { c.ConstantinopleBlock = nil }, "Constantinople at genesis"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			config, alloc := genesisConfig(0), PoSWStakingContractAllocs(0)
+			config, alloc := genesisConfig(10001), PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(10001))
 			test.change(config, alloc)
 			before, err := json.Marshal(alloc)
 			if err != nil {
@@ -615,7 +623,7 @@ func TestStakingGenesisValidation(t *testing.T) {
 }
 
 func TestGenesisDoesNotInjectStaking(t *testing.T) {
-	config := genesisConfig(0)
+	config := genesisConfig(10001)
 	funded := common.HexToAddress("0xabcd")
 	genesis := &Genesis{Config: config, GasLimit: 12_000_000, Difficulty: big.NewInt(1), Alloc: types.GenesisAlloc{funded: {Balance: big.NewInt(42)}}}
 	db := rawdb.NewMemoryDatabase()

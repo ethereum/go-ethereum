@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"maps"
+	"math/big"
 	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -77,20 +78,20 @@ var (
 var (
 	// xShardSendSelector is the selector of the outbox's only method:
 	//
-	//	send(uint32 dstShard, address to, uint256 value, uint64 gasLimit, bool isMove, bytes data)
-	xShardSendSelector = crypto.Keccak256([]byte("send(uint32,address,uint256,uint64,bool,bytes)"))[:4]
+	//	send(uint256 dstShard, address to, uint256 value, uint64 gasLimit, bool isMove, bytes data)
+	xShardSendSelector = crypto.Keccak256([]byte("send(uint256,address,uint256,uint64,bool,bytes)"))[:4]
 
 	// XShardSentMessageTopic is the topic of the event the outbox emits for
 	// every message:
 	//
-	//	SentMessage(uint32 indexed dstShard, address indexed from, address indexed to,
+	//	SentMessage(uint256 indexed dstShard, address indexed from, address indexed to,
 	//	            uint256 value, uint256 gasPrice, uint64 gasLimit, bool isMove, bytes data)
-	XShardSentMessageTopic = crypto.Keccak256Hash([]byte("SentMessage(uint32,address,address,uint256,uint256,uint64,bool,bytes)"))
+	XShardSentMessageTopic = crypto.Keccak256Hash([]byte("SentMessage(uint256,address,address,uint256,uint256,uint64,bool,bytes)"))
 )
 
 // xShardMessage is a cross-shard message, as given to the outbox.
 type xShardMessage struct {
-	dstShard uint32
+	dstShard *big.Int
 	to       common.Address
 	value    *uint256.Int
 	gasLimit uint64
@@ -109,7 +110,7 @@ func decodeXShardSend(input []byte) (*xShardMessage, error) {
 	if len(args) < 7*32 {
 		return nil, errXShardInvalidInput
 	}
-	if bitutil.TestBytes(args[0:28]) || bitutil.TestBytes(args[32:44]) || bitutil.TestBytes(args[96:120]) {
+	if bitutil.TestBytes(args[32:44]) || bitutil.TestBytes(args[96:120]) {
 		return nil, errXShardInvalidInput
 	}
 	if bitutil.TestBytes(args[128:159]) || args[159] > 1 {
@@ -123,7 +124,7 @@ func decodeXShardSend(input []byte) (*xShardMessage, error) {
 		return nil, errXShardInvalidInput
 	}
 	return &xShardMessage{
-		dstShard: binary.BigEndian.Uint32(args[28:32]),
+		dstShard: new(big.Int).SetBytes(args[0:32]),
 		to:       common.BytesToAddress(args[44:64]),
 		value:    new(uint256.Int).SetBytes(args[64:96]),
 		gasLimit: binary.BigEndian.Uint64(args[120:128]),
@@ -135,7 +136,7 @@ func decodeXShardSend(input []byte) (*xShardMessage, error) {
 // xShardSentMessageLog returns the SentMessage event of a message.
 func xShardSentMessageLog(addr, from common.Address, msg *xShardMessage, gasPrice *uint256.Int) *types.Log {
 	var dstShard, gasLimit, isMove, offset, size common.Hash
-	binary.BigEndian.PutUint32(dstShard[28:], msg.dstShard)
+	msg.dstShard.FillBytes(dstShard[:])
 	binary.BigEndian.PutUint64(gasLimit[24:], msg.gasLimit)
 	if msg.isMove {
 		isMove[31] = 1
@@ -211,7 +212,7 @@ func (c *xShardOutboxCall) Run(input []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !evm.chainConfig.QuarkChain.IsXShardDestination(toMsg.dstShard) {
+	if !evm.chainConfig.IsXShardDestination(toMsg.dstShard) {
 		return nil, errXShardInvalidShard
 	}
 	// The destination charges XShardSendGas out of the gas limit.

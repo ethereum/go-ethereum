@@ -26,7 +26,7 @@ import (
 
 func TestShardCreateBlockToMine(t *testing.T) {
 	testPoWMiner(t, func(t *testing.T) {
-		env, _, _ := newMiningEnv(t, 1)
+		env, _, _ := newMiningEnv(t, 10002)
 		s := NewShard(env.sc)
 		coinbase := common.Address{0xaa}
 		block, diff, err := s.CreateBlockToMine(context.Background(), coinbase)

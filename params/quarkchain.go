@@ -42,16 +42,14 @@ const (
 	// XShardGasLimitDivisor sets the cross-shard gas limit of a shard block, the
 	// gas reserved for its deposits, to its gas limit over this divisor.
 	XShardGasLimitDivisor uint64 = 2
-
-	// RootCoinbaseShardID is the shard the root chain pays its coinbase to.
-	RootCoinbaseShardID uint32 = 0
 )
 
 // QuarkChainConfig is the configuration of a QuarkChain shard chain. Its
 // presence in the chain config enables the QuarkChain specific features.
 type QuarkChainConfig struct {
-	ShardID  uint32   `json:"shardId"`  // ID of this shard
-	ShardIDs []uint32 `json:"shardIds"` // IDs of all shards in the network, this one included
+	// ChainIDs lists the EVM chain IDs of all shards, this one included.
+	// The first chain receives root rewards and hosts the root staking contract.
+	ChainIDs []*big.Int `json:"chainIds"`
 
 	PoSW *PoSWConfig `json:"posw"` // Required consensus configuration for this shard.
 	// RewardTaxRate is the fraction of the decayed subsidy and each miner fee
@@ -71,8 +69,7 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 	if c == nil || other == nil {
 		return c == other
 	}
-	return c.ShardID == other.ShardID &&
-		slices.Equal(c.ShardIDs, other.ShardIDs) &&
+	return slices.EqualFunc(c.ChainIDs, other.ChainIDs, configBlockEqual) &&
 		c.PoSW.Equal(other.PoSW) &&
 		configRatEqual(c.RewardTaxRate, other.RewardTaxRate) &&
 		c.MaxBlocksPerRootBlock == other.MaxBlocksPerRootBlock
@@ -112,11 +109,50 @@ func (c *QuarkChainConfig) AfterTax(amount *big.Int) *big.Int {
 
 // String implements the stringer interface.
 func (c QuarkChainConfig) String() string {
-	return fmt.Sprintf("quarkchain(shard: %d, shards: %v)", c.ShardID, c.ShardIDs)
+	return fmt.Sprintf("quarkchain(chains: %v)", c.ChainIDs)
 }
 
 // IsXShardDestination reports whether this shard can send a cross-shard
 // message to the given shard.
-func (c *QuarkChainConfig) IsXShardDestination(shardID uint32) bool {
-	return c != nil && shardID != c.ShardID && slices.Contains(c.ShardIDs, shardID)
+func (c *ChainConfig) IsXShardDestination(chainID *big.Int) bool {
+	return c != nil && c.QuarkChain != nil && chainID != nil && chainID.Sign() > 0 &&
+		!configBlockEqual(chainID, c.ChainID) &&
+		slices.ContainsFunc(c.QuarkChain.ChainIDs, func(id *big.Int) bool { return configBlockEqual(id, chainID) })
+}
+
+// IsRootCoinbaseChain reports whether this chain receives root rewards and hosts root staking.
+// These are assigned to the first chain in QuarkChain.ChainIDs.
+func (c *ChainConfig) IsRootCoinbaseChain() bool {
+	return c != nil && c.QuarkChain != nil && c.ChainID != nil && len(c.QuarkChain.ChainIDs) > 0 &&
+		configBlockEqual(c.ChainID, c.QuarkChain.ChainIDs[0])
+}
+
+// CheckQuarkChain validates the shard identity, network membership and consensus settings.
+// Shard IDs use the same positive uint256 values as transaction signatures and the EVM.
+func (c *ChainConfig) CheckQuarkChain() error {
+	if c.QuarkChain == nil {
+		return nil
+	}
+	validID := func(id *big.Int) bool { return id != nil && id.Sign() > 0 && id.BitLen() <= 256 }
+	if !validID(c.ChainID) {
+		return fmt.Errorf("invalid QuarkChain chain ID: %v", c.ChainID)
+	}
+	q := c.QuarkChain
+	if len(q.ChainIDs) == 0 {
+		return fmt.Errorf("chain IDs must not be empty")
+	}
+	seen := make(map[string]bool, len(q.ChainIDs))
+	for _, id := range q.ChainIDs {
+		if !validID(id) {
+			return fmt.Errorf("invalid member chain ID: %v", id)
+		}
+		if seen[id.String()] {
+			return fmt.Errorf("duplicate chain ID: %v", id)
+		}
+		seen[id.String()] = true
+	}
+	if !seen[c.ChainID.String()] {
+		return fmt.Errorf("chain IDs must include local chain %v", c.ChainID)
+	}
+	return q.PoSW.Check()
 }

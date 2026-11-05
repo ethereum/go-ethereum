@@ -16,24 +16,29 @@
 
 package params
 
-import (
-	"math/big"
-	"slices"
-)
+import "math/big"
 
-// NewTestQuarkChainConfig returns a fresh shard configuration for tests using
-// fake consensus, with staking disabled and zero subsidy. If shardIDs is omitted,
-// only the local shard is configured. Callers may customize the returned config.
-func NewTestQuarkChainConfig(shardID uint32, shardIDs ...uint32) *QuarkChainConfig {
-	if len(shardIDs) == 0 {
-		shardIDs = []uint32{shardID}
+// NewTestQuarkChainConfig returns a fresh chain configuration for tests using
+// fake consensus, with staking disabled and zero subsidy. The first chain receives
+// root rewards. If chainIDs is omitted, chain 10001 is first and the local chain is included.
+func NewTestQuarkChainConfig(chainID int64, chainIDs ...int64) *ChainConfig {
+	if len(chainIDs) == 0 {
+		chainIDs = []int64{10001}
+		if chainID != 10001 {
+			chainIDs = append(chainIDs, chainID)
+		}
 	}
-	return &QuarkChainConfig{
-		ShardID: shardID, ShardIDs: slices.Clone(shardIDs),
+	config := *MergedTestChainConfig
+	config.ChainID = big.NewInt(chainID)
+	config.QuarkChain = &QuarkChainConfig{
 		RewardTaxRate: big.NewRat(1, 2),
 		PoSW: &PoSWConfig{
 			AdjustmentCutoff: 7, AdjustmentFactor: 512, MinimumDifficulty: big.NewInt(1),
 			CoinbaseAmount: big.NewInt(0), EpochInterval: 3153600, DecayFactor: big.NewRat(22, 25),
 		},
 	}
+	for _, id := range chainIDs {
+		config.QuarkChain.ChainIDs = append(config.QuarkChain.ChainIDs, big.NewInt(id))
+	}
+	return &config
 }

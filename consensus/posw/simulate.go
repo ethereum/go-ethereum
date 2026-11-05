@@ -34,7 +34,7 @@ var _ consensus.SealVerifier = (*PoSWSimulate)(nil)
 // TODO: In the New/Init PR, add ConsensusType to params.QuarkChainConfig and have
 // ShardBackend.New instantiate the selected engine, defaulting to PoSW. Nodes on
 // the same chain must agree because this choice changes which seals are valid.
-func NewSimulate(config *params.QuarkChainConfig, genesis *types.Header) (*PoSWSimulate, error) {
+func NewSimulate(config *params.ChainConfig, genesis *types.Header) (*PoSWSimulate, error) {
 	engine, err := New(config, genesis)
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func NewSimulate(config *params.QuarkChainConfig, genesis *types.Header) (*PoSWS
 // As with PoSW, the header must already be validated and its parent state available.
 func (p *PoSWSimulate) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
 	reader, _ := chain.(consensus.StakingReader)
-	difficulty, err := GetAdjustedDifficulty(p.config.PoSW, reader, header)
+	difficulty, err := GetAdjustedDifficulty(p.config.QuarkChain.PoSW, reader, header)
 	if err != nil {
 		return err
 	}

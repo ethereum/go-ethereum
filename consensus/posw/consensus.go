@@ -41,7 +41,7 @@ var errOlderBlockTime = errors.New("timestamp must be greater than parent")
 // MixDigest carries the base difficulty; geth's Difficulty and Nonce stay zero.
 // Header checks need no state; VerifySeal applies the discount at body import.
 type PoSW struct {
-	config   *params.QuarkChainConfig     // Validated when the engine is constructed.
+	config   *params.ChainConfig          // Validated when the engine is constructed.
 	gasLimit uint64                       // Fixed shard gas limit copied from genesis, matching pyquarkchain.
 	cacheMu  sync.Mutex                   // Serializes cache creation, not hashimoto verification.
 	caches   *lru.Cache[uint64, []uint32] // Immutable verification data, keyed by Ethash epoch.
@@ -52,11 +52,11 @@ var _ consensus.SealVerifier = (*PoSW)(nil)
 
 // New validates the shard configuration and saves the genesis gas limit.
 // The caller supplies genesis so engine creation does not require a running chain.
-func New(config *params.QuarkChainConfig, genesis *types.Header) (*PoSW, error) {
-	if config == nil {
+func New(config *params.ChainConfig, genesis *types.Header) (*PoSW, error) {
+	if config == nil || config.QuarkChain == nil {
 		return nil, errors.New("posw: missing shard configuration")
 	}
-	if err := config.Check(); err != nil {
+	if err := config.CheckQuarkChain(); err != nil {
 		return nil, err
 	}
 	if genesis == nil {
@@ -131,8 +131,8 @@ func (p *PoSW) verifyHeader(chain consensus.ChainHeaderReader, header, parent *t
 		return err
 	}
 	extra, _ := header.QKCExtra() // Format and version were checked above.
-	if extra.ShardID != p.config.ShardID {
-		return fmt.Errorf("invalid shard ID: have %d, want %d", extra.ShardID, p.config.ShardID)
+	if extra.ChainID.Cmp(p.config.ChainID) != 0 {
+		return fmt.Errorf("invalid chain ID: have %d, want %d", extra.ChainID, p.config.ChainID)
 	}
 	// Match pyquarkchain: every shard block uses its genesis gas limit.
 	if header.GasLimit != p.gasLimit {
@@ -238,7 +238,7 @@ func (p *PoSW) VerifyUncles(chain consensus.ChainReader, block *types.Block) err
 // CalcDifficulty returns the base PoW difficulty, before the staking discount.
 // Header validation and Prepare must first check time > parent.Time.
 func (p *PoSW) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	return CalcDifficulty(p.config.PoSW, time, parent.Time, parent.QKCDifficulty())
+	return CalcDifficulty(p.config.QuarkChain.PoSW, time, parent.Time, parent.QKCDifficulty())
 }
 
 // Prepare writes the base difficulty before execution, since the EVM also sees
@@ -249,8 +249,8 @@ func (p *PoSW) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	if err != nil {
 		return err
 	}
-	if extra.Version != 0 || extra.ShardID != p.config.ShardID {
-		return fmt.Errorf("invalid qkc version or shard: version %d, shard %d", extra.Version, extra.ShardID)
+	if extra.Version != 0 || extra.ChainID.Cmp(p.config.ChainID) != 0 {
+		return fmt.Errorf("invalid qkc version or shard: version %d, shard %d", extra.Version, extra.ChainID)
 	}
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
@@ -275,8 +275,8 @@ func (p *PoSW) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 // Finalize credits the subsidy after separately rounding epoch decay and reward
 // tax, as in pyquarkchain. Transaction fees are accounted for elsewhere.
 func (p *PoSW) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
-	reward := p.config.PoSW.BlockRewardAt(header.Number)
-	reward = p.config.AfterTax(reward)
+	reward := p.config.QuarkChain.PoSW.BlockRewardAt(header.Number)
+	reward = p.config.QuarkChain.AfterTax(reward)
 	if reward.Sign() != 0 {
 		state.AddBalance(header.Coinbase, uint256.MustFromBig(reward), tracing.BalanceIncreaseRewardMineBlock)
 	}

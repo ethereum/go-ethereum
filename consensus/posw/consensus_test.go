@@ -19,6 +19,7 @@ package posw
 import (
 	"errors"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 
@@ -67,17 +68,18 @@ func (c *testChain) GetShardLockedStakes(parent *types.Header, _ common.Address)
 
 func newTestChain() (*testChain, *types.Header) {
 	config := *params.AllEthashProtocolChanges
-	config.QuarkChain = params.NewTestQuarkChainConfig(0)
+	config.ChainID = big.NewInt(10001)
+	config.QuarkChain = params.NewTestQuarkChainConfig(10001).QuarkChain
 	config.QuarkChain.PoSW.MinimumDifficulty = big.NewInt(100)
 	parent := &types.Header{Number: new(big.Int), Difficulty: new(big.Int), GasLimit: 12_000_000,
 		BaseFee: big.NewInt(params.InitialBaseFee), UncleHash: types.EmptyUncleHash,
-		MixDigest: common.BigToHash(big.NewInt(100)), Extra: (&types.QKCExtra{XShardGasLimit: 12_000_000 / params.XShardGasLimitDivisor}).Encode()}
+		MixDigest: common.BigToHash(big.NewInt(100)), Extra: (&types.QKCExtra{ChainID: config.ChainID, XShardGasLimit: 12_000_000 / params.XShardGasLimitDivisor}).Encode()}
 	return &testChain{config: &config, genesis: parent, headers: map[common.Hash]*types.Header{parent.Hash(): parent}, stakes: make(map[common.Hash]*uint256.Int)}, parent
 }
 
 func newTestEngine(t *testing.T, chain *testChain) *PoSW {
 	t.Helper()
-	engine, err := New(chain.config.QuarkChain, chain.genesis)
+	engine, err := New(chain.config, chain.genesis)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,19 +99,42 @@ func child(parent *types.Header) *types.Header {
 // fail at construction.
 func TestNew(t *testing.T) {
 	chain, genesis := newTestChain()
-	invalid := params.NewTestQuarkChainConfig(0)
-	invalid.PoSW.AdjustmentCutoff = 0
-	missingTax := params.NewTestQuarkChainConfig(0)
-	missingTax.RewardTaxRate = nil
-	for _, config := range []*params.QuarkChainConfig{nil, {}, invalid, missingTax} {
+	invalid := params.NewTestQuarkChainConfig(10001)
+	invalid.QuarkChain.PoSW.AdjustmentCutoff = 0
+	for _, config := range []*params.ChainConfig{nil, {}, invalid} {
 		if engine, err := New(config, genesis); err == nil || engine != nil {
 			t.Fatalf("invalid config accepted: engine %v, error %v", engine, err)
 		}
 	}
 	for _, genesis := range []*types.Header{nil, {GasLimit: params.MaxGasLimit + 1}} {
-		if engine, err := New(chain.config.QuarkChain, genesis); err == nil || engine != nil {
+		if engine, err := New(chain.config, genesis); err == nil || engine != nil {
 			t.Fatalf("invalid genesis accepted: engine %v, error %v", engine, err)
 		}
+	}
+}
+
+func TestHeaderLargeChainID(t *testing.T) {
+	chain, parent := newTestChain()
+	id := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(10001))
+	chain.config.ChainID = new(big.Int).Set(id)
+	chain.config.QuarkChain.ChainIDs = []*big.Int{new(big.Int).Set(id)}
+	extra, _ := parent.QKCExtra()
+	extra.ChainID = new(big.Int).Set(id)
+	parent.Extra = extra.Encode()
+	chain.headers = map[common.Hash]*types.Header{parent.Hash(): parent}
+	engine := newTestEngine(t, chain)
+	header := child(parent)
+	if err := engine.Prepare(chain, header); err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.VerifyHeader(chain, header); err != nil {
+		t.Fatalf("valid large chain ID rejected: %v", err)
+	}
+	extra, _ = header.QKCExtra()
+	extra.ChainID = big.NewInt(10001) // Same low bits, different chain.
+	header.Extra = extra.Encode()
+	if err := engine.VerifyHeader(chain, header); err == nil {
+		t.Fatal("accepted a header from a different chain with matching low bits")
 	}
 }
 
@@ -190,7 +215,7 @@ func TestHeaderVerification(t *testing.T) {
 		mutate func(*types.Header)
 	}{
 		{"extra", func(h *types.Header) { h.Extra = nil }},
-		{"shard", func(h *types.Header) { e, _ := h.QKCExtra(); e.ShardID = 1; h.Extra = e.Encode() }},
+		{"shard", func(h *types.Header) { e, _ := h.QKCExtra(); e.ChainID = big.NewInt(10002); h.Extra = e.Encode() }},
 		{"base difficulty", func(h *types.Header) { h.MixDigest = common.BigToHash(big.NewInt(99)) }},
 		{"time", func(h *types.Header) { h.Time = parent.Time }},
 		{"future", func(h *types.Header) { h.Time = uint64(time.Now().Unix()) + 60 }},
@@ -391,7 +416,7 @@ func TestPrepareAndFinalize(t *testing.T) {
 	if h.GasLimit != parent.GasLimit {
 		t.Fatalf("prepared gas limit: have %d, want %d", h.GasLimit, parent.GasLimit)
 	}
-	if got, _ := h.QKCExtra(); *got != wantExtra {
+	if got, _ := h.QKCExtra(); !reflect.DeepEqual(*got, wantExtra) {
 		t.Fatalf("prepared extra: got %+v, want %+v", *got, wantExtra)
 	}
 	if err := engine.VerifyHeader(chain, h); err != nil {
@@ -403,7 +428,7 @@ func TestPrepareAndFinalize(t *testing.T) {
 	}{
 		{"extra", nil},
 		{"version", (&types.QKCExtra{Version: 1}).Encode()},
-		{"shard", (&types.QKCExtra{ShardID: 1}).Encode()},
+		{"shard", (&types.QKCExtra{ChainID: big.NewInt(10002)}).Encode()},
 	} {
 		t.Run(invalid.name, func(t *testing.T) {
 			header := types.CopyHeader(h)

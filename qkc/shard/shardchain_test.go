@@ -73,8 +73,7 @@ type testEnv struct {
 }
 
 func newTestEnv(t *testing.T) *testEnv {
-	config := *params.MergedTestChainConfig
-	config.QuarkChain = params.NewTestQuarkChainConfig(0, 0, 1)
+	config := *params.NewTestQuarkChainConfig(10001, 10001, 10002)
 	env := &testEnv{
 		t:      t,
 		engine: noVerifyEngine{beacon.New(ethash.NewFaker())},
@@ -86,10 +85,10 @@ func newTestEnv(t *testing.T) *testEnv {
 		Config:     env.config,
 		Difficulty: common.Big0,
 		BaseFee:    big.NewInt(params.InitialBaseFee),
-		ExtraData:  (&types.QKCExtra{ShardID: 0}).Encode(),
+		ExtraData:  (&types.QKCExtra{ChainID: big.NewInt(10001)}).Encode(),
 		Alloc:      core.SystemContractAllocs(),
 	}
-	maps.Copy(gspec.Alloc, core.PoSWStakingContractAllocs(config.QuarkChain.ShardID))
+	maps.Copy(gspec.Alloc, core.PoSWStakingContractAllocs(&config))
 	env.genDb, _, _ = core.GenerateChainWithGenesis(gspec, env.engine, 0, nil)
 
 	chain, err := core.NewBlockChain(env.db, gspec, env.engine, nil)
@@ -116,7 +115,7 @@ func newTestEnv(t *testing.T) *testEnv {
 // qkcExtra returns the extra data of a shard block referencing the given root
 // block.
 func qkcExtra(prevRoot *qkctypes.RootBlock) []byte {
-	return (&types.QKCExtra{PrevRootBlock: prevRoot.Hash()}).Encode()
+	return (&types.QKCExtra{ChainID: big.NewInt(10001), PrevRootBlock: prevRoot.Hash()}).Encode()
 }
 
 // newRoot creates a root block on top of parent, carrying the given shard block
@@ -128,14 +127,14 @@ func newRoot(parent *qkctypes.RootBlock, seed uint64, headers ...*types.Header) 
 
 // makeShardHeaders creates a linked sequence of headers for a shard. Each
 // header references the corresponding root block in prevRoots.
-func makeShardHeaders(shardID uint32, startBlockNumber int64, prevRoots ...*qkctypes.RootBlock) []*types.Header {
+func makeShardHeaders(chainID int64, startBlockNumber int64, prevRoots ...*qkctypes.RootBlock) []*types.Header {
 	headers := make([]*types.Header, len(prevRoots))
 	for i, prevRoot := range prevRoots {
 		headers[i] = &types.Header{
 			ParentHash: common.Hash{},
 			Number:     big.NewInt(startBlockNumber + int64(i)),
 			Difficulty: common.Big0,
-			Extra:      (&types.QKCExtra{ShardID: shardID, PrevRootBlock: prevRoot.Hash()}).Encode(),
+			Extra:      (&types.QKCExtra{ChainID: big.NewInt(chainID), PrevRootBlock: prevRoot.Hash()}).Encode(),
 		}
 		if i > 0 {
 			headers[i].ParentHash = headers[i-1].Hash()
@@ -197,11 +196,11 @@ func (env *testEnv) makeBlocks(parent *types.Block, n int, prevRoot *qkctypes.Ro
 			view.deposits[header.Hash()] = env.sc.XShardDeposits(header.Hash())
 		}
 	}
-	inbox := NewXShardInbox(env.config.QuarkChain, view)
+	inbox := NewXShardInbox(env.config, view)
 	blocks, _ := core.GenerateChain(env.config, parent, env.engine, env.genDb, n, func(i int, b *core.BlockGen) {
 		b.SetCoinbase(common.Address{seed})
 		extra := &types.QKCExtra{
-			ShardID:        env.config.QuarkChain.ShardID,
+			ChainID:        env.config.ChainID,
 			PrevRootBlock:  prevRoot.Hash(),
 			XShardGasLimit: b.Gas() / params.XShardGasLimitDivisor,
 		}
@@ -280,7 +279,7 @@ func TestShardChainInitGenesis(t *testing.T) {
 	env := newTestEnv(t)
 	rootDB := rawdb.NewMemoryDatabase()
 	t.Cleanup(func() { rootDB.Close() })
-	remote := makeShardHeaders(1, 99, env.rootGenesis)[0]
+	remote := makeShardHeaders(10002, 99, env.rootGenesis)[0]
 	qkcrawdb.WriteXShardDeposits(rootDB, remote.Hash(), nil)
 	root := qkctypes.NewRootBlock(env.rootGenesis.Header(), qkctypes.ShardBlockHeaders{remote, env.genesis.Header()}, nil)
 	env.sc = NewShardChain(rootDB, env.chain, nil)
@@ -327,7 +326,7 @@ func TestShardChainInitGenesisValidation(t *testing.T) {
 			rootHeader := env.rootGenesis.Header()
 			switch name {
 			case "missing local":
-				headers = makeShardHeaders(1, 0, env.rootGenesis)
+				headers = makeShardHeaders(10002, 0, env.rootGenesis)
 			case "duplicate local":
 				headers = append(headers, header)
 			case "non-genesis local":
@@ -1039,9 +1038,9 @@ func TestInsertRootBlockValidation(t *testing.T) {
 	aForkB2 := env.makeBlocks(blocks[0], 1, r1b, 2)[0]
 	env.insert(aForkB2)
 
-	bHeaders := makeShardHeaders(1, 1, r0, r0, r1, r1)
+	bHeaders := makeShardHeaders(10002, 1, r0, r0, r1, r1)
 	b1, b2, b3, b4 := bHeaders[0], bHeaders[1], bHeaders[2], bHeaders[3]
-	t1 := makeShardHeaders(7, 1, r1)[0]
+	t1 := makeShardHeaders(10008, 1, r1)[0]
 	qkcrawdb.WriteXShardDeposits(env.db, b1.Hash(), nil)
 	qkcrawdb.WriteXShardDeposits(env.db, b3.Hash(), nil)
 	qkcrawdb.WriteXShardDeposits(env.db, t1.Hash(), nil)
@@ -1049,7 +1048,7 @@ func TestInsertRootBlockValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := env.sc.validateXShardDeposits(b1, b1Extra, env.config.QuarkChain); err != nil {
+	if err := env.sc.validateXShardDeposits(b1, b1Extra, env.config); err != nil {
 		t.Fatalf("block referencing the genesis root with an empty deposit list: %v", err)
 	}
 	env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = 1
@@ -1119,22 +1118,22 @@ func TestValidateXShardDeposits(t *testing.T) {
 	r0 := qkctypes.NewRootBlock(&qkctypes.RootBlockHeader{}, nil, nil)
 	r1 := newRoot(r0, 1)
 	unknown := newRoot(r0, 2)
-	config := &params.QuarkChainConfig{ShardID: 0, ShardIDs: []uint32{0, 1}}
+	config := params.NewTestQuarkChainConfig(10001, 10001, 10002)
 	tests := []struct {
 		name    string
-		shardID uint32
+		chainID int64
 		root    *qkctypes.RootBlock
 		stored  bool
 		err     error
 	}{
-		{"unknown root without deposits", 1, unknown, false, ErrUnknownRootBlock},
-		{"unknown root with deposits", 1, unknown, true, ErrUnknownRootBlock},
-		{"genesis root without deposits", 1, r0, false, ErrMissingXShardDeposits},
-		{"genesis root with empty deposits", 1, r0, true, nil},
-		{"later root without deposits", 1, r1, false, ErrMissingXShardDeposits},
-		{"later root with empty deposits", 1, r1, true, nil},
-		{"unknown shard without deposits", 7, r1, false, nil},
-		{"unknown shard with deposits", 7, r1, true, ErrUnexpectedXShardDeposits},
+		{"unknown root without deposits", 10002, unknown, false, ErrUnknownRootBlock},
+		{"unknown root with deposits", 10002, unknown, true, ErrUnknownRootBlock},
+		{"genesis root without deposits", 10002, r0, false, ErrMissingXShardDeposits},
+		{"genesis root with empty deposits", 10002, r0, true, nil},
+		{"later root without deposits", 10002, r1, false, ErrMissingXShardDeposits},
+		{"later root with empty deposits", 10002, r1, true, nil},
+		{"unknown shard without deposits", 10008, r1, false, nil},
+		{"unknown shard with deposits", 10008, r1, true, ErrUnexpectedXShardDeposits},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -1142,7 +1141,7 @@ func TestValidateXShardDeposits(t *testing.T) {
 			t.Cleanup(func() { db.Close() })
 			qkcrawdb.WriteRootBlock(db, r0)
 			qkcrawdb.WriteRootBlock(db, r1)
-			block := makeShardHeaders(test.shardID, 1, test.root)[0]
+			block := makeShardHeaders(test.chainID, 1, test.root)[0]
 			extra, err := block.QKCExtra()
 			if err != nil {
 				t.Fatal(err)

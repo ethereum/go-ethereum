@@ -30,8 +30,7 @@ import (
 // TestRPCDepositTransaction checks the RPC representation of a cross-shard
 // deposit, and that clients decode it back to the deposit.
 func TestRPCDepositTransaction(t *testing.T) {
-	config := *params.MergedTestChainConfig
-	config.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1}}
+	config := *params.NewTestQuarkChainConfig(10002, 10001, 10002)
 	deposit := &types.DepositTx{
 		Version:         types.DepositTxVersion,
 		SourceBlockHash: common.Hash{0xaa},
