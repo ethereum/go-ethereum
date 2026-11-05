@@ -39,8 +39,7 @@ func TestCallTracerDeposit(t *testing.T) {
 	for _, fork := range []string{"pre-amsterdam", "amsterdam"} {
 		for _, tracerName := range []string{"callTracer", "callTracerLegacy"} {
 			t.Run(fork+"/"+tracerName, func(t *testing.T) {
-				config := *params.MergedTestChainConfig
-				config.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1}}
+				config := *params.NewTestQuarkChainConfig(10002, 10001, 10002)
 				if fork == "amsterdam" {
 					config.AmsterdamTime = new(uint64)
 				}

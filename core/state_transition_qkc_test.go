@@ -73,8 +73,9 @@ func testDepositExecution(t *testing.T, amsterdam bool) {
 	if amsterdam {
 		config.AmsterdamTime = new(uint64)
 	}
+	config.ChainID = big.NewInt(10002)
 	ethConfig := config
-	config.QuarkChain = params.NewTestQuarkChainConfig(1, 0, 1)
+	config.QuarkChain = params.NewTestQuarkChainConfig(10002, 10001, 10002).QuarkChain
 	gspec := &Genesis{
 		Config: &config,
 		Alloc: withSystemContracts(types.GenesisAlloc{
@@ -83,7 +84,7 @@ func testDepositExecution(t *testing.T, amsterdam bool) {
 			reverter: {Code: program.New().Push(0).Push(0).Op(vm.REVERT).Bytes()},
 		}),
 	}
-	maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(config.QuarkChain.ShardID))
+	maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(&config))
 	deposits := []*types.DepositTx{
 		// A move to an EOA.
 		xShardTestMove(0, common.HexToAddress("0xa1"), eoa, 1000, 7*params.GWei),
@@ -194,11 +195,10 @@ func testDepositExecution(t *testing.T, amsterdam bool) {
 // shard sends, is a consensus error that leaves the state alone.
 func TestDepositNotMove(t *testing.T) {
 	var (
-		config   = *params.MergedTestChainConfig
+		config   = *params.NewTestQuarkChainConfig(10002, 10001, 10002)
 		coinbase = common.HexToAddress("0xc0ffee")
 		to       = common.HexToAddress("0xe0a")
 	)
-	config.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1}}
 	header := &types.Header{Number: big.NewInt(1), Difficulty: new(big.Int), BaseFee: big.NewInt(params.GWei), GasLimit: 30_000_000}
 
 	for _, tt := range []struct {

@@ -67,3 +67,25 @@ SSZ generation does not support `uint256.Int` directly in these message
 schemas. Represent it as `[UInt256Length]byte` and fill the array using
 `uint256.Int.MarshalSSZAppend(dst[:0])`. The resulting 32 bytes are
 little-endian. Do not apply this numeric byte order rule to hashes.
+
+### Chain IDs
+
+Shard identity is the positive `params.ChainConfig.ChainID`, used by signatures,
+the EVM, headers, routing and cross-shard messages. There is no separate shard
+number. `quarkchain.chainIds` must be nonempty and include the local chain ID.
+Its first entry, `quarkchain.chainIds[0]`, receives root rewards and hosts root
+staking. Use the same ordered list on every shard; reordering it changes the
+consensus configuration and is rejected for an initialized chain.
+
+SSZ message `ChainID` fields use the numeric uint256 representation above.
+Use `ChainIDToSSZ` and `ChainIDFromSSZ` to convert between `*big.Int` and these
+fields. Encoding rejects nil, negative and oversized IDs; zero is preserved,
+and handlers must still enforce the positive-ID requirement for shards.
+Business interfaces and P2P frames use `*big.Int`; the P2P frame prefix and the
+QKC header extra encode the ID as 32 big-endian bytes. Zero is reserved for
+root traffic in P2P routing; `RootChainID()` returns an independent zero value
+for each frame. Cross-shard `send` and `SentMessage` use ABI
+`uint256` for the destination chain ID.
+
+These encodings replace the former 4-byte IDs and are incompatible with old
+frames, header extras and outbox ABIs. Use matching peers and new genesis data.

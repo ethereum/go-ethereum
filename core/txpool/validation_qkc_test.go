@@ -36,7 +36,7 @@ func TestValidateTransactionRejectsDeposit(t *testing.T) {
 		head   = &types.Header{Number: big.NewInt(1), Difficulty: common.Big0}
 		tx     = types.NewTx(&types.DepositTx{Value: uint256.NewInt(1), GasPrice: uint256.NewInt(1), Gas: params.XShardSendGas})
 	)
-	config.QuarkChain = &params.QuarkChainConfig{ShardID: 1, ShardIDs: []uint32{0, 1}}
+	config = *params.NewTestQuarkChainConfig(10002, 10001, 10002)
 	opts := &ValidationOptions{Config: &config, Accept: 0xff, MaxSize: 1 << 20, MinTip: new(big.Int)}
 	if err := ValidateTransaction(tx, head, types.LatestSigner(&config), opts); !errors.Is(err, core.ErrTxTypeNotSupported) {
 		t.Errorf("deposit validation error %v, want %v", err, core.ErrTxTypeNotSupported)

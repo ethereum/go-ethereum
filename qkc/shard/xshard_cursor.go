@@ -95,7 +95,7 @@ func (c *ShardChain) XShardDeposits(hash common.Hash) []*types.DepositTx {
 // The walk ends at the previous root block of the shard block applying the
 // deposits.
 type xShardCursor struct {
-	config  *params.QuarkChainConfig
+	config  *params.ChainConfig
 	chain   XShardChain
 	maxRoot *qkctypes.RootBlock // last root block of the walk
 
@@ -107,7 +107,7 @@ type xShardCursor struct {
 
 // newXShardCursor returns a cursor at the given position, walking up to the
 // root block maxRoot.
-func newXShardCursor(config *params.QuarkChainConfig, chain XShardChain, pos types.XShardCursor, maxRoot common.Hash) (*xShardCursor, error) {
+func newXShardCursor(config *params.ChainConfig, chain XShardChain, pos types.XShardCursor, maxRoot common.Hash) (*xShardCursor, error) {
 	c := &xShardCursor{
 		config:       config,
 		chain:        chain,
@@ -175,11 +175,11 @@ func (c *xShardCursor) Next() (*types.DepositTx, error) {
 			if err != nil {
 				return nil, fmt.Errorf("source block %x: %w", header.Hash(), err)
 			}
-			if extra.ShardID == c.config.ShardID {
+			if extra.ChainID.Cmp(c.config.ChainID) == 0 {
 				continue
 			}
 			if c.deposits = c.chain.XShardDeposits(header.Hash()); c.deposits == nil {
-				return nil, fmt.Errorf("%w: block %x of shard %d", ErrXShardDepositsMissing, header.Hash(), extra.ShardID)
+				return nil, fmt.Errorf("%w: block %x of shard %d", ErrXShardDepositsMissing, header.Hash(), extra.ChainID)
 			}
 			continue
 		}
@@ -202,7 +202,7 @@ func (c *xShardCursor) Next() (*types.DepositTx, error) {
 // is none.
 func (c *xShardCursor) current() *types.DepositTx {
 	if c.minorIndex == 0 {
-		if c.depositIndex == 1 && c.config.ShardID == params.RootCoinbaseShardID {
+		if c.depositIndex == 1 && c.config.IsRootCoinbaseChain() {
 			return rootCoinbaseDeposit(c.root)
 		}
 		return nil
@@ -214,7 +214,7 @@ func (c *xShardCursor) current() *types.DepositTx {
 }
 
 // rootCoinbaseDeposit returns the deposit paying the coinbase of a root block to
-// its miner, on shard params.RootCoinbaseShardID. It is a move, with no gas cost.
+// its miner, on the configured root coinbase chain. It is a move, with no gas cost.
 func rootCoinbaseDeposit(root *qkctypes.RootBlock) *types.DepositTx {
 	coinbase := root.Coinbase()
 	return &types.DepositTx{
@@ -236,12 +236,12 @@ var _ core.XShardInbox = (*XShardInbox)(nil)
 // cross-shard cursor over the root chain and the deposits received from the
 // other shards. It implements core.XShardInbox.
 type XShardInbox struct {
-	config *params.QuarkChainConfig
+	config *params.ChainConfig
 	chain  XShardChain
 }
 
 // NewXShardInbox returns the inbox of the shard with the given configuration.
-func NewXShardInbox(config *params.QuarkChainConfig, chain XShardChain) *XShardInbox {
+func NewXShardInbox(config *params.ChainConfig, chain XShardChain) *XShardInbox {
 	return &XShardInbox{config: config, chain: chain}
 }
 

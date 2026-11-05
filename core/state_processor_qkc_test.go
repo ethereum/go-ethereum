@@ -114,18 +114,17 @@ func TestCheckDepositOrder(t *testing.T) {
 // transaction is invalid.
 func TestDepositAfterTransaction(t *testing.T) {
 	var (
-		config = *params.MergedTestChainConfig
+		config = *params.NewTestQuarkChainConfig(10002, 10001, 10002)
 		engine = beacon.New(ethash.NewFaker())
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		sender = crypto.PubkeyToAddress(key.PublicKey)
 		to     = common.HexToAddress("0xe0a")
 	)
-	config.QuarkChain = params.NewTestQuarkChainConfig(1, 0, 1)
 	gspec := &Genesis{
 		Config: &config,
 		Alloc:  withSystemContracts(types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}}),
 	}
-	maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(config.QuarkChain.ShardID))
+	maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(&config))
 	signer := types.LatestSigner(gspec.Config)
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
 		b.AddTx(types.MustSignNewTx(key, signer, &types.DynamicFeeTx{
