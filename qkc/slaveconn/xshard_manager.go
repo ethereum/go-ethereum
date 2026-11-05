@@ -35,25 +35,22 @@ import (
 // time and waits for its response, so a successful outbound PING sees the
 // inbound connection registered before the next slave is asked to dial.
 // Duplicate connections are rejected if this ordering is violated.
-//
-// TODO: Define xshard TCP disconnect handling, including manager cleanup and whether
-// to stop the cluster or reconnect. Closed connections currently remain indexed.
 type XshardConnManager struct {
-	// mu guards all mutable manager state below. Registration
-	// (registerConnection) and Close are multi-map transactions over these
-	// fields plus closed, so they must stay in one critical section; do not
-	// split locking per field.
-	mu          sync.RWMutex
-	conns       map[string]*XshardConn
-	connections map[*XshardConn]struct{}
-
 	localChainID *big.Int
 	// Only connections to slaves with configured chain IDs enter the routing index.
 	configuredChainIDs map[string]struct{}
 	maxPayloadSize     uint32        // 0 uses the maximum frame payload length.
 	handler            XshardHandler // Serves cross-shard requests from other slaves.
-	closed             bool
 	log                log.Logger
+
+	// mu guards the connection indexes and closed state together.
+	mu          sync.RWMutex
+	conns       map[string]*XshardConn
+	connections map[*XshardConn]struct{}
+
+	closed        bool
+	shutdownOnce  sync.Once
+	shutdownSlave func() // Stops the slave after an indexed connection drops.
 }
 
 // Public API
@@ -62,10 +59,14 @@ type XshardConnManager struct {
 // localChainID identifies the chain hosted by this slave; configuredChainIDs
 // lists the chain IDs hosted by the cluster's slaves. A zero maxPayloadSize
 // uses the protocol's maximum payload size. handler serves cross-shard requests
-// from other slaves and must not be nil.
-func NewXshardConnManager(localChainID *big.Int, configuredChainIDs []*big.Int, maxPayloadSize uint32, handler XshardHandler, logger log.Logger) (*XshardConnManager, error) {
+// from other slaves and must not be nil. shutdownSlave must stop the local
+// slave when an established cross-shard connection closes unexpectedly.
+func NewXshardConnManager(localChainID *big.Int, configuredChainIDs []*big.Int, maxPayloadSize uint32, handler XshardHandler, shutdownSlave func(), logger log.Logger) (*XshardConnManager, error) {
 	if handler == nil {
 		return nil, errors.New("xshard handler must not be nil")
+	}
+	if shutdownSlave == nil {
+		return nil, errors.New("xshard shutdown callback must not be nil")
 	}
 	if err := validateXshardChainID(localChainID); err != nil {
 		return nil, err
@@ -94,6 +95,7 @@ func NewXshardConnManager(localChainID *big.Int, configuredChainIDs []*big.Int, 
 		connections:        make(map[*XshardConn]struct{}),
 		localChainID:       new(big.Int).Set(localChainID),
 		handler:            handler,
+		shutdownSlave:      shutdownSlave,
 		configuredChainIDs: clusterSet,
 		maxPayloadSize:     maxPayloadSize,
 		log:                logger,
@@ -284,7 +286,24 @@ func (p *XshardConnManager) registerConnection(conn *XshardConn) error {
 
 	p.conns[conn.RemoteChainID().String()] = conn
 	p.mu.Unlock()
+	go p.watchConnection(conn)
 	return nil
+}
+
+// watchConnection shuts down the slave if an indexed connection drops unexpectedly.
+func (p *XshardConnManager) watchConnection(conn *XshardConn) {
+	<-conn.WaitUntilClosed()
+	p.mu.RLock()
+	closed := p.closed
+	p.mu.RUnlock()
+	if !closed {
+		// A normal manager shutdown closes its connections too; only an
+		// unexpected disconnect should stop the slave.
+		p.shutdownOnce.Do(func() {
+			p.log.Error("indexed xshard connection closed; shutting down slave", "remote_chain_id", conn.RemoteChainID())
+			p.shutdownSlave()
+		})
+	}
 }
 
 // trackConnection registers a newly created conn. It reports false if the

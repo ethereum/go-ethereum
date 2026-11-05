@@ -52,11 +52,11 @@ const MaxFramePayloadLen = 16 << 20
 //
 // Wire layout:
 //
-//	[4B payload_len][8B cluster_peer_id, Master↔chain only][1B opcode][8B rpc_id][payload]
+//	[4B payload_len][8B cluster_peer_id, Master↔slave only][1B opcode][8B rpc_id][payload]
 //
 // payload_len counts only payload. ClusterPeerID routes traffic through a
-// virtual peer connection on Master↔chain links; it is zero for ordinary
-// cluster traffic and is omitted entirely on direct chain↔chain links.
+// virtual peer connection on Master↔slave links; it is zero for ordinary
+// cluster traffic and is omitted entirely on direct slave↔slave links.
 //
 // The codec selected for the connection determines whether ClusterPeerID is
 // present on the wire.
@@ -80,26 +80,26 @@ type P2PFrame struct {
 	Payload []byte
 }
 
-// ReadClusterFrame reads one direct chain↔chain internal TCP frame, which does
+// ReadClusterFrame reads one direct slave↔slave internal TCP frame, which does
 // not carry a ClusterPeerID. maxPayloadLen must be in [1, MaxFramePayloadLen].
 func ReadClusterFrame(r io.Reader, maxPayloadLen uint32) (*ClusterFrame, error) {
 	return readClusterFrame(r, maxPayloadLen, false)
 }
 
-// WriteClusterFrame writes one direct chain↔chain internal TCP frame, which
+// WriteClusterFrame writes one direct slave↔slave internal TCP frame, which
 // does not carry a ClusterPeerID.
 func WriteClusterFrame(w io.Writer, frame *ClusterFrame) error {
 	return writeClusterFrame(w, frame, false)
 }
 
-// ReadClusterFrameWithPeerID reads one Master↔chain internal TCP frame. The
+// ReadClusterFrameWithPeerID reads one Master↔slave internal TCP frame. The
 // 8-byte ClusterPeerID routes a virtual peer command through the connection.
 // maxPayloadLen must be in [1, MaxFramePayloadLen].
 func ReadClusterFrameWithPeerID(r io.Reader, maxPayloadLen uint32) (*ClusterFrame, error) {
 	return readClusterFrame(r, maxPayloadLen, true)
 }
 
-// WriteClusterFrameWithPeerID writes one Master↔chain internal TCP frame.
+// WriteClusterFrameWithPeerID writes one Master↔slave internal TCP frame.
 func WriteClusterFrameWithPeerID(w io.Writer, frame *ClusterFrame) error {
 	return writeClusterFrame(w, frame, true)
 }
