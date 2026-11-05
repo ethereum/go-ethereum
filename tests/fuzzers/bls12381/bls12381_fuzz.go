@@ -28,7 +28,6 @@ import (
 
 	"github.com/consensys/gnark-crypto/ecc"
 	gnark "github.com/consensys/gnark-crypto/ecc/bls12-381"
-	"github.com/consensys/gnark-crypto/ecc/bls12-381/fp"
 	"github.com/consensys/gnark-crypto/ecc/bls12-381/fr"
 	"github.com/ethereum/go-ethereum/common"
 	blst "github.com/supranational/blst/bindings/go"
@@ -278,7 +277,7 @@ func fuzzCrossG2MultiExp(data []byte) int {
 
 func getG1Points(input io.Reader) (*gnark.G1Affine, *blst.P1Affine, error) {
 	// sample a random scalar
-	s, err := randomScalar(input, fp.Modulus())
+	s, err := randomScalar(input, fr.Modulus())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -302,7 +301,7 @@ func getG1Points(input io.Reader) (*gnark.G1Affine, *blst.P1Affine, error) {
 
 func getG2Points(input io.Reader) (*gnark.G2Affine, *blst.P2Affine, error) {
 	// sample a random scalar
-	s, err := randomScalar(input, fp.Modulus())
+	s, err := randomScalar(input, fr.Modulus())
 	if err != nil {
 		return nil, nil, err
 	}
