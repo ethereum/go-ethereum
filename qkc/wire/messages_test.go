@@ -312,9 +312,60 @@ func TestPingPongSSZRoundTrip(t *testing.T) {
 	roundTripSSZ(t, &PongResponse{})
 }
 
+func TestChainIDSSZConversion(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		id   *big.Int
+		want [UInt256Length]byte
+	}{
+		{"zero", new(big.Int), [UInt256Length]byte{}},
+		{"one", big.NewInt(1), [UInt256Length]byte{1}},
+		{"multi-byte", big.NewInt(0x01020304), [UInt256Length]byte{4, 3, 2, 1}},
+		{"max", new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1)), [UInt256Length]byte(bytes.Repeat([]byte{0xff}, UInt256Length))},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			original := new(big.Int).Set(test.id)
+			encoded, err := ChainIDToSSZ(test.id)
+			if err != nil || encoded != test.want {
+				t.Fatalf("encode %v: have %x, error %v, want %x", test.id, encoded, err, test.want)
+			}
+			if test.id.Cmp(original) != 0 {
+				t.Fatal("encoding changed the input chain ID")
+			}
+			decoded := ChainIDFromSSZ(encoded)
+			if decoded.Cmp(test.id) != 0 || encoded != test.want {
+				t.Fatalf("decode %x: have %v, want %v", encoded, decoded, test.id)
+			}
+		})
+	}
+	for _, test := range []struct {
+		name string
+		id   *big.Int
+	}{
+		{"nil", nil},
+		{"negative", big.NewInt(-1)},
+		{"overflow", new(big.Int).Lsh(big.NewInt(1), 256)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := ChainIDToSSZ(test.id); err == nil {
+				t.Fatalf("invalid chain ID %v accepted", test.id)
+			}
+		})
+	}
+}
+
 func TestSSZLargeChainIDs(t *testing.T) {
 	// Numeric uint256 is little-endian; this ID uses both the high and low bits.
-	id := [UInt256Length]byte{0: 0x31, 16: 0x80, 31: 0x40}
+	value := new(big.Int).Lsh(big.NewInt(0x40), 248)
+	value.Add(value, new(big.Int).Lsh(big.NewInt(0x80), 128))
+	value.Add(value, big.NewInt(0x31))
+	id, err := ChainIDToSSZ(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := ([UInt256Length]byte{0: 0x31, 16: 0x80, 31: 0x40}); id != want {
+		t.Fatalf("chain ID byte order: have %x, want %x", id, want)
+	}
 	for _, msg := range []SSZMessage{
 		&PingRequest{ChainID: id, HasRootTip: true, RootTip: Data{1}},
 		&PongResponse{ChainID: id},
@@ -326,6 +377,13 @@ func TestSSZLargeChainIDs(t *testing.T) {
 	}
 	if got := mustMarshalSSZ(t, &PongResponse{ChainID: id}); !bytes.Equal(got, id[:]) {
 		t.Fatalf("chain ID encoding: have %x, want %x", got, id)
+	}
+	var pong PongResponse
+	if err := pong.UnmarshalSSZ(mustMarshalSSZ(t, &PongResponse{ChainID: id})); err != nil {
+		t.Fatal(err)
+	}
+	if got := ChainIDFromSSZ(pong.ChainID); got.Cmp(value) != 0 {
+		t.Fatalf("decoded chain ID: have %v, want %v", got, value)
 	}
 }
 

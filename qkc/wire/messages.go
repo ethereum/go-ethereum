@@ -16,7 +16,13 @@
 
 package wire
 
-import "github.com/ethereum/go-ethereum/common"
+import (
+	"fmt"
+	"math/big"
+	"slices"
+
+	"github.com/ethereum/go-ethereum/common"
+)
 
 // The go:generate directive below runs from this package directory; it cds to
 // the repository root so the generator paths are stable and can be copied
@@ -40,6 +46,25 @@ const UInt128Length = 16
 
 // UInt256Length is the byte length of a uint256; numeric fields use little-endian.
 const UInt256Length = 32
+
+// ChainIDToSSZ encodes a chain ID as a little-endian uint256. It rejects nil,
+// negative and oversized IDs. Zero is allowed; callers validate shard identity.
+func ChainIDToSSZ(id *big.Int) ([UInt256Length]byte, error) {
+	var encoded [UInt256Length]byte
+	if id == nil || id.Sign() < 0 || id.BitLen() > 256 {
+		return encoded, fmt.Errorf("invalid SSZ chain ID: %v", id)
+	}
+	id.FillBytes(encoded[:])
+	slices.Reverse(encoded[:])
+	return encoded, nil
+}
+
+// ChainIDFromSSZ decodes a little-endian uint256 into an independent chain ID.
+// Every input is representable; callers validate shard identity, including zero.
+func ChainIDFromSSZ(encoded [UInt256Length]byte) *big.Int {
+	slices.Reverse(encoded[:])
+	return new(big.Int).SetBytes(encoded[:])
+}
 
 // Data carries an already encoded object unchanged through SSZ: RLP for geth
 // objects, SSZ for QKC root objects.
