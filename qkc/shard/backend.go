@@ -65,6 +65,8 @@ type Shard struct {
 // New constructs a shard without selecting a root tip. chainConfig is
 // authoritative; it is attached to a copy of genesis without changing the caller's
 // genesis. The same borrowed database stores chain data, roots and received deposits.
+// TODO: In the later New/Init work, remove the genesis and db arguments.
+// New should open the shard DB and read the genesis from it.
 func New(chainConfig *params.ChainConfig, genesis *core.Genesis, db ethdb.Database, cache *core.BlockChainConfig, client ClusterClient) (*Shard, error) {
 	if chainConfig == nil || chainConfig.QuarkChain == nil {
 		return nil, errNotQuarkChain
