@@ -148,6 +148,29 @@ func TestQuarkChainConfigEqual(t *testing.T) {
 	}
 }
 
+func TestQuarkChainConsensusType(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		value   ConsensusType
+		wantErr bool
+	}{
+		{"legacy empty", "", false},
+		{"ethash", ConsensusEthash, false},
+		{"simulate", ConsensusSimulate, false},
+		{"none", "NONE", true},
+		{"unknown", "unknown", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			config := NewTestQuarkChainConfig(10001)
+			config.QuarkChain.ConsensusType = test.value
+			err := config.CheckConfigForkOrder()
+			if (err != nil) != test.wantErr {
+				t.Fatalf("CheckConfigForkOrder() error = %v, want error = %v", err, test.wantErr)
+			}
+		})
+	}
+}
+
 func TestQuarkChainIDs(t *testing.T) {
 	large := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(10001))
 	config := NewTestQuarkChainConfig(10001, 10001, 10002)

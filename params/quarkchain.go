@@ -135,5 +135,10 @@ func (c *ChainConfig) CheckQuarkChain() error {
 	if !seen[c.ChainID.String()] {
 		return fmt.Errorf("chain IDs must include local chain %v", c.ChainID)
 	}
+	if q.ConsensusType != "" {
+		if err := q.ConsensusType.Check(); err != nil {
+			return err
+		}
+	}
 	return q.PoSW.Check()
 }

@@ -334,6 +334,21 @@ func TestGenesisCommit(t *testing.T) {
 	}
 }
 
+func TestGenesisCommitRejectsInvalidQuarkChainConsensusType(t *testing.T) {
+	db := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(db, triedb.HashDefaults)
+	defer tdb.Close()
+	config := genesisConfig(10001)
+	config.QuarkChain.ConsensusType = "NONE"
+	genesis := &Genesis{Config: config}
+	if block, err := genesis.Commit(db, tdb, nil); block != nil || err == nil || !strings.Contains(err.Error(), "invalid ConsensusType") {
+		t.Fatalf("invalid consensus type accepted: block=%v err=%v", block, err)
+	}
+	if hash := rawdb.ReadCanonicalHash(db, 0); hash != (common.Hash{}) {
+		t.Fatalf("invalid genesis was committed at %s", hash)
+	}
+}
+
 func TestReadWriteGenesisAlloc(t *testing.T) {
 	var (
 		db    = rawdb.NewMemoryDatabase()
