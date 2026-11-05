@@ -223,7 +223,7 @@ To load the same configuration from Go, follow this sequence:
 
 1. Call `LoadCluster` with the deployment file.
 2. Optionally replace `ClusterConfig.NetworkFile`.
-3. Call `SelectNode` with the role and, for a shard, its routing ID.
+3. Call `SelectNode` with the role and, for a shard, its chain ID.
 4. Apply explicit process overrides to the returned `NodeConfig`.
 5. Call `LoadNetwork` with the selected network file.
 6. Call `ClusterConfig.Validate` to validate the entire deployment.
