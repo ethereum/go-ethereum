@@ -44,7 +44,7 @@ type XshardHandler interface {
 
 // XshardConn is a slave-to-slave TCP connection for cross-shard RPCs.
 type XshardConn struct {
-	base *conn.BaseConn
+	*conn.BaseConn
 
 	handler XshardHandler
 
@@ -56,7 +56,7 @@ type XshardConn struct {
 	pingReceived chan struct{} // closed after the first PING
 	pingOnce     sync.Once     // records only the first PING
 
-	// inboundRegistered is closed by the pool after it indexes an inbound
+	// inboundRegistered is closed by the manager after it indexes an inbound
 	// connection. The PING handler waits for it before returning PONG. It is
 	// nil for outbound connections, which are indexed after receiving PONG.
 	inboundRegistered chan struct{}
@@ -73,7 +73,7 @@ func newXshardConn(nc net.Conn, maxPayloadSize uint32, localChainID, remoteChain
 		maxPayloadSize = wire.MaxFramePayloadLen
 	}
 	xc := &XshardConn{handler: handler, localChainID: localChainID, remoteChainID: remoteChainID, outbound: outbound, pingReceived: make(chan struct{})}
-	xc.base = conn.NewBaseConn(conn.Config{
+	xc.BaseConn = conn.NewBaseConn(conn.Config{
 		Transport: conn.NewTCPTransport(
 			nc,
 			func(r io.Reader) (*wire.ClusterFrame, error) {
@@ -103,7 +103,7 @@ func (x *XshardConn) RemoteChainID() uint32 { return x.remoteChainID }
 // ErrorCode is returned as *wire.RemoteError; transport and context errors are
 // returned unchanged.
 func (x *XshardConn) SendAddXshardTxList(ctx context.Context, req *wire.AddXshardTxListRequest) error {
-	resp, err := x.base.SendRPC(ctx, byte(wire.ClusterOpAddXshardTxListRequest), req)
+	resp, err := x.SendRPC(ctx, byte(wire.ClusterOpAddXshardTxListRequest), req)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func (x *XshardConn) SendAddXshardTxList(ctx context.Context, req *wire.AddXshar
 // Internal implementation
 
 // handlePing records the remote slave's chain ID for inbound connections and
-// signals the pool. Inbound PONGs are sent after the pool registers the connection.
+// signals the manager. Inbound PONGs are sent after the manager registers the connection.
 func (x *XshardConn) handlePing(req wire.SSZMessage) (wire.SSZMessage, error) {
 	ping := req.(*wire.PingRequest)
 
@@ -133,16 +133,16 @@ func (x *XshardConn) handlePing(req wire.SSZMessage) (wire.SSZMessage, error) {
 		close(x.pingReceived)
 	})
 
-	// Inbound-only barrier: the pool must finish registering this connection
+	// Inbound-only barrier: the manager must finish registering this connection
 	// before the PONG is written, so the dialing peer can rely on the reverse
 	// dial being skipped by the time it sees PONG. Every PING (not only the
 	// first) must pass it, since any of them may carry the response the peer
-	// observes. Pool failure paths close the connection, which wakes this
+	// observes. Manager failure paths close the connection, which wakes this
 	// select with an error instead of leaking the goroutine.
 	if x.inboundRegistered != nil {
 		select {
 		case <-x.inboundRegistered:
-		case <-x.base.WaitUntilClosed():
+		case <-x.WaitUntilClosed():
 			return nil, fmt.Errorf("connection closed before inbound registration")
 		}
 	}
@@ -163,18 +163,18 @@ func (x *XshardConn) waitUntilPingReceived() bool {
 
 	select {
 	case <-x.pingReceived:
-		return !x.base.IsClosed()
-	case <-x.base.WaitUntilClosed():
+		return !x.IsClosed()
+	case <-x.WaitUntilClosed():
 		return false
 	case <-timer.C:
-		x.base.Close()
+		x.Close()
 		return false
 	}
 }
 
 // sendPing sends PING and returns the remote slave's chain ID.
 func (x *XshardConn) sendPing(ctx context.Context) (uint32, error) {
-	resp, err := x.base.SendRPC(ctx, byte(wire.ClusterOpPing), &wire.PingRequest{ChainID: x.localChainID})
+	resp, err := x.SendRPC(ctx, byte(wire.ClusterOpPing), &wire.PingRequest{ChainID: x.localChainID})
 	if err != nil {
 		return 0, err
 	}

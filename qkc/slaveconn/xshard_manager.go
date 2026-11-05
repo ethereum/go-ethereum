@@ -28,23 +28,24 @@ import (
 	"github.com/ethereum/go-ethereum/qkc/wire"
 )
 
-// XshardPool manages the local slave's cross-shard connections to other slaves,
-// indexed by each remote slave's chain ID. Connections and chain IDs remain
-// indexed until the pool closes. Concurrent dials may establish multiple
-// connections to the same slave.
+// XshardConnManager manages the local slave's cross-shard connections to other slaves,
+// indexed by each remote slave's chain ID. Connections remain indexed until
+// the manager closes. Master sends ConnectToSlavesRequest to one slave at a
+// time and waits for its response, so a successful outbound PING sees the
+// inbound connection registered before the next slave is asked to dial.
+// Duplicate connections are rejected if this ordering is violated.
 //
-// TODO: Define xshard TCP disconnect handling, including pool cleanup and whether
+// TODO: Define xshard TCP disconnect handling, including manager cleanup and whether
 // to stop the cluster or reconnect. Closed connections currently remain indexed.
-type XshardPool struct {
-	// mu guards all mutable pool state below. Registration
+type XshardConnManager struct {
+	// mu guards all mutable manager state below. Registration
 	// (registerConnection) and Close are multi-map transactions over these
 	// fields plus closed, so they must stay in one critical section; do not
 	// split locking per field.
 	mu          sync.RWMutex
-	conns       map[uint32][]*XshardConn
+	conns       map[uint32]*XshardConn
 	connections map[*XshardConn]struct{}
 
-	chainIDs     map[uint32]struct{}
 	localChainID uint32
 	// Only connections to slaves with configured chain IDs enter the routing index.
 	configuredChainIDs map[uint32]struct{}
@@ -56,12 +57,12 @@ type XshardPool struct {
 
 // Public API
 
-// NewXshardPool creates the local slave's pool of cross-shard connections.
+// NewXshardConnManager creates the local slave's manager of cross-shard connections.
 // localChainID identifies the chain hosted by this slave; configuredChainIDs
 // lists the chain IDs hosted by the cluster's slaves. A zero maxPayloadSize
 // uses the protocol's maximum payload size. handler serves cross-shard requests
 // from other slaves and must not be nil.
-func NewXshardPool(localChainID uint32, configuredChainIDs []uint32, maxPayloadSize uint32, handler XshardHandler, logger log.Logger) (*XshardPool, error) {
+func NewXshardConnManager(localChainID uint32, configuredChainIDs []uint32, maxPayloadSize uint32, handler XshardHandler, logger log.Logger) (*XshardConnManager, error) {
 	if handler == nil {
 		return nil, errors.New("xshard handler must not be nil")
 	}
@@ -78,10 +79,9 @@ func NewXshardPool(localChainID uint32, configuredChainIDs []uint32, maxPayloadS
 	for _, id := range configuredChainIDs {
 		clusterSet[id] = struct{}{}
 	}
-	return &XshardPool{
-		conns:              make(map[uint32][]*XshardConn),
+	return &XshardConnManager{
+		conns:              make(map[uint32]*XshardConn),
 		connections:        make(map[*XshardConn]struct{}),
-		chainIDs:           make(map[uint32]struct{}),
 		localChainID:       localChainID,
 		handler:            handler,
 		configuredChainIDs: clusterSet,
@@ -92,7 +92,7 @@ func NewXshardPool(localChainID uint32, configuredChainIDs []uint32, maxPayloadS
 
 // DialToSlave establishes an outbound cross-shard connection to the slave
 // described by slaveInfo. Its ChainID identifies the chain hosted by that slave.
-func (p *XshardPool) DialToSlave(ctx context.Context, slaveInfo wire.SlaveInfo) error {
+func (p *XshardConnManager) DialToSlave(ctx context.Context, slaveInfo wire.SlaveInfo) error {
 	if _, ok := p.configuredChainIDs[slaveInfo.ChainID]; !ok {
 		return fmt.Errorf("slave chain ID %d is not configured", slaveInfo.ChainID)
 	}
@@ -115,10 +115,10 @@ func (p *XshardPool) DialToSlave(ctx context.Context, slaveInfo wire.SlaveInfo) 
 	}
 
 	if !p.trackConnection(conn) {
-		conn.base.Close()
-		return fmt.Errorf("xshard pool closed")
+		conn.Close()
+		return fmt.Errorf("xshard manager closed")
 	}
-	conn.base.Start()
+	conn.Start()
 
 	// The remote slave must confirm its advertised chain ID.
 	// Bound the handshake independently of the caller's context so a peer
@@ -130,15 +130,13 @@ func (p *XshardPool) DialToSlave(ctx context.Context, slaveInfo wire.SlaveInfo) 
 	id, err := conn.sendPing(pingCtx)
 	if err != nil {
 		p.rejectConnection(conn)
-		return fmt.Errorf("ping failed for %s: %w", conn.base.RemoteAddr(), err)
+		return fmt.Errorf("ping failed for %s: %w", conn.RemoteAddr(), err)
 	}
 	if id != slaveInfo.ChainID {
 		p.rejectConnection(conn)
-		return fmt.Errorf("slave chain ID mismatch for %s: expected %d, got %d", conn.base.RemoteAddr(), slaveInfo.ChainID, id)
+		return fmt.Errorf("slave chain ID mismatch for %s: expected %d, got %d", conn.RemoteAddr(), slaveInfo.ChainID, id)
 	}
 
-	// Do not deduplicate again after the handshake: simultaneous dials could
-	// otherwise cause both nodes to close their outbound connections.
 	if err := p.registerConnection(conn); err != nil {
 		return err
 	}
@@ -151,8 +149,8 @@ func (p *XshardPool) DialToSlave(ctx context.Context, slaveInfo wire.SlaveInfo) 
 // handshake fails or times out are discarded and never enter the routing index.
 // Registration happens-before the PONG reply for inbound connections, so a successful
 // handshake observed by the dialing peer implies that the inbound connection
-// has already been indexed by this pool.
-func (p *XshardPool) HandleInbound(nc net.Conn) {
+// has already been indexed by this manager.
+func (p *XshardConnManager) HandleInbound(nc net.Conn) {
 	// Inbound identity arrives with the first PING.
 	conn, err := newXshardConn(nc, p.maxPayloadSize, p.localChainID, 0, false, p.handler, p.log)
 	if err != nil {
@@ -162,30 +160,28 @@ func (p *XshardPool) HandleInbound(nc net.Conn) {
 	}
 
 	if !p.trackConnection(conn) {
-		conn.base.Close()
-		p.log.Warn("xshard pool closed, closing inbound connection from slave", "remote", conn.base.RemoteAddr())
+		conn.Close()
+		p.log.Warn("xshard manager closed, closing inbound connection from slave", "remote", conn.RemoteAddr())
 		return
 	}
 
 	// Arm the registration barrier before Start, so the reader goroutine
 	// observes the channel (goroutine creation publishes the write).
 	conn.inboundRegistered = make(chan struct{})
-	conn.base.Start()
+	conn.Start()
 
 	if !conn.waitUntilPingReceived() {
-		p.log.Warn("inbound xshard connection from slave closed before ping", "remote", conn.base.RemoteAddr())
+		p.log.Warn("inbound xshard connection from slave closed before ping", "remote", conn.RemoteAddr())
 		p.rejectConnection(conn)
 		return
 	}
 
-	// A remote slave may have multiple inbound connections.
 	if err := p.registerConnection(conn); err != nil {
-		conn.base.Close() // defensive
-		p.log.Warn("inbound xshard connection from slave rejected", "remote", conn.base.RemoteAddr(), "err", err)
+		p.log.Warn("inbound xshard connection from slave rejected", "remote", conn.RemoteAddr(), "err", err)
 		return
 	}
 	// Release the barrier: the first PING's PONG is written only after this
-	// point, so the dialing peer cannot trigger a reverse dial that this pool
+	// point, so the dialing peer cannot trigger a reverse dial that this manager
 	// would not know to skip. registerConnection's failure paths close the
 	// conn, which unblocks the barrier with an error instead of a PONG.
 	close(conn.inboundRegistered)
@@ -193,22 +189,17 @@ func (p *XshardPool) HandleInbound(nc net.Conn) {
 	p.log.Info("indexed inbound xshard connection from slave", "remote_chain_id", conn.RemoteChainID())
 }
 
-// Lookup returns cross-shard connections to the slave identified by chainID.
-// They may be closed concurrently afterwards, so callers must tolerate failed
-// sends.
-// The returned slice is a copy holding the original pointers.
-func (p *XshardPool) Lookup(chainID uint32) []*XshardConn {
+// Lookup returns the connection to the slave identified by chainID. It may
+// close concurrently afterwards, so callers must tolerate failed sends.
+func (p *XshardConnManager) Lookup(chainID uint32) *XshardConn {
 	p.mu.RLock()
-	conns := p.conns[chainID]
-	result := make([]*XshardConn, len(conns))
-	copy(result, conns)
-	p.mu.RUnlock()
-	return result
+	defer p.mu.RUnlock()
+	return p.conns[chainID]
 }
 
-// Close closes all pool connections, including ones still handshaking
+// Close closes all manager connections, including ones still handshaking
 // (py close_all leaks those).
-func (p *XshardPool) Close() {
+func (p *XshardConnManager) Close() {
 	p.mu.Lock()
 	if p.closed {
 		p.mu.Unlock()
@@ -223,13 +214,12 @@ func (p *XshardPool) Close() {
 
 	p.conns = nil
 	p.connections = nil
-	p.chainIDs = nil
 	p.mu.Unlock()
 
 	for _, conn := range allConns {
-		conn.base.Close()
+		conn.Close()
 	}
-	p.log.Info("xshard pool closed", "connections", len(allConns))
+	p.log.Info("xshard manager closed", "connections", len(allConns))
 }
 
 // Internal implementation
@@ -238,9 +228,9 @@ func (p *XshardPool) Close() {
 // evicts it from the tracking set. Every failure path between
 // trackConnection and registerConnection must go through here, never
 // through closing the connection alone: a conn left only in the tracking set would
-// linger until pool Close.
-func (p *XshardPool) rejectConnection(conn *XshardConn) {
-	conn.base.Close()
+// linger until manager Close.
+func (p *XshardConnManager) rejectConnection(conn *XshardConn) {
+	conn.Close()
 
 	p.mu.Lock()
 	delete(p.connections, conn)
@@ -248,39 +238,38 @@ func (p *XshardPool) rejectConnection(conn *XshardConn) {
 }
 
 // registerConnection commits a verified connection into the routing index.
-// It reports an error if the pool closed while the connection was handshaking,
+// It reports an error if the manager closed while the connection was handshaking,
 // evicting any leftover tracking entry (normally none — Close empties the
 // registries) and closing the conn.
-func (p *XshardPool) registerConnection(conn *XshardConn) error {
+func (p *XshardConnManager) registerConnection(conn *XshardConn) error {
 	p.mu.Lock()
 	if p.closed {
 		delete(p.connections, conn)
 		p.mu.Unlock()
-		conn.base.Close()
-		return fmt.Errorf("xshard pool closed")
+		conn.Close()
+		return fmt.Errorf("xshard manager closed")
 	}
 	if _, ok := p.configuredChainIDs[conn.RemoteChainID()]; !ok {
 		delete(p.connections, conn)
 		p.mu.Unlock()
-		conn.base.Close()
+		conn.Close()
 		return fmt.Errorf("slave chain ID %d is not configured", conn.RemoteChainID())
 	}
+	if p.conns[conn.RemoteChainID()] != nil {
+		delete(p.connections, conn)
+		p.mu.Unlock()
+		conn.Close()
+		return fmt.Errorf("slave chain ID %d already connected", conn.RemoteChainID())
+	}
 
-	p.addSlaveConnectionLocked(conn)
+	p.conns[conn.RemoteChainID()] = conn
 	p.mu.Unlock()
 	return nil
 }
 
-// addSlaveConnectionLocked indexes the connection by the remote slave's chain ID.
-func (p *XshardPool) addSlaveConnectionLocked(conn *XshardConn) {
-	id := conn.RemoteChainID()
-	p.chainIDs[id] = struct{}{}
-	p.conns[id] = append(p.conns[id], conn)
-}
-
 // trackConnection registers a newly created conn. It reports false if the
-// pool is already closed.
-func (p *XshardPool) trackConnection(conn *XshardConn) bool {
+// manager is already closed.
+func (p *XshardConnManager) trackConnection(conn *XshardConn) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
@@ -292,12 +281,12 @@ func (p *XshardPool) trackConnection(conn *XshardConn) bool {
 
 // knownSlave reports whether chainID identifies the local slave or a slave
 // already in the routing index.
-func (p *XshardPool) knownSlave(chainID uint32) bool {
+func (p *XshardConnManager) knownSlave(chainID uint32) bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	if p.localChainID == chainID {
 		return true
 	}
-	_, known := p.chainIDs[chainID]
+	_, known := p.conns[chainID]
 	return known
 }
