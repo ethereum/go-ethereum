@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -205,16 +206,32 @@ func TestBackendBroadcastXShardTxList(t *testing.T) {
 		"10003": {}, // Configured destinations with no messages still receive a list.
 	}
 	delivered := make(map[string][]*types.DepositTx)
+	var deliveredMu sync.Mutex
+	otherStarted := make(chan struct{})
 	s := &Shard{chain: env.sc, clusterClient: &backendClusterClient{
-		broadcast: func(_ context.Context, chainID *big.Int, hash common.Hash, list []*types.DepositTx) error {
+		broadcast: func(ctx context.Context, chainID *big.Int, hash common.Hash, list []*types.DepositTx) error {
 			if hash != block.Hash() {
 				t.Fatalf("delivered block %x, want %x", hash, block.Hash())
 			}
+			// The first destination must not prevent the other from starting.
+			if chainID.String() == "10002" {
+				select {
+				case <-otherStarted:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			} else {
+				close(otherStarted)
+			}
+			deliveredMu.Lock()
 			delivered[chainID.String()] = list
+			deliveredMu.Unlock()
 			return nil
 		},
 	}}
-	if err := s.BroadcastXShardTxList(context.Background(), block.Hash()); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := s.BroadcastXShardTxList(ctx, block.Hash()); err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(delivered, want) {
@@ -239,6 +256,7 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 			failure := errors.New("delivery failed")
 			fail := true
 			delivered := make(map[string]bool)
+			var deliveredMu sync.Mutex
 			reports := 0
 			client := &backendClusterClient{
 				broadcast: func(_ context.Context, chainID *big.Int, hash common.Hash, list []*types.DepositTx) error {
@@ -248,7 +266,9 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 					if fail && !failReport && chainID.String() == "10002" {
 						return failure
 					}
+					deliveredMu.Lock()
 					delivered[chainID.String()] = true
+					deliveredMu.Unlock()
 					return nil
 				},
 				report: func(_ context.Context, header *types.Header, amount *uint256.Int) error {

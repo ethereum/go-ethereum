@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/qkc/rawdb"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
 	"github.com/holiman/uint256"
+	"golang.org/x/sync/errgroup"
 )
 
 var _ MinerBackend = (*Shard)(nil)
@@ -68,8 +69,10 @@ const minedBlockDeliveryTimeout = 30 * time.Second
 // New constructs a shard without selecting a root tip. chainConfig is
 // authoritative; it is attached to a copy of genesis without changing the caller's
 // genesis. The same borrowed database stores chain data, roots and received deposits.
-// TODO: In the later New/Init work, remove the genesis and db arguments.
-// New should open the shard DB and read the genesis from it.
+// TODO: In the later New/Init work, accept a user-level shard.Config instead of
+// genesis, db and cache. Open the DB, load genesis and derive core.BlockChainConfig
+// here as eth.New does: DB state scheme, genesis-based history policy and
+// datadir-relative journal paths.
 func New(chainConfig *params.ChainConfig, genesis *core.Genesis, db ethdb.Database, cache *core.BlockChainConfig, client ClusterClient) (*Shard, error) {
 	if chainConfig == nil || chainConfig.QuarkChain == nil {
 		return nil, errNotQuarkChain
@@ -165,8 +168,9 @@ func (s *Shard) AddRootBlock(root *qkctypes.RootBlock) (bool, error) {
 // shard in config, sending an empty list when it has no deposits for that shard.
 // Empty lists mark the source block as received so destinations can process a
 // root that confirms it. Destinations come from config, not from emitted messages.
-// Each ClusterClient call must succeed for all hosts serving that shard. A failure
-// stops delivery; retrying repeats all deliveries by block hash.
+// Deliveries run concurrently, and every call must succeed for all hosts serving
+// that shard before reporting to master. A failure cancels outstanding calls;
+// all calls finish before returning. Retrying repeats all deliveries by block hash.
 func (s *Shard) BroadcastXShardTxList(ctx context.Context, blockHash common.Hash) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -176,22 +180,29 @@ func (s *Shard) BroadcastXShardTxList(ctx context.Context, blockHash common.Hash
 		return err
 	}
 	config := s.chain.chain.Config()
+	// Wait for all deliveries before reporting to master. A delivery failure
+	// cancels the other deliveries through a child context; the caller's context
+	// is unaffected, and Wait returns the first error after all tasks finish.
+	group, ctx := errgroup.WithContext(ctx)
 	for _, chainID := range config.QuarkChain.ChainIDs {
 		if chainID.Cmp(config.ChainID) == 0 {
 			continue
 		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		list := deposits[chainID.String()]
-		if list == nil {
-			list = []*types.DepositTx{}
-		}
-		if err := s.clusterClient.BroadcastXShardTxList(ctx, chainID, blockHash, list); err != nil {
-			return fmt.Errorf("broadcast block %x deposits to shard %d: %w", blockHash, chainID, err)
-		}
+		group.Go(func() error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			list := deposits[chainID.String()]
+			if list == nil {
+				list = []*types.DepositTx{}
+			}
+			if err := s.clusterClient.BroadcastXShardTxList(ctx, chainID, blockHash, list); err != nil {
+				return fmt.Errorf("broadcast block %x deposits to shard %d: %w", blockHash, chainID, err)
+			}
+			return nil
+		})
 	}
-	return nil
+	return group.Wait()
 }
 
 // AddShardBlock imports a block, delivers all cross-shard lists, then reports
