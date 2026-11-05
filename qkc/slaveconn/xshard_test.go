@@ -19,6 +19,7 @@ package slaveconn
 import (
 	"context"
 	"errors"
+	"math/big"
 	"net"
 	"strings"
 	"testing"
@@ -43,7 +44,7 @@ func TestXshardConnManagerPayloadLimit(t *testing.T) {
 		{"above maximum", wire.MaxFramePayloadLen + 1, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			manager, err := NewXshardConnManager(0, []uint32{0, 1}, tc.limit, &testXshardHandler{}, nil)
+			manager, err := NewXshardConnManager(big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(2)}, tc.limit, &testXshardHandler{}, nil)
 			if manager != nil {
 				defer manager.Close()
 			}
@@ -59,19 +60,19 @@ func TestXshardConnManagerPayloadLimit(t *testing.T) {
 
 func TestRejectUnconfiguredSlave(t *testing.T) {
 	handler := &testXshardHandler{requests: make(chan *wire.AddXshardTxListRequest, 1)}
-	manager, err := NewXshardConnManager(0, []uint32{0, 1}, 0, handler, nil)
+	manager, err := NewXshardConnManager(big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(2)}, 0, handler, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer manager.Close()
-	if err := manager.DialToSlave(context.Background(), wire.SlaveInfo{ChainID: 2}); err == nil || !strings.Contains(err.Error(), "not configured") {
+	if err := manager.DialToSlave(context.Background(), wire.SlaveInfo{ChainID: [wire.UInt256Length]byte{3}}); err == nil || !strings.Contains(err.Error(), "not configured") {
 		t.Fatalf("expected unconfigured slave error, got %v", err)
 	}
 
 	local, remote := net.Pipe()
 	done := make(chan struct{})
 	go func() { defer close(done); manager.HandleInbound(local) }()
-	peer, err := newXshardConn(remote, 0, 2, 0, true, handler, nil)
+	peer, err := newXshardConn(remote, 0, big.NewInt(3), big.NewInt(1), true, handler, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +88,7 @@ func TestRejectUnconfiguredSlave(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("inbound handler did not finish")
 	}
-	if manager.Lookup(2) != nil || manager.knownSlave(2) {
+	if manager.Lookup(big.NewInt(3)) != nil || manager.knownSlave(big.NewInt(3)) {
 		t.Fatal("unconfigured slave was registered")
 	}
 	manager.mu.RLock()
@@ -112,7 +113,7 @@ func (h xshardHandlerFunc) AddXshardTxList(req *wire.AddXshardTxListRequest) (*w
 // exercise the same handler registration as real TCP connections.
 func newTestXshardPeer(t *testing.T, handler XshardHandler) *XshardConn {
 	t.Helper()
-	manager, err := NewXshardConnManager(0, []uint32{0, 1}, 0, handler, nil)
+	manager, err := NewXshardConnManager(big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(2)}, 0, handler, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func newTestXshardPeer(t *testing.T, handler XshardHandler) *XshardConn {
 		defer close(done)
 		manager.HandleInbound(local)
 	}()
-	peer, err := newXshardConn(remote, 0, 1, 0, true, handler, nil)
+	peer, err := newXshardConn(remote, 0, big.NewInt(2), big.NewInt(1), true, handler, nil)
 	if err != nil {
 		remote.Close()
 		t.Fatal(err)
@@ -146,19 +147,19 @@ func newTestXshardPeer(t *testing.T, handler XshardHandler) *XshardConn {
 func TestXshardConnRemoteErrorKeepsConnection(t *testing.T) {
 	const errorCode = 404
 	peer := newTestXshardPeer(t, xshardHandlerFunc(func(req *wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error) {
-		if req.ChainID != 0 {
+		if req.ChainID != ([wire.UInt256Length]byte{1}) {
 			return &wire.AddXshardTxListResponse{ErrorCode: errorCode}, nil
 		}
 		return &wire.AddXshardTxListResponse{}, nil
 	}))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: 2})
+	err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: [wire.UInt256Length]byte{3}})
 	var remoteErr *wire.RemoteError
 	if !errors.As(err, &remoteErr) || remoteErr.Code != errorCode {
 		t.Fatalf("expected RemoteError with code %d, got %T: %v", errorCode, err, err)
 	}
-	if err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: 0}); err != nil {
+	if err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: [wire.UInt256Length]byte{1}}); err != nil {
 		t.Fatalf("request after remote execution failure: %v", err)
 	}
 }
@@ -177,11 +178,11 @@ func TestXshardConnHandlerErrorClosesConnection(t *testing.T) {
 			}))
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: 0})
+			err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: [wire.UInt256Length]byte{1}})
 			if !errors.Is(err, conn.ErrConnectionClosed) {
 				t.Fatalf("expected connection closure after handler error, got %v", err)
 			}
-			if err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: 0}); !errors.Is(err, conn.ErrConnectionClosed) {
+			if err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: [wire.UInt256Length]byte{1}}); !errors.Is(err, conn.ErrConnectionClosed) {
 				t.Fatalf("request after handler failure: expected connection closed, got %v", err)
 			}
 		})
@@ -192,7 +193,7 @@ func TestXshardConnContextErrorsKeepConnection(t *testing.T) {
 	entered := make(chan struct{}, 2)
 	release := make(chan struct{})
 	peer := newTestXshardPeer(t, xshardHandlerFunc(func(req *wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error) {
-		if req.ChainID != 0 {
+		if req.ChainID != ([wire.UInt256Length]byte{1}) {
 			entered <- struct{}{}
 			<-release
 		}
@@ -212,7 +213,7 @@ func TestXshardConnContextErrorsKeepConnection(t *testing.T) {
 			defer cancel()
 			result := make(chan error, 1)
 			go func() {
-				result <- peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: 1})
+				result <- peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: [wire.UInt256Length]byte{2}})
 			}()
 			select {
 			case <-entered:
@@ -229,7 +230,7 @@ func TestXshardConnContextErrorsKeepConnection(t *testing.T) {
 			}
 			ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			if err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: 0}); err != nil {
+			if err := peer.SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: [wire.UInt256Length]byte{1}}); err != nil {
 				t.Fatalf("request after context error: %v", err)
 			}
 		})
@@ -238,12 +239,19 @@ func TestXshardConnContextErrorsKeepConnection(t *testing.T) {
 
 func TestTCPXshardHandshakeAndRequest(t *testing.T) {
 	handler := &testXshardHandler{requests: make(chan *wire.AddXshardTxListRequest, 1)}
-	server, err := NewXshardConnManager(0, []uint32{0, 1}, 0, handler, nil)
+	serverID := new(big.Int).Lsh(big.NewInt(1), 80)
+	clientID := new(big.Int).Add(serverID, big.NewInt(1))
+	configuredIDs := []*big.Int{serverID, clientID}
+	serverWireID, err := wire.ChainIDToSSZ(serverID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewXshardConnManager(serverID, configuredIDs, 0, handler, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer server.Close()
-	client, err := NewXshardConnManager(1, []uint32{0, 1}, 0, handler, nil)
+	client, err := NewXshardConnManager(clientID, configuredIDs, 0, handler, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,20 +272,27 @@ func TestTCPXshardHandshakeAndRequest(t *testing.T) {
 	addr := listener.Addr().(*net.TCPAddr)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := client.DialToSlave(ctx, wire.SlaveInfo{Host: []byte("127.0.0.1"), Port: uint16(addr.Port), ChainID: 0}); err != nil {
+	serverID.SetInt64(0)
+	serverID = wire.ChainIDFromSSZ(serverWireID)
+	if err := client.DialToSlave(ctx, wire.SlaveInfo{Host: []byte("127.0.0.1"), Port: uint16(addr.Port), ChainID: serverWireID}); err != nil {
 		t.Fatal(err)
 	}
 	<-done
-	if server.Lookup(1) == nil || client.Lookup(0) == nil {
+	if server.Lookup(new(big.Int).Set(clientID)) == nil || client.Lookup(new(big.Int).Set(serverID)) == nil {
 		t.Fatal("slave connections were not indexed by chain ID")
 	}
-	if err := client.Lookup(0).SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: 0}); err != nil {
+	remoteID := client.Lookup(serverID).RemoteChainID()
+	remoteID.SetInt64(0)
+	if client.Lookup(serverID).RemoteChainID().Cmp(serverID) != 0 {
+		t.Fatal("remote chain ID changed through its accessor")
+	}
+	if err := client.Lookup(serverID).SendAddXshardTxList(ctx, &wire.AddXshardTxListRequest{ChainID: serverWireID}); err != nil {
 		t.Fatal(err)
 	}
 	select {
 	case req := <-handler.requests:
-		if req.ChainID != 0 {
-			t.Fatalf("chain ID = %d", req.ChainID)
+		if req.ChainID != serverWireID {
+			t.Fatalf("chain ID = %x", req.ChainID)
 		}
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
@@ -286,12 +301,12 @@ func TestTCPXshardHandshakeAndRequest(t *testing.T) {
 
 func TestDialToSlaveRejectsWrongChainID(t *testing.T) {
 	handler := &testXshardHandler{requests: make(chan *wire.AddXshardTxListRequest, 1)}
-	server, err := NewXshardConnManager(2, []uint32{1, 2, 3}, 0, handler, nil)
+	server, err := NewXshardConnManager(big.NewInt(3), []*big.Int{big.NewInt(2), big.NewInt(3), big.NewInt(4)}, 0, handler, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer server.Close()
-	client, err := NewXshardConnManager(1, []uint32{1, 2, 3}, 0, handler, nil)
+	client, err := NewXshardConnManager(big.NewInt(2), []*big.Int{big.NewInt(2), big.NewInt(3), big.NewInt(4)}, 0, handler, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,17 +325,17 @@ func TestDialToSlaveRejectsWrongChainID(t *testing.T) {
 	addr := listener.Addr().(*net.TCPAddr)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := client.DialToSlave(ctx, wire.SlaveInfo{Host: []byte("127.0.0.1"), Port: uint16(addr.Port), ChainID: 3}); err == nil {
+	if err := client.DialToSlave(ctx, wire.SlaveInfo{Host: []byte("127.0.0.1"), Port: uint16(addr.Port), ChainID: [wire.UInt256Length]byte{4}}); err == nil {
 		t.Fatal("expected slave chain ID mismatch")
 	}
-	if client.Lookup(3) != nil {
+	if client.Lookup(big.NewInt(4)) != nil {
 		t.Fatal("mismatched connection was indexed")
 	}
 }
 
 func TestXshardConnManagerRejectsDuplicateConnection(t *testing.T) {
 	handler := &testXshardHandler{}
-	manager, err := NewXshardConnManager(0, []uint32{0, 1}, 0, handler, nil)
+	manager, err := NewXshardConnManager(big.NewInt(1), []*big.Int{big.NewInt(1), big.NewInt(2)}, 0, handler, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +343,7 @@ func TestXshardConnManagerRejectsDuplicateConnection(t *testing.T) {
 
 	firstLocal, firstRemote := net.Pipe()
 	defer firstRemote.Close()
-	first, err := newXshardConn(firstLocal, 0, 0, 1, true, handler, nil)
+	first, err := newXshardConn(firstLocal, 0, big.NewInt(1), big.NewInt(2), true, handler, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,7 +356,7 @@ func TestXshardConnManagerRejectsDuplicateConnection(t *testing.T) {
 
 	duplicateLocal, duplicateRemote := net.Pipe()
 	defer duplicateRemote.Close()
-	duplicate, err := newXshardConn(duplicateLocal, 0, 0, 1, true, handler, nil)
+	duplicate, err := newXshardConn(duplicateLocal, 0, big.NewInt(1), big.NewInt(2), true, handler, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,12 +366,29 @@ func TestXshardConnManagerRejectsDuplicateConnection(t *testing.T) {
 	if err := manager.registerConnection(duplicate); err == nil || !strings.Contains(err.Error(), "already connected") {
 		t.Fatalf("expected duplicate connection error, got %v", err)
 	}
-	if manager.Lookup(1) != first || !duplicate.IsClosed() {
+	if manager.Lookup(big.NewInt(2)) != first || !duplicate.IsClosed() {
 		t.Fatal("duplicate connection replaced the registered connection or remained open")
 	}
 	manager.mu.RLock()
 	defer manager.mu.RUnlock()
 	if len(manager.connections) != 1 {
 		t.Fatalf("tracked connections = %d, want 1", len(manager.connections))
+	}
+}
+
+func TestXshardConnManagerRejectsInvalidChainIDs(t *testing.T) {
+	for _, id := range []*big.Int{nil, new(big.Int), big.NewInt(-1), new(big.Int).Lsh(big.NewInt(1), 256)} {
+		if manager, err := NewXshardConnManager(id, []*big.Int{big.NewInt(1)}, 0, &testXshardHandler{}, nil); err == nil {
+			manager.Close()
+			t.Fatalf("accepted invalid local chain ID %v", id)
+		}
+		if manager, err := NewXshardConnManager(big.NewInt(1), []*big.Int{big.NewInt(1), id}, 0, &testXshardHandler{}, nil); err == nil {
+			manager.Close()
+			t.Fatalf("accepted invalid configured chain ID %v", id)
+		}
+	}
+	if manager, err := NewXshardConnManager(big.NewInt(1), []*big.Int{big.NewInt(2)}, 0, &testXshardHandler{}, nil); err == nil {
+		manager.Close()
+		t.Fatal("accepted local chain ID missing from configuration")
 	}
 }

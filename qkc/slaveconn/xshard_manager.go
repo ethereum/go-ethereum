@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"strconv"
 	"sync"
@@ -43,12 +44,12 @@ type XshardConnManager struct {
 	// fields plus closed, so they must stay in one critical section; do not
 	// split locking per field.
 	mu          sync.RWMutex
-	conns       map[uint32]*XshardConn
+	conns       map[string]*XshardConn
 	connections map[*XshardConn]struct{}
 
-	localChainID uint32
+	localChainID *big.Int
 	// Only connections to slaves with configured chain IDs enter the routing index.
-	configuredChainIDs map[uint32]struct{}
+	configuredChainIDs map[string]struct{}
 	maxPayloadSize     uint32        // 0 uses the maximum frame payload length.
 	handler            XshardHandler // Serves cross-shard requests from other slaves.
 	closed             bool
@@ -62,9 +63,12 @@ type XshardConnManager struct {
 // lists the chain IDs hosted by the cluster's slaves. A zero maxPayloadSize
 // uses the protocol's maximum payload size. handler serves cross-shard requests
 // from other slaves and must not be nil.
-func NewXshardConnManager(localChainID uint32, configuredChainIDs []uint32, maxPayloadSize uint32, handler XshardHandler, logger log.Logger) (*XshardConnManager, error) {
+func NewXshardConnManager(localChainID *big.Int, configuredChainIDs []*big.Int, maxPayloadSize uint32, handler XshardHandler, logger log.Logger) (*XshardConnManager, error) {
 	if handler == nil {
 		return nil, errors.New("xshard handler must not be nil")
+	}
+	if err := validateXshardChainID(localChainID); err != nil {
+		return nil, err
 	}
 	if len(configuredChainIDs) == 0 {
 		return nil, errors.New("configured chain IDs must not be empty")
@@ -75,14 +79,20 @@ func NewXshardConnManager(localChainID uint32, configuredChainIDs []uint32, maxP
 	if logger == nil {
 		logger = log.Root()
 	}
-	clusterSet := make(map[uint32]struct{}, len(configuredChainIDs))
+	clusterSet := make(map[string]struct{}, len(configuredChainIDs))
 	for _, id := range configuredChainIDs {
-		clusterSet[id] = struct{}{}
+		if err := validateXshardChainID(id); err != nil {
+			return nil, err
+		}
+		clusterSet[id.String()] = struct{}{}
+	}
+	if _, ok := clusterSet[localChainID.String()]; !ok {
+		return nil, fmt.Errorf("local chain ID %s is not configured", localChainID)
 	}
 	return &XshardConnManager{
-		conns:              make(map[uint32]*XshardConn),
+		conns:              make(map[string]*XshardConn),
 		connections:        make(map[*XshardConn]struct{}),
-		localChainID:       localChainID,
+		localChainID:       new(big.Int).Set(localChainID),
 		handler:            handler,
 		configuredChainIDs: clusterSet,
 		maxPayloadSize:     maxPayloadSize,
@@ -93,11 +103,12 @@ func NewXshardConnManager(localChainID uint32, configuredChainIDs []uint32, maxP
 // DialToSlave establishes an outbound cross-shard connection to the slave
 // described by slaveInfo. Its ChainID identifies the chain hosted by that slave.
 func (p *XshardConnManager) DialToSlave(ctx context.Context, slaveInfo wire.SlaveInfo) error {
-	if _, ok := p.configuredChainIDs[slaveInfo.ChainID]; !ok {
-		return fmt.Errorf("slave chain ID %d is not configured", slaveInfo.ChainID)
+	remoteChainID := wire.ChainIDFromSSZ(slaveInfo.ChainID)
+	if _, ok := p.configuredChainIDs[remoteChainID.String()]; !ok {
+		return fmt.Errorf("slave chain ID %d is not configured", remoteChainID)
 	}
-	if p.knownSlave(slaveInfo.ChainID) {
-		p.log.Info("outbound xshard connection skipped: slave already known", "remote_chain_id", slaveInfo.ChainID)
+	if p.knownSlave(remoteChainID) {
+		p.log.Info("outbound xshard connection skipped: slave already known", "remote_chain_id", remoteChainID)
 		return nil
 	}
 
@@ -108,7 +119,7 @@ func (p *XshardConnManager) DialToSlave(ctx context.Context, slaveInfo wire.Slav
 		return fmt.Errorf("dial xshard slave %s: %w", addr, err)
 	}
 
-	conn, err := newXshardConn(nc, p.maxPayloadSize, p.localChainID, slaveInfo.ChainID, true, p.handler, p.log)
+	conn, err := newXshardConn(nc, p.maxPayloadSize, p.localChainID, remoteChainID, true, p.handler, p.log)
 	if err != nil {
 		nc.Close()
 		return fmt.Errorf("create xshard connection to slave %s: %w", addr, err)
@@ -132,9 +143,9 @@ func (p *XshardConnManager) DialToSlave(ctx context.Context, slaveInfo wire.Slav
 		p.rejectConnection(conn)
 		return fmt.Errorf("ping failed for %s: %w", conn.RemoteAddr(), err)
 	}
-	if id != slaveInfo.ChainID {
+	if id.Cmp(remoteChainID) != 0 {
 		p.rejectConnection(conn)
-		return fmt.Errorf("slave chain ID mismatch for %s: expected %d, got %d", conn.RemoteAddr(), slaveInfo.ChainID, id)
+		return fmt.Errorf("slave chain ID mismatch for %s: expected %d, got %d", conn.RemoteAddr(), remoteChainID, id)
 	}
 
 	if err := p.registerConnection(conn); err != nil {
@@ -150,9 +161,15 @@ func (p *XshardConnManager) DialToSlave(ctx context.Context, slaveInfo wire.Slav
 // Registration happens-before the PONG reply for inbound connections, so a successful
 // handshake observed by the dialing peer implies that the inbound connection
 // has already been indexed by this manager.
+//
+// The caller must pass only slave-to-slave connections. As in pyquarkchain,
+// a slave treats its first accepted connection as the Master connection and
+// later connections as slave connections. This relies on Master connecting
+// to every slave before sending ConnectToSlavesRequest, and on the Master
+// connection never being re-established: the slave shuts down if it drops.
 func (p *XshardConnManager) HandleInbound(nc net.Conn) {
 	// Inbound identity arrives with the first PING.
-	conn, err := newXshardConn(nc, p.maxPayloadSize, p.localChainID, 0, false, p.handler, p.log)
+	conn, err := newXshardConn(nc, p.maxPayloadSize, p.localChainID, nil, false, p.handler, p.log)
 	if err != nil {
 		nc.Close()
 		p.log.Error("inbound xshard connection from slave rejected", "err", err)
@@ -191,10 +208,13 @@ func (p *XshardConnManager) HandleInbound(nc net.Conn) {
 
 // Lookup returns the connection to the slave identified by chainID. It may
 // close concurrently afterwards, so callers must tolerate failed sends.
-func (p *XshardConnManager) Lookup(chainID uint32) *XshardConn {
+func (p *XshardConnManager) Lookup(chainID *big.Int) *XshardConn {
+	if chainID == nil {
+		return nil
+	}
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.conns[chainID]
+	return p.conns[chainID.String()]
 }
 
 // Close closes all manager connections, including ones still handshaking
@@ -249,20 +269,20 @@ func (p *XshardConnManager) registerConnection(conn *XshardConn) error {
 		conn.Close()
 		return fmt.Errorf("xshard manager closed")
 	}
-	if _, ok := p.configuredChainIDs[conn.RemoteChainID()]; !ok {
+	if _, ok := p.configuredChainIDs[conn.RemoteChainID().String()]; !ok {
 		delete(p.connections, conn)
 		p.mu.Unlock()
 		conn.Close()
 		return fmt.Errorf("slave chain ID %d is not configured", conn.RemoteChainID())
 	}
-	if p.conns[conn.RemoteChainID()] != nil {
+	if p.conns[conn.RemoteChainID().String()] != nil {
 		delete(p.connections, conn)
 		p.mu.Unlock()
 		conn.Close()
 		return fmt.Errorf("slave chain ID %d already connected", conn.RemoteChainID())
 	}
 
-	p.conns[conn.RemoteChainID()] = conn
+	p.conns[conn.RemoteChainID().String()] = conn
 	p.mu.Unlock()
 	return nil
 }
@@ -281,12 +301,12 @@ func (p *XshardConnManager) trackConnection(conn *XshardConn) bool {
 
 // knownSlave reports whether chainID identifies the local slave or a slave
 // already in the routing index.
-func (p *XshardConnManager) knownSlave(chainID uint32) bool {
+func (p *XshardConnManager) knownSlave(chainID *big.Int) bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	if p.localChainID == chainID {
+	if p.localChainID.Cmp(chainID) == 0 {
 		return true
 	}
-	_, known := p.conns[chainID]
+	_, known := p.conns[chainID.String()]
 	return known
 }

@@ -369,8 +369,8 @@ func TestSSZLargeChainIDs(t *testing.T) {
 	for _, msg := range []SSZMessage{
 		&PingRequest{ChainID: id, HasRootTip: true, RootTip: Data{1}},
 		&PongResponse{ChainID: id},
-		&ChainInfo{Host: []byte("localhost"), Port: 38391, ChainID: id},
-		&ConnectToChainsRequest{ChainInfoList: []ChainInfo{{ChainID: id}}},
+		&SlaveInfo{Host: []byte("localhost"), Port: 38391, ChainID: id},
+		&ConnectToSlavesRequest{SlaveInfoList: []SlaveInfo{{ChainID: id}}},
 		&AddXshardTxListRequest{ChainID: id, DepositTxList: []Data{{1}}},
 	} {
 		roundTripSSZ(t, msg)
@@ -394,17 +394,17 @@ func TestChainToChainPingCarriesChainIDWithoutRootTip(t *testing.T) {
 
 		var got PingRequest
 		if err := got.UnmarshalSSZ(encoded); err != nil {
-			t.Fatalf("UnmarshalSSZ for chain ID %d: %v", chainID, err)
+			t.Fatalf("UnmarshalSSZ for chain ID %x: %v", chainID, err)
 		}
 		if got.ChainID != chainID || got.HasRootTip || len(got.RootTip) != 0 {
-			t.Fatalf("decoded ping = %+v, want ChainID=%d and no root tip", got, chainID)
+			t.Fatalf("decoded ping = %+v, want ChainID=%x and no root tip", got, chainID)
 		}
 	}
 }
 
-func TestConnectToChainsSSZRoundTrip(t *testing.T) {
-	req := &ConnectToChainsRequest{
-		ChainInfoList: []ChainInfo{
+func TestConnectToSlavesSSZRoundTrip(t *testing.T) {
+	req := &ConnectToSlavesRequest{
+		SlaveInfoList: []SlaveInfo{
 			{Host: []byte("10.0.0.1"), Port: 38391, ChainID: [UInt256Length]byte{1}},
 			{Host: []byte("10.0.0.2"), Port: 38392, ChainID: [UInt256Length]byte{2}},
 		},
