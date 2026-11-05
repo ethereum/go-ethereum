@@ -38,6 +38,12 @@ const (
 	protocolLength  = 2
 	txTimeout       = 10 * time.Second
 	maxSubmitSize   = 1024 * 1024 // 1MB
+	// maxSubmitCount bounds the number of transactions in one submission. The
+	// size limit alone does not bound the work a submission costs: legacy
+	// transactions are about 100 bytes, so a 1MB message can carry thousands of
+	// them, and the pool recovers the sender of every single one before it can
+	// reject the batch.
+	maxSubmitCount = 100
 )
 
 // Message codes.
@@ -185,6 +191,9 @@ func readTxSubmitMessage(rw p2p.MsgReadWriter) ([]*types.Transaction, error) {
 	}
 	var txs []*types.Transaction
 	if err := msg.Decode(&txs); err != nil {
+		return nil, p2p.DiscProtocolError
+	}
+	if len(txs) > maxSubmitCount {
 		return nil, p2p.DiscProtocolError
 	}
 	return txs, nil
