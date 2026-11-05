@@ -41,12 +41,12 @@ import (
 
 // backendClusterClient exposes RPC calls so tests can check payloads, ordering and failures.
 type backendClusterClient struct {
-	broadcast func(context.Context, uint32, common.Hash, []*types.DepositTx) error
+	broadcast func(context.Context, *big.Int, common.Hash, []*types.DepositTx) error
 	report    func(context.Context, *types.Header, *uint256.Int) error
 }
 
-func (c *backendClusterClient) BroadcastXShardTxList(ctx context.Context, shard uint32, hash common.Hash, list []*types.DepositTx) error {
-	return c.broadcast(ctx, shard, hash, list)
+func (c *backendClusterClient) BroadcastXShardTxList(ctx context.Context, chainID *big.Int, hash common.Hash, list []*types.DepositTx) error {
+	return c.broadcast(ctx, chainID, hash, list)
 }
 
 func (c *backendClusterClient) SendMinorBlockHeaderToMaster(ctx context.Context, header *types.Header, amount *uint256.Int) error {
@@ -54,23 +54,22 @@ func (c *backendClusterClient) SendMinorBlockHeaderToMaster(ctx context.Context,
 }
 
 // TestBackendLifecycle checks PoSW construction, separate root initialization,
-// and shard-zero-only stake queries. Stop and failed construction must leave the
+// and root-coinbase-chain-only stake queries. Stop and failed construction must leave the
 // caller's database usable, and Init must not propagate genesis again.
 func TestBackendLifecycle(t *testing.T) {
-	for _, shardID := range []uint32{0, 1} {
-		t.Run(big.NewInt(int64(shardID)).String(), func(t *testing.T) {
-			config := *params.MergedTestChainConfig
-			config.QuarkChain = params.NewTestQuarkChainConfig(shardID, 0, 1)
+	for _, chainID := range []int64{10001, 10002} {
+		t.Run(big.NewInt(chainID).String(), func(t *testing.T) {
+			config := *params.NewTestQuarkChainConfig(chainID, 10001, 10002)
 			alloc := core.SystemContractAllocs()
-			maps.Copy(alloc, core.PoSWStakingContractAllocs(shardID))
+			maps.Copy(alloc, core.PoSWStakingContractAllocs(&config))
 			genesis := &core.Genesis{
 				GasLimit: 12_000_000, Difficulty: new(big.Int), Mixhash: common.BigToHash(common.Big1),
-				ExtraData: (&types.QKCExtra{ShardID: shardID}).Encode(), Alloc: alloc,
+				ExtraData: (&types.QKCExtra{ChainID: big.NewInt(chainID)}).Encode(), Alloc: alloc,
 			}
 			db := rawdb.NewMemoryDatabase()
 			t.Cleanup(func() { db.Close() })
 			client := &backendClusterClient{
-				broadcast: func(context.Context, uint32, common.Hash, []*types.DepositTx) error {
+				broadcast: func(context.Context, *big.Int, common.Hash, []*types.DepositTx) error {
 					t.Fatal("Init must not broadcast genesis")
 					return nil
 				},
@@ -103,7 +102,7 @@ func TestBackendLifecycle(t *testing.T) {
 				t.Fatal("Init did not select the master's root")
 			}
 			stakes, signer, err := s.GetRootChainStakes(common.Address{}, s.CurrentBlock().Hash())
-			if shardID == 0 {
+			if chainID == 10001 {
 				if err != nil || stakes == nil || !stakes.IsZero() || signer != (common.Address{}) {
 					t.Fatalf("root stakes: %v, %v, %v", stakes, signer, err)
 				}
@@ -114,7 +113,7 @@ func TestBackendLifecycle(t *testing.T) {
 					t.Fatalf("missing shard block header: stakes %v, signer %v, error %v", stakes, signer, err)
 				}
 			} else if err == nil {
-				t.Fatal("nonzero shard served root-chain stakes")
+				t.Fatal("non-root-coinbase chain served root-chain stakes")
 			}
 			if err := s.Stop(); err != nil {
 				t.Fatal(err)
@@ -146,7 +145,7 @@ func TestBackendLifecycle(t *testing.T) {
 
 func TestBackendCreateBlockToMine(t *testing.T) {
 	testPoWMiner(t, func(t *testing.T) {
-		env, _, _ := newMiningEnv(t, 1)
+		env, _, _ := newMiningEnv(t, 10002)
 		s := newMiningShard(env.sc)
 		coinbase := common.Address{0xaa}
 		block, diff, err := s.CreateBlockToMine(context.Background(), coinbase)
@@ -181,14 +180,14 @@ func TestBackendCreateBlockToMine(t *testing.T) {
 // its deposits or an empty list, with the source block hash preserved.
 func TestBackendBroadcastXShardTxList(t *testing.T) {
 	env := newTestEnv(t)
-	env.chain.Config().QuarkChain.ShardIDs = []uint32{0, 1, 2}
+	env.chain.Config().QuarkChain.ChainIDs = []*big.Int{big.NewInt(10001), big.NewInt(10002), big.NewInt(10003)}
 	// Broadcast reads stored receipts; outbox execution is covered by TestXShardDeposits.
 	tx := types.NewTx(&types.LegacyTx{
 		To: &params.XShardOutboxAddress, Gas: params.TxGas, GasPrice: big.NewInt(params.GWei),
 	})
 	receipts := types.Receipts{{
 		Status: types.ReceiptStatusSuccessful, CumulativeGasUsed: params.TxGas,
-		Logs: []*types.Log{sentMessageLog(1)},
+		Logs: []*types.Log{sentMessageLog(10002)},
 	}}
 	block := types.NewBlock(&types.Header{
 		ParentHash: env.genesis.Hash(), Number: big.NewInt(1), Time: 1,
@@ -197,21 +196,21 @@ func TestBackendBroadcastXShardTxList(t *testing.T) {
 	rawdb.WriteBlock(env.db, block)
 	rawdb.WriteReceipts(env.db, block.Hash(), block.NumberU64(), receipts)
 	to := common.Address{19: 0x0e}
-	want := map[uint32][]*types.DepositTx{
-		1: {{
+	want := map[string][]*types.DepositTx{
+		"10002": {{
 			Version: types.DepositTxVersion, SourceBlockHash: block.Hash(), SourceLogIndex: 0,
 			From: common.Address{19: 0x0d}, To: &to, Value: uint256.NewInt(0x0a),
 			GasPrice: uint256.NewInt(0x0b), Gas: 0x0c, IsMove: true, Data: []byte{1, 2, 3},
 		}},
-		2: {}, // Configured destinations with no messages still receive a list.
+		"10003": {}, // Configured destinations with no messages still receive a list.
 	}
-	delivered := make(map[uint32][]*types.DepositTx)
+	delivered := make(map[string][]*types.DepositTx)
 	s := &Shard{chain: env.sc, clusterClient: &backendClusterClient{
-		broadcast: func(_ context.Context, shard uint32, hash common.Hash, list []*types.DepositTx) error {
+		broadcast: func(_ context.Context, chainID *big.Int, hash common.Hash, list []*types.DepositTx) error {
 			if hash != block.Hash() {
 				t.Fatalf("delivered block %x, want %x", hash, block.Hash())
 			}
-			delivered[shard] = list
+			delivered[chainID.String()] = list
 			return nil
 		},
 	}}
@@ -234,27 +233,27 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			env := newTestEnv(t)
-			env.config.QuarkChain.ShardIDs = []uint32{0, 1, 2}
-			env.chain.Config().QuarkChain.ShardIDs = []uint32{0, 1, 2}
+			env.config.QuarkChain.ChainIDs = []*big.Int{big.NewInt(10001), big.NewInt(10002), big.NewInt(10003)}
+			env.chain.Config().QuarkChain.ChainIDs = []*big.Int{big.NewInt(10001), big.NewInt(10002), big.NewInt(10003)}
 			block := env.makeBlocks(env.genesis, 1, env.rootGenesis, 1)[0]
 			failure := errors.New("delivery failed")
 			fail := true
-			delivered := make(map[uint32]bool)
+			delivered := make(map[string]bool)
 			reports := 0
 			client := &backendClusterClient{
-				broadcast: func(_ context.Context, shard uint32, hash common.Hash, list []*types.DepositTx) error {
-					if hash != block.Hash() || (shard != 1 && shard != 2) || len(list) != 0 {
-						t.Fatalf("unexpected delivery: shard %d, block %x, list %v", shard, hash, list)
+				broadcast: func(_ context.Context, chainID *big.Int, hash common.Hash, list []*types.DepositTx) error {
+					if hash != block.Hash() || (chainID.String() != "10002" && chainID.String() != "10003") || len(list) != 0 {
+						t.Fatalf("unexpected delivery: chain %s, block %x, list %v", chainID, hash, list)
 					}
-					if fail && !failReport && shard == 1 {
+					if fail && !failReport && chainID.String() == "10002" {
 						return failure
 					}
-					delivered[shard] = true
+					delivered[chainID.String()] = true
 					return nil
 				},
 				report: func(_ context.Context, header *types.Header, amount *uint256.Int) error {
 					reports++
-					if !delivered[1] || !delivered[2] {
+					if !delivered["10002"] || !delivered["10003"] {
 						t.Fatal("master notified before all shards received their lists")
 					}
 					if header.Hash() != block.Hash() || !amount.IsZero() {
@@ -276,7 +275,7 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 			if !failReport && reports != 0 {
 				t.Fatal("broadcast failure still reported to master")
 			}
-			fail, reports, delivered = false, 0, make(map[uint32]bool)
+			fail, reports, delivered = false, 0, make(map[string]bool)
 			// A fresh wrapper has no in-memory delivery progress to rely on.
 			s = &Shard{chain: env.sc, clusterClient: client}
 			if err := s.AddShardBlock(context.Background(), block); err != nil {

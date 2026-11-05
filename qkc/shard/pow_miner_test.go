@@ -19,6 +19,7 @@ package shard
 import (
 	"context"
 	"errors"
+	"math/big"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -40,7 +41,7 @@ func testPoWMiner(t *testing.T, test func(*testing.T)) {
 func newPoWMinerEnv(t *testing.T, config PoWMinerConfig) (*testEnv, *PoWMiner) {
 	t.Helper()
 	env, _, _ := newMiningEnv(t, 10002)
-	m := NewPoWMiner(NewShard(env.sc), config)
+	m := NewPoWMiner(newMiningShard(env.sc), config)
 	t.Cleanup(m.StopLocalMining)
 	return env, m
 }
@@ -48,7 +49,7 @@ func newPoWMinerEnv(t *testing.T, config PoWMinerConfig) (*testEnv, *PoWMiner) {
 // newMiningShard acknowledges cluster delivery for the mining tests.
 func newMiningShard(chain *ShardChain) *Shard {
 	return &Shard{chain: chain, clusterClient: &backendClusterClient{
-		broadcast: func(context.Context, uint32, common.Hash, []*types.DepositTx) error { return nil },
+		broadcast: func(context.Context, *big.Int, common.Hash, []*types.DepositTx) error { return nil },
 		report:    func(context.Context, *types.Header, *uint256.Int) error { return nil },
 	}}
 }

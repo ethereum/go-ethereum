@@ -82,7 +82,7 @@ func New(chainConfig *params.ChainConfig, genesis *core.Genesis, db ethdb.Databa
 	}
 	genesisCopy := *genesis
 	genesisCopy.Config = chainConfig
-	engine, err := posw.New(chainConfig.QuarkChain, genesisCopy.ToBlock().Header())
+	engine, err := posw.New(chainConfig, genesisCopy.ToBlock().Header())
 	if err != nil {
 		return nil, err
 	}
@@ -170,20 +170,20 @@ func (s *Shard) BroadcastXShardTxList(ctx context.Context, blockHash common.Hash
 	if err != nil {
 		return err
 	}
-	config := s.chain.chain.Config().QuarkChain
-	for _, shardID := range config.ShardIDs {
-		if shardID == config.ShardID {
+	config := s.chain.chain.Config()
+	for _, chainID := range config.QuarkChain.ChainIDs {
+		if chainID.Cmp(config.ChainID) == 0 {
 			continue
 		}
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		list := deposits[shardID]
+		list := deposits[chainID.String()]
 		if list == nil {
 			list = []*types.DepositTx{}
 		}
-		if err := s.clusterClient.BroadcastXShardTxList(ctx, shardID, blockHash, list); err != nil {
-			return fmt.Errorf("broadcast block %x deposits to shard %d: %w", blockHash, shardID, err)
+		if err := s.clusterClient.BroadcastXShardTxList(ctx, chainID, blockHash, list); err != nil {
+			return fmt.Errorf("broadcast block %x deposits to shard %d: %w", blockHash, chainID, err)
 		}
 	}
 	return nil
