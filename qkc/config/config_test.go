@@ -670,6 +670,42 @@ func TestNodeDefaults(t *testing.T) {
 	}
 }
 
+func TestLargeChainIDDefaultIPC(t *testing.T) {
+	savedDataDir := node.DefaultConfig.DataDir
+	node.DefaultConfig.DataDir = "data"
+	t.Cleanup(func() { node.DefaultConfig.DataDir = savedDataDir })
+
+	small := DefaultNodeConfig(big.NewInt(100001))
+	if small.Node.DataDir != filepath.Join("data", "qkc", "shard-100001") || small.Node.IPCPath != "qkc-shard-100001.ipc" {
+		t.Fatalf("small chain ID defaults changed: datadir=%q ipc=%q", small.Node.DataDir, small.Node.IPCPath)
+	}
+	if runtime.GOOS == "windows" {
+		return // Windows named pipes do not have the Unix socket path limit.
+	}
+	maxID := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+	maxNode := DefaultNodeConfig(maxID)
+	again := DefaultNodeConfig(new(big.Int).Set(maxID))
+	other := DefaultNodeConfig(new(big.Int).Sub(maxID, big.NewInt(1)))
+	if endpoint := maxNode.Node.IPCEndpoint(); len(endpoint) > 103 {
+		t.Fatalf("maximum chain ID default IPC endpoint is too long for macOS: %d bytes: %q", len(endpoint), endpoint)
+	}
+	if maxNode.Node.IPCEndpoint() != again.Node.IPCEndpoint() || maxNode.Node.IPCEndpoint() == other.Node.IPCEndpoint() || maxNode.Node.DataDir == other.Node.DataDir {
+		t.Fatal("large chain ID defaults must be stable and distinct")
+	}
+
+	cluster, network := exampleCluster(t), exampleNetwork(t)
+	cluster.Slaves[1].ChainID = new(big.Int).Set(maxID)
+	cluster.Slaves[1].Node.DataDir = maxNode.Node.DataDir
+	cluster.Slaves[1].Node.IPCPath = maxNode.Node.IPCPath
+	network.Shards[1].ChainID = new(big.Int).Set(maxID)
+	for i := range network.Shards {
+		network.Shards[i].QuarkChain.ChainIDs[1] = new(big.Int).Set(maxID)
+	}
+	if err := cluster.Validate(network); err != nil {
+		t.Fatalf("maximum chain ID deployment should be valid with default IPC path: %v", err)
+	}
+}
+
 func TestClusterPublicEndpoint(t *testing.T) {
 	for _, test := range []struct {
 		name, input, host string
@@ -1085,6 +1121,20 @@ func TestClusterIPCEndpoints(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestClusterRejectsOverlongIPC(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows named pipes do not have the Unix socket path limit")
+	}
+	cluster := exampleCluster(t)
+	cluster.Slaves[0].Node.IPCPath = strings.Repeat("i", 104) + ".ipc"
+	if err := cluster.Slaves[0].Validate(exampleNetwork(t)); err == nil || !strings.Contains(err.Error(), "IPC endpoint") {
+		t.Fatalf("overlong IPC endpoint accepted by node validation: %v", err)
+	}
+	if err := cluster.Validate(exampleNetwork(t)); err == nil || !strings.Contains(err.Error(), "IPC endpoint") {
+		t.Fatalf("overlong IPC endpoint accepted: %v", err)
 	}
 }
 

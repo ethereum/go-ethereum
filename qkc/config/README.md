@@ -191,6 +191,8 @@ Defaults reuse [node.DefaultConfig](../../node/defaults.go) and, for shards,
   and `qkc/shard-<id>`.
 - IPC filenames `qkc-master.ipc` and `qkc-shard-<id>.ipc`, so processes keep
   separate endpoints even with empty data directories or Windows named pipes.
+- On Unix, chain IDs above 64 bits use a stable short suffix in the default
+  shard data directory and IPC filename to fit Unix socket path limits.
 - Shard RPC module lists include `eth`.
 - External P2P disabled for shards. No Ethereum bootstrap nodes or Ethereum
   network preset are injected.

@@ -270,7 +270,7 @@ func TestCheckQKCConfig(t *testing.T) {
 		datadir := filepath.Join(t.TempDir(), "unused")
 		app := newApp()
 		app.Writer = &out
-		args := append([]string{"qkc", "checkconfig", "--config", qkcExampleCluster, "--datadir", datadir}, test.args...)
+		args := append([]string{"qkc", "checkconfig", "--config", qkcExampleCluster, "--datadir", datadir, "--ipcdisable"}, test.args...)
 		if err := app.Run(args); err != nil {
 			t.Fatal(err)
 		}

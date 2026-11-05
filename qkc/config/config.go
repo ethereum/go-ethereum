@@ -18,6 +18,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -97,9 +99,16 @@ var tomlSettings = toml.Config{
 func DefaultNodeConfig(chainID *big.Int) NodeConfig {
 	cfg := NodeConfig{Role: RoleMaster, Node: node.DefaultConfig}
 	name := "master"
+	pathName := name
 	if chainID != nil {
 		cfg.Role, cfg.ChainID = RoleSlave, new(big.Int).Set(chainID)
 		name = fmt.Sprintf("shard-%v", chainID)
+		pathName = name
+		if chainID.BitLen() > 64 && runtime.GOOS != "windows" {
+			// Keep the full ID in Node.Name, but bound Unix path components.
+			hash := sha256.Sum256(chainID.Bytes())
+			pathName = "shard-" + base64.RawURLEncoding.EncodeToString(hash[:12])
+		}
 		eth := ethconfig.Defaults
 		// TOML text decoding mutates big integers in place. Keep defaults and
 		// other shard entries independent when overriding these values.
@@ -116,9 +125,9 @@ func DefaultNodeConfig(chainID *big.Int) NodeConfig {
 	}
 	cfg.Node.Name = "qkc-" + name
 	if cfg.Node.DataDir != "" {
-		cfg.Node.DataDir = filepath.Join(cfg.Node.DataDir, "qkc", name)
+		cfg.Node.DataDir = filepath.Join(cfg.Node.DataDir, "qkc", pathName)
 	}
-	cfg.Node.IPCPath = cfg.Node.Name + ".ipc"
+	cfg.Node.IPCPath = "qkc-" + pathName + ".ipc"
 	return cfg
 }
 
@@ -561,6 +570,10 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 		if _, err := strconv.ParseUint(port, 10, 16); err != nil {
 			return fmt.Errorf("%s: invalid port %q", name, port)
 		}
+	}
+	// macOS has a 104-byte Unix socket path, including the terminator.
+	if endpoint := c.Node.IPCEndpoint(); runtime.GOOS != "windows" && len(endpoint) > 103 {
+		return fmt.Errorf("IPC endpoint exceeds Unix socket path limit: %s", endpoint)
 	}
 	return nil
 }
