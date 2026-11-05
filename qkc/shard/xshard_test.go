@@ -40,7 +40,7 @@ import (
 
 // xShardSend is a move sent to the outbox.
 type xShardSend struct {
-	dstShard uint32
+	dstShard int64
 	to       common.Address
 	value    int64
 }
@@ -49,7 +49,7 @@ type xShardSend struct {
 // converts them into the deposits of shards 1 and 2.
 func TestXShardDeposits(t *testing.T) {
 	var (
-		config = *params.MergedTestChainConfig
+		config = *params.NewTestQuarkChainConfig(10001, 10001, 10002, 10003)
 		engine = beacon.New(ethash.NewFaker())
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		sender = crypto.PubkeyToAddress(key.PublicKey)
@@ -58,15 +58,14 @@ func TestXShardDeposits(t *testing.T) {
 		// impostor emits a SentMessage topic from another address.
 		impostor = common.HexToAddress("0x1111")
 	)
-	config.QuarkChain = params.NewTestQuarkChainConfig(0, 0, 1, 2)
 	sendABI, err := abi.JSON(strings.NewReader(`[{"type": "function", "name": "send", "stateMutability": "payable", "outputs": [], "inputs": [
-		{"name": "dstShard", "type": "uint32"}, {"name": "to", "type": "address"}, {"name": "value", "type": "uint256"},
+		{"name": "dstShard", "type": "uint256"}, {"name": "to", "type": "address"}, {"name": "value", "type": "uint256"},
 		{"name": "gasLimit", "type": "uint64"}, {"name": "isMove", "type": "bool"}, {"name": "data", "type": "bytes"}]}]`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	alloc := core.SystemContractAllocs()
-	maps.Copy(alloc, core.PoSWStakingContractAllocs(config.QuarkChain.ShardID))
+	maps.Copy(alloc, core.PoSWStakingContractAllocs(&config))
 	alloc[sender] = types.Account{Balance: big.NewInt(params.Ether)}
 	alloc[impostor] = types.Account{Code: program.New().Push(vm.XShardSentMessageTopic).Push(0).Push(0).Op(vm.LOG1).Bytes()}
 	gspec := &core.Genesis{Config: &config, Alloc: alloc}
@@ -75,11 +74,11 @@ func TestXShardDeposits(t *testing.T) {
 	// Block 1 sends messages to shards 1 and 2, between a SentMessage topic of
 	// the impostor and a send failing on an unknown shard. Block 2 sends none.
 	sends := []*xShardSend{
-		{dstShard: 1, to: common.HexToAddress("0xa1"), value: 100},
+		{dstShard: 10002, to: common.HexToAddress("0xa1"), value: 100},
 		nil, // the impostor
-		{dstShard: 9, to: common.HexToAddress("0xa9"), value: 900},
-		{dstShard: 2, to: common.HexToAddress("0xa2"), value: 200},
-		{dstShard: 1, to: common.HexToAddress("0xa3"), value: 300},
+		{dstShard: 10010, to: common.HexToAddress("0xa9"), value: 900},
+		{dstShard: 10003, to: common.HexToAddress("0xa2"), value: 200},
+		{dstShard: 10002, to: common.HexToAddress("0xa3"), value: 300},
 	}
 	var nonce uint64
 	_, blocks, receipts := core.GenerateChainWithGenesis(gspec, engine, 2, func(i int, b *core.BlockGen) {
@@ -96,7 +95,7 @@ func TestXShardDeposits(t *testing.T) {
 				GasTipCap: big.NewInt(2),
 			}
 			if send != nil {
-				input, err := sendABI.Pack("send", send.dstShard, send.to, big.NewInt(send.value), params.XShardSendGas, true, []byte{})
+				input, err := sendABI.Pack("send", big.NewInt(send.dstShard), send.to, big.NewInt(send.value), params.XShardSendGas, true, []byte{})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -139,9 +138,9 @@ func TestXShardDeposits(t *testing.T) {
 			Data:            []byte{},
 		}
 	}
-	want := map[uint32][]*types.DepositTx{
-		1: {deposit(sends[0], 0), deposit(sends[4], 3)},
-		2: {deposit(sends[3], 2)},
+	want := map[string][]*types.DepositTx{
+		"10002": {deposit(sends[0], 0), deposit(sends[4], 3)},
+		"10003": {deposit(sends[3], 2)},
 	}
 	have, err := XShardDeposits(chain, hash)
 	if err != nil {
@@ -156,7 +155,7 @@ func TestXShardDeposits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to convert block 2: %v", err)
 	}
-	if want := map[uint32][]*types.DepositTx{1: {}, 2: {}}; !reflect.DeepEqual(have, want) {
+	if want := map[string][]*types.DepositTx{"10002": {}, "10003": {}}; !reflect.DeepEqual(have, want) {
 		t.Errorf("block 2 deposits %v, want %v", have, want)
 	}
 	// A block not inserted yet has no receipts to read.
@@ -167,7 +166,7 @@ func TestXShardDeposits(t *testing.T) {
 
 // sentMessageLog returns a SentMessage log of the outbox sending a move with
 // 3 bytes of data to the given shard, encoded as the outbox does.
-func sentMessageLog(dstShard byte) *types.Log {
+func sentMessageLog(dstShard int64) *types.Log {
 	data := make([]byte, 7*32)
 	data[31] = 0x0a                   // value
 	data[63] = 0x0b                   // gasPrice
@@ -178,7 +177,7 @@ func sentMessageLog(dstShard byte) *types.Log {
 	copy(data[192:], []byte{1, 2, 3}) // data, padded
 	return &types.Log{
 		Address: params.XShardOutboxAddress,
-		Topics:  []common.Hash{vm.XShardSentMessageTopic, {31: dstShard}, {31: 0x0d}, {31: 0x0e}},
+		Topics:  []common.Hash{vm.XShardSentMessageTopic, common.BigToHash(big.NewInt(dstShard)), {31: 0x0d}, {31: 0x0e}},
 		Data:    data,
 		Index:   5,
 	}
@@ -188,14 +187,14 @@ func sentMessageLog(dstShard byte) *types.Log {
 // cannot be converted fails the conversion, as it means a broken outbox.
 func TestXShardDepositsInvalid(t *testing.T) {
 	var (
-		config    = &params.QuarkChainConfig{ShardID: 0, ShardIDs: []uint32{0, 1}}
+		config    = params.NewTestQuarkChainConfig(10001, 10001, 10002)
 		blockHash = common.Hash{0xff}
 	)
-	have, err := depositsFromLogs(config, blockHash, []*types.Log{sentMessageLog(1)})
+	have, err := depositsFromLogs(config, blockHash, []*types.Log{sentMessageLog(10002)})
 	if err != nil {
 		t.Fatalf("failed to convert a valid event: %v", err)
 	}
-	want := map[uint32][]*types.DepositTx{1: {{
+	want := map[string][]*types.DepositTx{"10002": {{
 		Version:         types.DepositTxVersion,
 		SourceBlockHash: blockHash,
 		SourceLogIndex:  5,
@@ -214,10 +213,10 @@ func TestXShardDepositsInvalid(t *testing.T) {
 		name string
 		edit func(log *types.Log)
 	}{
-		{"own shard", func(log *types.Log) { log.Topics[1][31] = 0 }},
-		{"unknown shard", func(log *types.Log) { log.Topics[1][31] = 2 }},
+		{"own shard", func(log *types.Log) { log.Topics[1] = common.BigToHash(big.NewInt(10001)) }},
+		{"unknown shard", func(log *types.Log) { log.Topics[1] = common.BigToHash(big.NewInt(10003)) }},
 		{"missing topic", func(log *types.Log) { log.Topics = log.Topics[:3] }},
-		{"dirty dstShard", func(log *types.Log) { log.Topics[1][0] = 1 }},
+		{"unknown large chain ID", func(log *types.Log) { log.Topics[1][0] = 1 }},
 		{"dirty from", func(log *types.Log) { log.Topics[2][0] = 1 }},
 		{"dirty to", func(log *types.Log) { log.Topics[3][0] = 1 }},
 		{"short data", func(log *types.Log) { log.Data = log.Data[:5*32] }},
@@ -229,10 +228,25 @@ func TestXShardDepositsInvalid(t *testing.T) {
 		{"missing padding", func(log *types.Log) { log.Data = log.Data[:len(log.Data)-1] }},
 		{"huge length", func(log *types.Log) { copy(log.Data[5*32+24:6*32], bytes.Repeat([]byte{0xff}, 8)) }},
 	} {
-		log := sentMessageLog(1)
+		log := sentMessageLog(10002)
 		tt.edit(log)
 		if _, err := depositsFromLogs(config, blockHash, []*types.Log{log}); err == nil {
 			t.Errorf("%s: converted an invalid event", tt.name)
 		}
+	}
+}
+
+func TestXShardDepositsLargeChainID(t *testing.T) {
+	config := params.NewTestQuarkChainConfig(10001, 10001, 10002)
+	id := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 128), big.NewInt(10002))
+	config.QuarkChain.ChainIDs = append(config.QuarkChain.ChainIDs, new(big.Int).Set(id))
+	log := sentMessageLog(10002)
+	log.Topics[1] = common.BigToHash(id)
+	deposits, err := depositsFromLogs(config, common.Hash{1}, []*types.Log{log})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(deposits[id.String()]) != 1 || len(deposits["10002"]) != 0 || len(deposits) != 2 {
+		t.Fatalf("distinct chain IDs were conflated: %v", deposits)
 	}
 }

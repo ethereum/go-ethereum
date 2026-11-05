@@ -38,7 +38,7 @@ import (
 // transaction and that exactly the message's cost is burnt.
 func TestXShardOutbox(t *testing.T) {
 	var (
-		config = *params.MergedTestChainConfig
+		config = *params.NewTestQuarkChainConfig(10001, 10001, 10002)
 		engine = beacon.New(ethash.NewFaker())
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 		sender = crypto.PubkeyToAddress(key.PublicKey)
@@ -49,9 +49,8 @@ func TestXShardOutbox(t *testing.T) {
 		gasLimit = params.XShardSendGas
 		excess   = big.NewInt(1)
 	)
-	config.QuarkChain = params.NewTestQuarkChainConfig(0, 0, 1)
 	sendABI, err := abi.JSON(strings.NewReader(`[{"type": "function", "name": "send", "stateMutability": "payable", "outputs": [], "inputs": [
-		{"name": "dstShard", "type": "uint32"}, {"name": "to", "type": "address"}, {"name": "value", "type": "uint256"},
+		{"name": "dstShard", "type": "uint256"}, {"name": "to", "type": "address"}, {"name": "value", "type": "uint256"},
 		{"name": "gasLimit", "type": "uint64"}, {"name": "isMove", "type": "bool"}, {"name": "data", "type": "bytes"}]}]`))
 	if err != nil {
 		t.Fatal(err)
@@ -60,14 +59,14 @@ func TestXShardOutbox(t *testing.T) {
 		Config: &config,
 		Alloc:  withSystemContracts(types.GenesisAlloc{sender: {Balance: funds}}),
 	}
-	maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(config.QuarkChain.ShardID))
+	maps.Copy(gspec.Alloc, PoSWStakingContractAllocs(&config))
 	signer := types.LatestSigner(gspec.Config)
 
 	// The first message is valid and overpays, the second one goes to an
 	// unknown shard and fails.
 	_, blocks, _ := GenerateChainWithGenesis(gspec, engine, 1, func(i int, b *BlockGen) {
-		for nonce, dst := range []uint32{1, 2} {
-			input, err := sendABI.Pack("send", dst, common.HexToAddress("0xdead"), value, gasLimit, true, []byte{})
+		for nonce, dst := range []int64{10002, 10003} {
+			input, err := sendABI.Pack("send", big.NewInt(dst), common.HexToAddress("0xdead"), value, gasLimit, true, []byte{})
 			if err != nil {
 				t.Fatal(err)
 			}

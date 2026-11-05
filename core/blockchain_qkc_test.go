@@ -40,7 +40,7 @@ func TestLockedStakesParentState(t *testing.T) {
 		key := crypto.Keccak256Hash(common.LeftPadBytes(address[:], 32), make([]byte, 32))
 		return common.BigToHash(new(big.Int).Add(key.Big(), big.NewInt(offset)))
 	}
-	alloc := PoSWStakingContractAllocs(0)
+	alloc := PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(10001))
 	contract := alloc[params.ShardStakingContractAddress]
 	contract.Storage = map[common.Hash]common.Hash{
 		slot(locked, 2):   common.BigToHash(big.NewInt(123)),
@@ -59,7 +59,7 @@ func TestLockedStakesParentState(t *testing.T) {
 	}
 	alloc[params.RootStakingContractAddress] = rootContract
 	alloc[funded] = types.Account{Balance: big.NewInt(10000)}
-	genesis := &Genesis{Config: genesisConfig(0), GasLimit: 12000000, Difficulty: new(big.Int), Alloc: alloc}
+	genesis := &Genesis{Config: genesisConfig(10001), GasLimit: 12000000, Difficulty: new(big.Int), Alloc: alloc}
 	db := rawdb.NewMemoryDatabase()
 	defer db.Close()
 	chain, err := NewBlockChain(db, genesis, ethash.NewFaker(), DefaultConfig().WithStateScheme(rawdb.HashScheme))
@@ -124,11 +124,11 @@ func TestLockedStakesParentState(t *testing.T) {
 	}
 }
 
-func TestRootChainStakesShard0Only(t *testing.T) {
-	for _, config := range []*params.QuarkChainConfig{nil, {ShardID: 1}} {
-		chain := &BlockChain{chainConfig: &params.ChainConfig{QuarkChain: config}}
+func TestRootChainStakesCoinbaseChainOnly(t *testing.T) {
+	for _, config := range []*params.ChainConfig{{}, params.NewTestQuarkChainConfig(10002)} {
+		chain := &BlockChain{chainConfig: config}
 		if _, _, err := chain.GetRootChainStakes(&types.Header{}, common.Address{}); err == nil {
-			t.Fatal("accepted root-chain stakes query outside shard 0")
+			t.Fatal("accepted root-chain stakes query outside the configured root coinbase chain")
 		}
 	}
 }
@@ -136,7 +136,7 @@ func TestRootChainStakesShard0Only(t *testing.T) {
 func TestLockedStakesErrors(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	defer db.Close()
-	genesis := &Genesis{Config: genesisConfig(0), GasLimit: 12000000, Difficulty: new(big.Int), Alloc: PoSWStakingContractAllocs(0)}
+	genesis := &Genesis{Config: genesisConfig(10001), GasLimit: 12000000, Difficulty: new(big.Int), Alloc: PoSWStakingContractAllocs(params.NewTestQuarkChainConfig(10001))}
 	chain, err := NewBlockChain(db, genesis, ethash.NewFaker(), DefaultConfig().WithStateScheme(rawdb.HashScheme))
 	if err != nil {
 		t.Fatal(err)

@@ -19,6 +19,7 @@ package master
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -50,7 +51,7 @@ type ClusterClient interface {
 	// minorBlockHash. The result is the decoded business response after a
 	// completed RPC. err reports a transport or RPC failure, or a nonzero remote
 	// ErrorCode as *wire.RemoteError.
-	GetRootChainStakes(ctx context.Context, chainID uint32, address common.Address, minorBlockHash common.Hash) (*RootChainStakesResult, error)
+	GetRootChainStakes(ctx context.Context, chainID *big.Int, address common.Address, minorBlockHash common.Hash) (*RootChainStakesResult, error)
 }
 
 // RootChainStakesResult is the business representation of a chain's staking
