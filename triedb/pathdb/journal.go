@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -33,6 +34,10 @@ import (
 )
 
 const tempJournalSuffix = ".tmp"
+
+// journalWriteBuffer is the size of the buffer that gathers the RLP encoder's
+// many small writes to the journal file.
+const journalWriteBuffer = 256 * 1024
 
 var (
 	errMissJournal       = errors.New("journal not found")
@@ -369,6 +374,7 @@ func (db *Database) Journal(root common.Hash) error {
 	// Store the journal into the database and return
 	var (
 		file        *os.File
+		buffered    *bufio.Writer
 		journal     io.Writer
 		journalPath = db.journalPath()
 	)
@@ -390,7 +396,8 @@ func (db *Database) Journal(root common.Hash) error {
 				log.Warn("Removed leftover temporary journal file", "path", tmp)
 			}
 		}()
-		journal = file
+		buffered = bufio.NewWriterSize(file, journalWriteBuffer)
+		journal = buffered
 	} else {
 		journal = new(bytes.Buffer)
 	}
@@ -420,6 +427,9 @@ func (db *Database) Journal(root common.Hash) error {
 		rawdb.WriteTrieJournal(db.diskdb, data.Bytes())
 		log.Info("Persisted dirty state to disk", "size", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
 	} else {
+		if err := buffered.Flush(); err != nil {
+			return fmt.Errorf("failed to flush the journal: %w", err)
+		}
 		stat, err := file.Stat()
 		if err != nil {
 			return err
