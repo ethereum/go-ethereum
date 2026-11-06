@@ -820,13 +820,8 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		// still accessed like in a real block.
 		effectiveTip = new(uint256.Int)
 	}
-	fee := new(uint256.Int).SetUint64(gasUsed)
-	fee.Mul(fee, effectiveTip)
-	if rules.IsQuarkChain {
-		// Tax the miner tip after gas settlement, including failed transactions.
-		// The retained share cannot exceed fee, so it still fits uint256.
-		fee.SetFromBig(st.evm.ChainConfig().QuarkChain.AfterTax(fee.ToBig()))
-	}
+	fee := new(uint256.Int)
+	fee.SetFromBig(CalcTxFeeAfterTax(st.evm.ChainConfig(), gasUsed, effectiveTip.ToBig()))
 	st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 
 	// add the coinbase to the witness iff the fee is greater than 0

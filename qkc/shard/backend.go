@@ -259,11 +259,13 @@ func (s *Shard) AddShardBlock(ctx context.Context, block *types.Block) error {
 	if err := s.chain.InsertShardBlock(block); err != nil {
 		return err
 	}
-	if err := s.BroadcastXShardTxList(ctx, block.Hash()); err != nil {
-		return err
-	}
+	// Resolve local reporting data before sending RPCs, so calculation failures
+	// do not repeat cross-shard delivery on every retry.
 	coinbaseAmount, err := s.chain.chain.GetCoinbaseAmount(block.Hash())
 	if err != nil {
+		return err
+	}
+	if err := s.BroadcastXShardTxList(ctx, block.Hash()); err != nil {
 		return err
 	}
 	if err := s.clusterClient.SendMinorBlockHeaderToMaster(ctx, block.Header(), coinbaseAmount); err != nil {

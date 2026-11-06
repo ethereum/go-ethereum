@@ -682,16 +682,9 @@ func (miner *Miner) fillTransactions(ctx context.Context, interrupt *atomic.Int3
 func totalFees(config *params.ChainConfig, block *types.Block, receipts []*types.Receipt) *big.Int {
 	baseFee := block.BaseFee()
 	feesWei := new(big.Int)
-	var gasUsed, product big.Int
 	for i, tx := range block.Transactions() {
 		minerFee, _ := tx.EffectiveGasTip(baseFee)
-		gasUsed.SetUint64(receipts[i].GasUsed)
-		product.Mul(&gasUsed, minerFee)
-		if config.QuarkChain != nil {
-			// Match execution's per-transaction tax and rounding.
-			product.Set(config.QuarkChain.AfterTax(&product))
-		}
-		feesWei.Add(feesWei, &product)
+		feesWei.Add(feesWei, core.CalcTxFeeAfterTax(config, receipts[i].GasUsed, minerFee))
 	}
 	return feesWei
 }

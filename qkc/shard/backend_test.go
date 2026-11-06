@@ -321,6 +321,30 @@ func TestBackendAddShardBlockRetry(t *testing.T) {
 	}
 }
 
+// Missing receipts for a known empty block must fail before any RPC, on the
+// initial delivery attempt and on retries.
+func TestBackendAddShardBlockCoinbaseAmountFailure(t *testing.T) {
+	env := newTestEnv(t)
+	header := env.makeBlocks(env.genesis, 1, env.rootGenesis, 1)[0].Header()
+	block := types.NewBlock(header, &types.Body{Withdrawals: types.Withdrawals{}}, nil, trie.NewStackTrie(nil))
+	rawdb.WriteBlock(env.db, block)
+	s := &Shard{chain: env.sc, clusterClient: &backendClusterClient{
+		broadcast: func(context.Context, *big.Int, common.Hash, []*types.DepositTx) error {
+			t.Error("coinbase calculation failure must prevent broadcasting")
+			return nil
+		},
+		report: func(context.Context, *types.Header, *uint256.Int) error {
+			t.Error("coinbase calculation failure must prevent reporting")
+			return nil
+		},
+	}}
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := s.AddShardBlock(context.Background(), block); err == nil || !strings.Contains(err.Error(), "receipts") {
+			t.Fatalf("attempt %d: have %v, want missing receipts error", attempt, err)
+		}
+	}
+}
+
 // Mining submissions bound either RPC stage without changing the miner interface.
 func TestBackendInsertMinedBlockTimeout(t *testing.T) {
 	for _, stage := range []string{"broadcast", "report"} {

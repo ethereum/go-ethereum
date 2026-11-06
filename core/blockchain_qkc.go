@@ -59,17 +59,24 @@ func (bc *BlockChain) GetCoinbaseAmount(shardBlockHash common.Hash) (*uint256.In
 		if err != nil {
 			return nil, fmt.Errorf("shard block %s transaction %d fee: %w", shardBlockHash.Hex(), i, err)
 		}
-		// EffectiveGasTip includes the full gas price for deposits, whose fees
-		// are not subject to base-fee burning. GasUsed is already net of refunds.
-		fee := new(big.Int).Mul(new(big.Int).SetUint64(receipts[i].GasUsed), tip)
-		// Match execution's per-transaction rounding; taxing the sum would differ.
-		amount.Add(amount, bc.chainConfig.QuarkChain.AfterTax(fee))
+		amount.Add(amount, CalcTxFeeAfterTax(bc.chainConfig, receipts[i].GasUsed, tip))
 	}
 	result, overflow := uint256.FromBig(amount)
 	if overflow {
 		return nil, fmt.Errorf("coinbase amount for shard block %s exceeds uint256", shardBlockHash.Hex())
 	}
 	return result, nil
+}
+
+// CalcTxFeeAfterTax computes one transaction's miner fee after shard tax and rounding.
+// gasUsed is net of refunds. effectiveTip excludes the base fee for ordinary
+// transactions and is the full gas price for deposits.
+func CalcTxFeeAfterTax(config *params.ChainConfig, gasUsed uint64, effectiveTip *big.Int) *big.Int {
+	fee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), effectiveTip)
+	if config.QuarkChain != nil {
+		return config.QuarkChain.AfterTax(fee)
+	}
+	return fee
 }
 
 // GetShardLockedStakes executes the shard staking getter at header's state.

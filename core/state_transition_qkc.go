@@ -73,9 +73,7 @@ func (st *stateTransition) executeDeposit(rules params.Rules) (*ExecutionResult,
 	}
 	st.state.AddBalance(*msg.To, msg.Value, tracing.BalanceIncreaseXShardDeposit)
 	tracer.EmitExit(0, nil, gas, tracing.Gas{}, nil, false)
-	// Tax the full deposit fee, independently of any other transaction's rounding.
-	// AfterTax only reduces fee, so the result still fits uint256.
-	fee.SetFromBig(st.evm.ChainConfig().QuarkChain.AfterTax(fee.ToBig()))
+	fee.SetFromBig(CalcTxFeeAfterTax(st.evm.ChainConfig(), msg.GasLimit, msg.GasPrice.ToBig()))
 	st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 
 	return &ExecutionResult{
