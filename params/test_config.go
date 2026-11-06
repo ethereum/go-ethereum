@@ -31,6 +31,7 @@ func NewTestQuarkChainConfig(chainID int64, chainIDs ...int64) *ChainConfig {
 	config := *MergedTestChainConfig
 	config.ChainID = big.NewInt(chainID)
 	config.QuarkChain = &QuarkChainConfig{
+		MaxBlocksPerRootBlock: 100,
 		PoSW: &PoSWConfig{
 			AdjustmentCutoff: 7, AdjustmentFactor: 512, MinimumDifficulty: big.NewInt(1),
 			CoinbaseAmount: big.NewInt(0), EpochInterval: 3153600, DecayFactor: big.NewRat(22, 25), RewardTaxRate: big.NewRat(1, 2),

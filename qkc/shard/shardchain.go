@@ -274,6 +274,11 @@ func (c *ShardChain) InsertShardBlock(block *types.Block) error {
 	// TODO 1. check chain id here 2. check future block in engine.VerifyBlockHeader
 
 	if c.chain.HasBlock(block.Hash(), block.NumberU64()) {
+		// A previous import may have stored the block but failed in SetCanonical.
+		// The root reference was checked before storage. Retrying the head update
+		// would load the referenced root, call shouldUpdateHead with the current
+		// root tip, and call SetCanonical if selected. This rare case is not
+		// handled here yet.
 		return nil
 	}
 	rootTip := c.rootTip
@@ -587,7 +592,7 @@ func (c *ShardChain) validateRootBlock(root *qkctypes.RootBlock) (*types.Header,
 		}
 		blocks = append(blocks, block)
 	}
-	if limit := config.QuarkChain.MaxBlocksPerRootBlock; limit != 0 && uint64(len(blocks)) > limit {
+	if limit := config.QuarkChain.MaxBlocksPerRootBlock; uint64(len(blocks)) > limit {
 		return nil, fmt.Errorf("%w: %d, max %d", ErrTooManyConfirmedBlocks, len(blocks), limit)
 	}
 	// Rule 3 local continuity check. The master must validate the complete
@@ -735,6 +740,88 @@ func (c *ShardChain) setCanonicalByHead(head *types.Header) error {
 		return fmt.Errorf("set canonical head %x: %w", head.Hash(), err)
 	}
 	return nil
+}
+
+// GetUnconfirmedHeaderList returns the earliest canonical shard headers after
+// the current root tip's last confirmation, in ascending height order. The list
+// is capped by the required positive MaxBlocksPerRootBlock. Shard genesis
+// is already confirmed and excluded.
+//
+// The lock keeps the confirmation and canonical range consistent. Local headers
+// remain eligible while propagation is incomplete.
+//
+// This query uses the shard's local root tip, not a root hash supplied by master.
+// Root construction assumes the queried shards use the candidate parent's root
+// checkpoint and that the parent stays fixed through collection and building.
+// A stale checkpoint may return already confirmed headers, causing construction
+// to fail or a constructed candidate to fail root validation. The caller must
+// discard that candidate and collect headers again after checkpoint synchronization.
+// Headers not yet reported to master must also be filtered out by master.
+//
+// pyquarkchain writes a committing hash before inserting a root block locally.
+// If the block becomes the new tip, master updates its local root tip before
+// broadcasting the block to all shards. The hash is cleared only after all
+// shards accept the block. If a shard import fails, completed imports are not
+// undone and the committing hash is kept.
+//
+// If propagation cannot finish during normal operation, restart recovery can
+// be used: RootDb selects the parent of the persisted non-genesis root tip.
+// Master initializes the shards from that checkpoint, then rebroadcasts the
+// committing root block. Neither pyquarkchain nor goquarkchain checks committing
+// before root construction.
+//
+// TODO: In master, check that the parent root is fully committed before
+// collecting shard headers. While committing, wait with context cancellation
+// or return an error for the caller to retry, so this problem is caught before
+// building rather than during construction or later validation.
+// Use a lock to keep the parent fixed through header collection and building.
+//
+// Another option is to validate the returned headers against shard root tip.
+// Skip headers already confirmed by that parent, then include only a valid,
+// continuous sequence for each shard. Stop at the first unusable header.
+// This may include fewer headers, but reduces the need to wait for all shards
+// to reach the same root tip.
+func (c *ShardChain) GetUnconfirmedHeaderList() ([]*types.Header, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.rootTip == nil {
+		return nil, ErrRootChainUninitialized
+	}
+	confirmed, err := c.lastConfirmed(c.rootTip)
+	if err != nil {
+		return nil, err
+	}
+	header := c.chain.CurrentBlock()
+	start, end := confirmed.Number.Uint64(), header.Number.Uint64()
+	if start > end {
+		return nil, fmt.Errorf("%w: root confirmation is above the shard head", ErrShardStateInconsistency)
+	}
+	if limit := c.chain.Config().QuarkChain.MaxBlocksPerRootBlock; end-start > limit {
+		// Keep the earliest pending headers so the next root extends its parent's
+		// confirmation without gaps.
+		end = start + limit
+		// Holding mu prevents ShardChain's head updates, so this canonical header
+		// belongs to the same chain as the CurrentBlock captured above.
+		header = c.chain.GetHeaderByNumber(end)
+		if header == nil {
+			return nil, fmt.Errorf("%w: canonical shard block header at height %d not found", ErrShardStateInconsistency, end)
+		}
+	}
+
+	headers := make([]*types.Header, end-start)
+	// Fill backward while following parents so the result is already ascending.
+	for i := len(headers); i > 0; i-- {
+		headers[i-1] = header
+		parentHash := header.ParentHash
+		header = c.chain.GetHeaderByHash(parentHash)
+		if header == nil {
+			return nil, fmt.Errorf("%w: shard block header %s not found", ErrShardStateInconsistency, parentHash.Hex())
+		}
+	}
+	if header.Hash() != confirmed.Hash() {
+		return nil, fmt.Errorf("%w: canonical shard block at height %d does not descend from the root confirmation", ErrShardStateInconsistency, end)
+	}
+	return headers, nil
 }
 
 // prevRootBlock returns the header of the root block referenced by a shard block.
