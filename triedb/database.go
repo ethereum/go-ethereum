@@ -33,6 +33,7 @@ import (
 type Config struct {
 	Preimages         bool           // Flag whether the preimage of node key is recorded
 	IsUBT             bool           // Flag whether the db is holding a unified binary tree
+	IsPBT             bool           // Flag whether the db is holding an EIP-8297 partitioned binary tree
 	BinTrieGroupDepth int            // Number of levels per serialized group in binary trie (1-8, default 8)
 	HashDB            *hashdb.Config // Configs for hash-based scheme
 	PathDB            *pathdb.Config // Configs for experimental path-based scheme
@@ -112,7 +113,12 @@ func NewDatabase(diskdb ethdb.Database, config *Config) *Database {
 	if config.HashDB != nil && config.PathDB != nil {
 		log.Crit("Both 'hash' and 'path' mode are configured")
 	}
-	if config.PathDB != nil {
+	if config.IsPBT && config.PathDB == nil {
+		log.Crit("The partitioned binary tree requires the 'path' mode")
+	}
+	if config.IsPBT {
+		db.backend = pathdb.NewPBT(diskdb, config.PathDB)
+	} else if config.PathDB != nil {
 		db.backend = pathdb.New(diskdb, config.PathDB, config.IsUBT)
 	} else {
 		db.backend = hashdb.New(diskdb, config.HashDB)
@@ -392,6 +398,11 @@ func (db *Database) IndexProgress() (uint64, uint64, error) {
 // IsUBT returns the indicator if the database is holding a verkle tree.
 func (db *Database) IsUBT() bool {
 	return db.config.IsUBT
+}
+
+// IsPBT returns the indicator if the database is holding a partitioned binary tree.
+func (db *Database) IsPBT() bool {
+	return db.config.IsPBT
 }
 
 // Disk returns the underlying disk database.

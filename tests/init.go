@@ -825,6 +825,11 @@ func init() {
 	// the EIP150 and EIP158 rulesets.
 	Forks["TangerineWhistle"] = Forks["EIP150"]
 	Forks["SpuriousDragon"] = Forks["EIP158"]
+
+	// BinaryTree is Amsterdam committed with the EIP-8297 binary tree.
+	binaryTree := *Forks["Amsterdam"]
+	binaryTree.PBTTime = u64(0)
+	Forks["BinaryTree"] = &binaryTree
 }
 
 // AvailableForks returns the set of defined fork names

@@ -140,7 +140,7 @@ func convertToBinaryTrie(ctx *cli.Context) error {
 	}
 	log.Info("Starting MPT to binary trie conversion", "root", root, "block", headBlock.NumberU64())
 
-	srcTriedb := utils.MakeTrieDatabase(ctx, stack, chaindb, true, true, false)
+	srcTriedb := utils.MakeTrieDatabase(ctx, stack, chaindb, true, true, false, false)
 	defer srcTriedb.Close()
 
 	destTriedb := triedb.NewDatabase(chaindb, &triedb.Config{
