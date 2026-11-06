@@ -335,7 +335,7 @@ func serializerMissingCallback(missing string) *OpSerializer {
 func TestOpSerializerFor_WireRegistry(t *testing.T) {
 	serializers := map[wire.ClusterOp]*OpSerializer{
 		wire.ClusterOpPing:                       pingSer,
-		wire.ClusterOpConnectToChainsRequest:     OpSerializerFor[wire.ConnectToChainsRequest, wire.ConnectToChainsResponse](byte(wire.ClusterOpConnectToChainsResponse)),
+		wire.ClusterOpConnectToSlavesRequest:     OpSerializerFor[wire.ConnectToSlavesRequest, wire.ConnectToSlavesResponse](byte(wire.ClusterOpConnectToSlavesResponse)),
 		wire.ClusterOpAddRootBlockRequest:        OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse)),
 		wire.ClusterOpAddMinorBlockHeaderRequest: OpSerializerFor[wire.AddMinorBlockHeaderRequest, wire.AddMinorBlockHeaderResponse](byte(wire.ClusterOpAddMinorBlockHeaderResponse)),
 		wire.ClusterOpAddXshardTxListRequest:     OpSerializerFor[wire.AddXshardTxListRequest, wire.AddXshardTxListResponse](byte(wire.ClusterOpAddXshardTxListResponse)),
@@ -873,8 +873,8 @@ func TestBaseConn_DuplicateResponseDoesNotCompleteNextRPC(t *testing.T) {
 func TestBaseConn_InvalidResponseOpcodeClosesConnection(t *testing.T) {
 	rootOp := byte(wire.ClusterOpAddRootBlockRequest)
 	rootSer := OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse))
-	connectOp := byte(wire.ClusterOpConnectToChainsRequest)
-	connectSer := OpSerializerFor[wire.ConnectToChainsRequest, wire.ConnectToChainsResponse](byte(wire.ClusterOpConnectToChainsResponse))
+	connectOp := byte(wire.ClusterOpConnectToSlavesRequest)
+	connectSer := OpSerializerFor[wire.ConnectToSlavesRequest, wire.ConnectToSlavesResponse](byte(wire.ClusterOpConnectToSlavesResponse))
 	helloOp := byte(wire.CommandOpHello)
 	for _, tc := range []struct {
 		name        string
@@ -894,8 +894,8 @@ func TestBaseConn_InvalidResponseOpcodeClosesConnection(t *testing.T) {
 		{
 			name:        "response opcode paired with a different request",
 			requestOp:   byte(wire.ClusterOpPing),
-			inboundOp:   byte(wire.ClusterOpConnectToChainsResponse),
-			payload:     mustSerialize(t, &wire.ConnectToChainsResponse{}),
+			inboundOp:   byte(wire.ClusterOpConnectToSlavesResponse),
+			payload:     mustSerialize(t, &wire.ConnectToSlavesResponse{}),
 			serializers: map[byte]*OpSerializer{byte(wire.ClusterOpPing): pingSer, connectOp: connectSer},
 		},
 		{
@@ -1936,7 +1936,7 @@ func TestDispatch_InvalidFramesCloseConnection(t *testing.T) {
 		{
 			name:   "unsupported request opcode",
 			server: true,
-			frames: []*wire.ClusterFrame{{Opcode: byte(wire.ClusterOpConnectToChainsRequest), RPCID: 1, Payload: pingPayload}},
+			frames: []*wire.ClusterFrame{{Opcode: byte(wire.ClusterOpConnectToSlavesRequest), RPCID: 1, Payload: pingPayload}},
 		},
 		{
 			name:   "truncated request payload",

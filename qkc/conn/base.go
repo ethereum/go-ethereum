@@ -316,7 +316,7 @@ func (c *BaseConn) SendCommand(opcode byte, cmd wire.SSZMessage) error {
 //
 // It is exposed so connections that route already-constructed frames from other
 // connections can reuse this connection's writeMu for physical serialization
-// (e.g. forwarding virtual peer traffic over a Master↔chain connection).
+// (e.g. forwarding virtual peer traffic over a Master↔slave connection).
 func (c *BaseConn) WriteFrame(f *wire.ClusterFrame) error {
 	return c.writeFrame(f)
 }
