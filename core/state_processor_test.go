@@ -432,3 +432,18 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 	}
 	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
 }
+
+
+// TestRequestContractAddress verifies that custom chain-configured request
+// contract addresses override the canonical predeploy addresses.
+func TestRequestContractAddress(t *testing.T) {
+	defaultAddress := common.HexToAddress("0x00000961Ef480Eb55e80D19ad83579A64c007002")
+	customAddress := common.HexToAddress("0x66355689a9f067eeb9dc9d899E4192676988279C")
+
+	if got := requestContractAddress(nil, defaultAddress); got != defaultAddress {
+		t.Fatalf("default address mismatch: have %s, want %s", got, defaultAddress)
+	}
+	if got := requestContractAddress(&customAddress, defaultAddress); got != customAddress {
+		t.Fatalf("configured address mismatch: have %s, want %s", got, customAddress)
+	}
+}
