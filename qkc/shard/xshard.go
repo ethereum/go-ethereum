@@ -51,7 +51,9 @@ func XShardDeposits(chain *core.BlockChain, blockHash common.Hash) (map[string][
 		return nil, fmt.Errorf("unknown block %x", blockHash)
 	}
 	receipts := chain.GetReceiptsByHash(blockHash)
-	if receipts == nil && header.TxHash != types.EmptyTxsHash {
+	// Imported empty blocks have a persisted, non-nil empty receipt list. Nil
+	// means receipt data is missing or could not be read or derived.
+	if receipts == nil || (len(receipts) == 0 && header.TxHash != types.EmptyTxsHash) {
 		return nil, fmt.Errorf("missing receipts of block %x", blockHash)
 	}
 	var logs []*types.Log
