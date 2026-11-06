@@ -31,6 +31,26 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+// MinerBackend supplies candidate construction and block import for PoWMiner,
+// like goquarkchain's MinerAPI.
+type MinerBackend interface {
+	// CreateBlockToMine builds an unsealed candidate on the shard head, paying
+	// coinbase, and returns the difficulty its seal must meet.
+	CreateBlockToMine(ctx context.Context, coinbase common.Address) (*types.Block, *big.Int, error)
+
+	// InsertMinedBlock imports a sealed candidate.
+	InsertMinedBlock(block *types.Block) error
+
+	// CurrentBlock returns the shard head.
+	CurrentBlock() *types.Header
+
+	// RootTip returns the hash of the root tip, which new candidates reference.
+	RootTip() common.Hash
+
+	// SubscribeChainHeadEvent registers a subscription for shard head changes.
+	SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription
+}
+
 const (
 	// DefaultWorkRefresh is how long served work stays current before it is
 	// rebuilt to include newer transactions, as in pyquarkchain's get_work.
@@ -195,6 +215,9 @@ func (m *PoWMiner) currentWork(coinbase common.Address) *servedWork {
 // SubmitWork seals the served candidate with sealHash and imports it. A
 // candidate is accepted while its parent is the shard head, even after newer
 // work has been served, and is dropped once imported or stale.
+// TODO(sync): Retry delivery of uncommitted mined blocks independently of work:
+// if import succeeds but RPCs fail, the moved head makes resubmissions stale,
+// and the local mining loop logs the error and moves on.
 func (m *PoWMiner) SubmitWork(sealHash common.Hash, nonce types.BlockNonce, mixHash common.Hash) error {
 	head := m.backend.CurrentBlock().Hash()
 	m.mu.Lock()

@@ -1369,6 +1369,83 @@ func TestShardChainMissingAncestry(t *testing.T) {
 	})
 }
 
+// TestShardChainUnconfirmedHeaders checks that queries return the earliest
+// pending canonical headers in ascending order under each configured limit.
+// A root may inherit its confirmation; genesis and fully confirmed blocks must
+// never appear in the pending list.
+func TestShardChainUnconfirmedHeaders(t *testing.T) {
+	env := newTestEnv(t)
+	if headers, err := env.sc.GetUnconfirmedHeaderList(); err != nil || len(headers) != 0 {
+		t.Fatalf("genesis pending headers: %v, %v", headers, err)
+	}
+	blocks := env.makeBlocks(env.genesis, 5, env.rootGenesis, 1)
+	for _, block := range blocks {
+		env.insert(block)
+	}
+	root := newRoot(env.rootGenesis, 1, blocks[0].Header(), blocks[1].Header())
+	env.insertRoot(root, true)
+	// A root with no new local headers retains its parent's confirmation.
+	root = newRoot(root, 1)
+	env.insertRoot(root, true)
+	t.Run("parent hash traversal", func(t *testing.T) {
+		limit := env.chain.Config().QuarkChain.MaxBlocksPerRootBlock
+		env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = 2
+		defer func() { env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = limit }()
+		// Only the endpoint uses its height index; an interior index must not
+		// redirect the parent-hash traversal onto a stored fork.
+		fork := env.makeBlocks(blocks[1], 1, env.rootGenesis, 2)[0]
+		rawdb.WriteBlock(env.db, fork)
+		rawdb.WriteCanonicalHash(env.db, fork.Hash(), fork.NumberU64())
+		defer rawdb.WriteCanonicalHash(env.db, blocks[2].Hash(), blocks[2].NumberU64())
+		headers, err := env.sc.GetUnconfirmedHeaderList()
+		if err != nil || len(headers) != 2 || headers[0].Hash() != blocks[2].Hash() {
+			t.Fatalf("headers must follow the head's parent hashes: %v, error %v", headers, err)
+		}
+		// A fork cannot become a valid confirmation just because its height index matches.
+		qkcrawdb.WriteLastConfirmedBlockHash(env.db, root.Hash(), fork.Hash())
+		defer qkcrawdb.WriteLastConfirmedBlockHash(env.db, root.Hash(), blocks[1].Hash())
+		if headers, err := env.sc.GetUnconfirmedHeaderList(); !errors.Is(err, ErrShardStateInconsistency) || headers != nil {
+			t.Fatalf("confirmation off the head's ancestry: %v, error %v", headers, err)
+		}
+	})
+	t.Run("missing canonical endpoint", func(t *testing.T) {
+		// The limited range ends at height four; a missing canonical endpoint
+		// is a local inconsistency rather than an empty result or a fallback fork.
+		limit := env.chain.Config().QuarkChain.MaxBlocksPerRootBlock
+		env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = 2
+		defer func() { env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = limit }()
+		rawdb.DeleteCanonicalHash(env.db, blocks[3].NumberU64())
+		defer rawdb.WriteCanonicalHash(env.db, blocks[3].Hash(), blocks[3].NumberU64())
+		if headers, err := env.sc.GetUnconfirmedHeaderList(); !errors.Is(err, ErrShardStateInconsistency) || headers != nil {
+			t.Fatalf("missing canonical endpoint: %v, error %v", headers, err)
+		}
+	})
+	for _, limit := range []uint64{1, 2, 3, 9} {
+		env.chain.Config().QuarkChain.MaxBlocksPerRootBlock = limit
+		headers, err := env.sc.GetUnconfirmedHeaderList()
+		if err != nil {
+			t.Fatal(err)
+		}
+		count := 3
+		if limit < uint64(count) {
+			count = int(limit)
+		}
+		if len(headers) != count {
+			t.Fatalf("limit %d: have %d headers, want %d", limit, len(headers), count)
+		}
+		for i, header := range headers {
+			if header.Hash() != blocks[i+2].Hash() {
+				t.Fatalf("limit %d: header %d is not the earliest unconfirmed block", limit, i)
+			}
+		}
+	}
+	root = newRoot(root, 1, blocks[2].Header(), blocks[3].Header(), blocks[4].Header())
+	env.insertRoot(root, true)
+	if headers, err := env.sc.GetUnconfirmedHeaderList(); err != nil || len(headers) != 0 {
+		t.Fatalf("confirmed headers still pending: %v, %v", headers, err)
+	}
+}
+
 // failingRootDB fails one batch commit without changing the underlying data.
 // Only the shard's root-block store uses this wrapper, not the shard blockchain.
 type failingRootDB struct {
