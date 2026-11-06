@@ -176,7 +176,7 @@ func (ln *LocalNode) delete(e enr.Entry) {
 }
 
 func (ln *LocalNode) endpointForIP(ip netip.Addr) *lnEndpoint {
-	if ip.Is4() {
+	if ip.Unmap().Is4() {
 		return &ln.endpoint4
 	}
 	return &ln.endpoint6
