@@ -260,6 +260,8 @@ func (c *ClusterConfig) Validate() error {
 				return fmt.Errorf("Slaves[%d]: %w", i-1, err)
 			}
 		}
+		// Geth opens Auth RPC only for registered authenticated APIs; QKC
+		// does not register any yet, so its Auth endpoint is not reserved here.
 		endpoints := []string{cfg.PrivateEndpoint(), cfg.Node.P2P.ListenAddr, cfg.Node.WSEndpoint()}
 		if cfg.Node.WSHost == "" || cfg.Node.HTTPPort != cfg.Node.WSPort {
 			// Geth shares the listener and uses WSHost when HTTP and WS ports match.
