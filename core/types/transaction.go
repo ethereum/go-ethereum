@@ -359,8 +359,7 @@ func (tx *Transaction) GasTipCapIntCmp(other *big.Int) int {
 }
 
 // EffectiveGasTip returns the effective miner gasTipCap for the given base fee.
-// Deposits use their full gas price, without deducting the base fee.
-// Shard reward tax is applied separately when crediting the miner.
+// Deposits pay their full gas price to the miner, without deducting the base fee.
 // Note: if the effective gasTipCap would be negative, this method
 // returns ErrGasFeeCapTooLow, and value is undefined.
 func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {

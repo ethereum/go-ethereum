@@ -26,7 +26,7 @@ import (
 )
 
 // ClusterClient is implemented by the component that owns the cluster
-// connections. A ShardBackend holds this narrow interface instead of the connections
+// connections. A Shard holds this narrow interface instead of the connections
 // or wire-message encoders.
 // Implementations must support concurrent calls and honor context cancellation and deadlines.
 type ClusterClient interface {
