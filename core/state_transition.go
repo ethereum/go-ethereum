@@ -821,7 +821,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		effectiveTip = new(uint256.Int)
 	}
 	fee := new(uint256.Int)
-	fee.SetFromBig(CalcTxFeeAfterTax(st.evm.ChainConfig(), gasUsed, effectiveTip.ToBig()))
+	if overflow := fee.SetFromBig(CalcTxFeeAfterTax(st.evm.ChainConfig(), gasUsed, effectiveTip.ToBig())); overflow {
+		return nil, fmt.Errorf("%w: miner fee after tax exceeds 256 bits (sender %v)", ErrInsufficientFunds, msg.From)
+	}
 	st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 
 	// add the coinbase to the witness iff the fee is greater than 0
