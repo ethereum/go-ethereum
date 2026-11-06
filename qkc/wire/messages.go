@@ -141,6 +141,21 @@ type AddRootBlockResponse struct {
 	ErrorCode uint32
 }
 
+// GetUnconfirmedHeadersRequest asks the master for unconfirmed shard headers.
+type GetUnconfirmedHeadersRequest struct{}
+
+// UnconfirmedHeadersInfo carries one branch's headers, encoded as RLP.
+type UnconfirmedHeadersInfo struct {
+	Branch     uint32
+	HeaderList []Data `ssz-max:"4294967295,4294967295" ssz-size:"?,?"`
+}
+
+// GetUnconfirmedHeadersResponse returns unconfirmed headers grouped by branch.
+type GetUnconfirmedHeadersResponse struct {
+	ErrorCode       uint32
+	HeadersInfoList []UnconfirmedHeadersInfo `ssz-max:"4294967295"`
+}
+
 // GetRootChainStakesRequest asks a chain for the stakes recorded for Address
 // at MinorBlockHash.
 type GetRootChainStakesRequest struct {

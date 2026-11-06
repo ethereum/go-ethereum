@@ -42,6 +42,7 @@ type MasterHandler interface {
 
 	AddRootBlock(req *wire.AddRootBlockRequest) (*wire.AddRootBlockResponse, error)
 	GetRootChainStakes(req *wire.GetRootChainStakesRequest) (*wire.GetRootChainStakesResponse, error)
+	GetUnconfirmedHeaders(req *wire.GetUnconfirmedHeadersRequest) (*wire.GetUnconfirmedHeadersResponse, error)
 }
 
 // MasterConnConfig configures the slave's connection to its master.
@@ -92,18 +93,28 @@ func NewMasterConn(cfg MasterConnConfig) (*MasterConn, error) {
 		}, wire.WriteClusterFrameWithPeerID),
 		Forwarder: forwarder,
 		Serializers: map[byte]*conn.OpSerializer{
+			// Communication layer: connection setup and slave topology.
 			byte(wire.ClusterOpPing):                   conn.OpSerializerFor[wire.PingRequest, wire.PongResponse](byte(wire.ClusterOpPong)),
 			byte(wire.ClusterOpConnectToSlavesRequest): conn.OpSerializerFor[wire.ConnectToSlavesRequest, wire.ConnectToSlavesResponse](byte(wire.ClusterOpConnectToSlavesResponse)),
 
-			byte(wire.ClusterOpAddRootBlockRequest):        conn.OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse)),
-			byte(wire.ClusterOpGetRootChainStakesRequest):  conn.OpSerializerFor[wire.GetRootChainStakesRequest, wire.GetRootChainStakesResponse](byte(wire.ClusterOpGetRootChainStakesResponse)),
+			// Business layer: requests sent to the master.
 			byte(wire.ClusterOpAddMinorBlockHeaderRequest): conn.OpSerializerFor[wire.AddMinorBlockHeaderRequest, wire.AddMinorBlockHeaderResponse](byte(wire.ClusterOpAddMinorBlockHeaderResponse)),
+
+			// Business layer: requests received from the master.
+			byte(wire.ClusterOpAddRootBlockRequest):          conn.OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse)),
+			byte(wire.ClusterOpGetRootChainStakesRequest):    conn.OpSerializerFor[wire.GetRootChainStakesRequest, wire.GetRootChainStakesResponse](byte(wire.ClusterOpGetRootChainStakesResponse)),
+			byte(wire.ClusterOpGetUnconfirmedHeadersRequest): conn.OpSerializerFor[wire.GetUnconfirmedHeadersRequest, wire.GetUnconfirmedHeadersResponse](byte(wire.ClusterOpGetUnconfirmedHeadersResponse)),
 		},
 		Handlers: map[byte]conn.TypedHandler{
-			byte(wire.ClusterOpPing):                      mc.handlePing,
-			byte(wire.ClusterOpConnectToSlavesRequest):    mc.handleConnectToSlaves,
-			byte(wire.ClusterOpAddRootBlockRequest):       mc.handleAddRootBlock,
-			byte(wire.ClusterOpGetRootChainStakesRequest): mc.handleGetRootChainStakes,
+			// Handlers process received requests only.
+			// Communication layer.
+			byte(wire.ClusterOpPing):                   mc.handlePing,
+			byte(wire.ClusterOpConnectToSlavesRequest): mc.handleConnectToSlaves,
+
+			// Business layer.
+			byte(wire.ClusterOpAddRootBlockRequest):          mc.handleAddRootBlock,
+			byte(wire.ClusterOpGetRootChainStakesRequest):    mc.handleGetRootChainStakes,
+			byte(wire.ClusterOpGetUnconfirmedHeadersRequest): mc.handleGetUnconfirmedHeaders,
 		}, Logger: cfg.Logger,
 	})
 	return mc, nil
@@ -176,4 +187,8 @@ func (mc *MasterConn) handleAddRootBlock(req wire.SSZMessage) (wire.SSZMessage, 
 
 func (mc *MasterConn) handleGetRootChainStakes(req wire.SSZMessage) (wire.SSZMessage, error) {
 	return mc.handler.GetRootChainStakes(req.(*wire.GetRootChainStakesRequest))
+}
+
+func (mc *MasterConn) handleGetUnconfirmedHeaders(req wire.SSZMessage) (wire.SSZMessage, error) {
+	return mc.handler.GetUnconfirmedHeaders(req.(*wire.GetUnconfirmedHeadersRequest))
 }

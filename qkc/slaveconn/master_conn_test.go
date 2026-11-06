@@ -56,6 +56,9 @@ func (h *masterTestHandler) AddRootBlock(req *wire.AddRootBlockRequest) (*wire.A
 func (h *masterTestHandler) GetRootChainStakes(req *wire.GetRootChainStakesRequest) (*wire.GetRootChainStakesResponse, error) {
 	return &wire.GetRootChainStakesResponse{ErrorCode: 8}, nil
 }
+func (h *masterTestHandler) GetUnconfirmedHeaders(req *wire.GetUnconfirmedHeadersRequest) (*wire.GetUnconfirmedHeadersResponse, error) {
+	return &wire.GetUnconfirmedHeadersResponse{HeadersInfoList: []wire.UnconfirmedHeadersInfo{{Branch: 10002}}}, nil
+}
 
 func masterTestPair(t *testing.T, h *masterTestHandler, headerCode uint32, chainID *big.Int) (*MasterConn, *conn.BaseConn, *XshardConnManager) {
 	t.Helper()
@@ -73,11 +76,12 @@ func masterTestPair(t *testing.T, h *masterTestHandler, headerCode uint32, chain
 		return wire.ReadClusterFrameWithPeerID(r, wire.MaxFramePayloadLen)
 	}, wire.WriteClusterFrameWithPeerID),
 		Serializers: map[byte]*conn.OpSerializer{
-			byte(wire.ClusterOpPing):                       conn.OpSerializerFor[wire.PingRequest, wire.PongResponse](byte(wire.ClusterOpPong)),
-			byte(wire.ClusterOpConnectToSlavesRequest):     conn.OpSerializerFor[wire.ConnectToSlavesRequest, wire.ConnectToSlavesResponse](byte(wire.ClusterOpConnectToSlavesResponse)),
-			byte(wire.ClusterOpAddRootBlockRequest):        conn.OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse)),
-			byte(wire.ClusterOpGetRootChainStakesRequest):  conn.OpSerializerFor[wire.GetRootChainStakesRequest, wire.GetRootChainStakesResponse](byte(wire.ClusterOpGetRootChainStakesResponse)),
-			byte(wire.ClusterOpAddMinorBlockHeaderRequest): conn.OpSerializerFor[wire.AddMinorBlockHeaderRequest, wire.AddMinorBlockHeaderResponse](byte(wire.ClusterOpAddMinorBlockHeaderResponse)),
+			byte(wire.ClusterOpPing):                         conn.OpSerializerFor[wire.PingRequest, wire.PongResponse](byte(wire.ClusterOpPong)),
+			byte(wire.ClusterOpConnectToSlavesRequest):       conn.OpSerializerFor[wire.ConnectToSlavesRequest, wire.ConnectToSlavesResponse](byte(wire.ClusterOpConnectToSlavesResponse)),
+			byte(wire.ClusterOpAddRootBlockRequest):          conn.OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse)),
+			byte(wire.ClusterOpGetRootChainStakesRequest):    conn.OpSerializerFor[wire.GetRootChainStakesRequest, wire.GetRootChainStakesResponse](byte(wire.ClusterOpGetRootChainStakesResponse)),
+			byte(wire.ClusterOpGetUnconfirmedHeadersRequest): conn.OpSerializerFor[wire.GetUnconfirmedHeadersRequest, wire.GetUnconfirmedHeadersResponse](byte(wire.ClusterOpGetUnconfirmedHeadersResponse)),
+			byte(wire.ClusterOpAddMinorBlockHeaderRequest):   conn.OpSerializerFor[wire.AddMinorBlockHeaderRequest, wire.AddMinorBlockHeaderResponse](byte(wire.ClusterOpAddMinorBlockHeaderResponse)),
 		}, Handlers: map[byte]conn.TypedHandler{byte(wire.ClusterOpAddMinorBlockHeaderRequest): func(wire.SSZMessage) (wire.SSZMessage, error) {
 			return &wire.AddMinorBlockHeaderResponse{ErrorCode: headerCode}, nil
 		}}})
@@ -144,6 +148,10 @@ func TestMasterConnRPC(t *testing.T) {
 	resp, err = remote.SendRPC(ctx, byte(wire.ClusterOpGetRootChainStakesRequest), &wire.GetRootChainStakesRequest{})
 	if err != nil || resp.(*wire.GetRootChainStakesResponse).ErrorCode != 8 {
 		t.Fatalf("stakes %v, %v", resp, err)
+	}
+	resp, err = remote.SendRPC(ctx, byte(wire.ClusterOpGetUnconfirmedHeadersRequest), &wire.GetUnconfirmedHeadersRequest{})
+	if err != nil || resp.(*wire.GetUnconfirmedHeadersResponse).HeadersInfoList[0].Branch != 10002 {
+		t.Fatalf("unconfirmed headers %v, %v", resp, err)
 	}
 	err = mc.SendAddMinorBlockHeader(ctx, &wire.AddMinorBlockHeaderRequest{})
 	var remoteErr *wire.RemoteError

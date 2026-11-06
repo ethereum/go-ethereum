@@ -44,8 +44,10 @@ const (
 	ClusterOpConnectToSlavesResponse ClusterOp = 4 + ClusterOpBase // 0x84
 
 	// Master-to-slave root block update.
-	ClusterOpAddRootBlockRequest  ClusterOp = 5 + ClusterOpBase // 0x85
-	ClusterOpAddRootBlockResponse ClusterOp = 6 + ClusterOpBase // 0x86
+	ClusterOpAddRootBlockRequest           ClusterOp = 5 + ClusterOpBase  // 0x85
+	ClusterOpAddRootBlockResponse          ClusterOp = 6 + ClusterOpBase  // 0x86
+	ClusterOpGetUnconfirmedHeadersRequest  ClusterOp = 11 + ClusterOpBase // 0x8b
+	ClusterOpGetUnconfirmedHeadersResponse ClusterOp = 12 + ClusterOpBase // 0x8c
 
 	// Slave-to-Master block notification.
 	ClusterOpAddMinorBlockHeaderRequest  ClusterOp = 17 + ClusterOpBase // 0x91
