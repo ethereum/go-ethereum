@@ -204,9 +204,10 @@ func (api *FilterAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) 
 				// To keep the original behaviour, send a single tx hash in one notification.
 				// TODO(rjl493456442) Send a batch of tx hashes in one notification
 				latest := api.sys.backend.CurrentHeader()
+				parent := api.parentHeader(ctx, latest)
 				for _, tx := range txs {
 					if fullTx != nil && *fullTx {
-						rpcTx := ethapi.NewRPCPendingTransaction(tx, latest, chainConfig)
+						rpcTx := ethapi.NewRPCPendingTransaction(tx, latest, parent, chainConfig)
 						notifier.Notify(rpcSub.ID, rpcTx)
 					} else {
 						notifier.Notify(rpcSub.ID, tx.Hash())
@@ -577,9 +578,10 @@ func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 			return returnHashes(hashes), nil
 		case PendingTransactionsSubscription:
 			if f.fullTx {
+				parent := api.parentHeader(context.Background(), latest)
 				txs := make([]*ethapi.RPCTransaction, 0, len(f.txs))
 				for _, tx := range f.txs {
-					txs = append(txs, ethapi.NewRPCPendingTransaction(tx, latest, chainConfig))
+					txs = append(txs, ethapi.NewRPCPendingTransaction(tx, latest, parent, chainConfig))
 				}
 				f.txs = nil
 				return txs, nil
@@ -742,4 +744,13 @@ func decodeTopic(s string) (common.Hash, error) {
 		err = fmt.Errorf("hex has invalid length %d after decoding; expected %d for topic", len(b), common.HashLength)
 	}
 	return common.BytesToHash(b), err
+}
+
+// parentHeader returns the parent of head, or nil if it isn't available.
+func (api *FilterAPI) parentHeader(ctx context.Context, head *types.Header) *types.Header {
+	if head == nil {
+		return nil
+	}
+	parent, _ := api.sys.backend.HeaderByHash(ctx, head.ParentHash)
+	return parent
 }
