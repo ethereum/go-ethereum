@@ -73,8 +73,8 @@ type PeerDelivery struct {
 type txEntry struct {
 	tx *types.Transaction
 
-	// Technically it is not required to store peer information to drop properly.
-	// This is mainly for per peer size limit check.
+	// The peer is the source of the proofs, needed to attribute a failed cell
+	// verification, and is charged for the entry against its allowance.
 	peer  string    // Peer Identifier
 	added time.Time // Timestamp when the tx is added
 	size  uint64    // Encoded size, as accounted against the buffer limits
@@ -85,6 +85,21 @@ type cellEntry struct {
 	custody    types.CustodyBitmap
 	added      time.Time
 	size       uint64 // Total cell bytes, as accounted against the buffer limits
+
+	// Cell deliveries carry no proofs, so cells failing against the proofs of
+	// a transaction delivered by another peer do not tell which of the two is
+	// at fault. In that case the transaction is fetched again from the failing
+	// cell peer (verifier) and the earlier deliverer is kept as suspect until
+	// the verifier's own proofs decide.
+	suspect  string
+	verifier string
+}
+
+// refetchRequest asks for a transaction to be fetched from a specific peer.
+type refetchRequest struct {
+	peer string
+	hash common.Hash
+	size uint32
 }
 
 // cellsSize returns the bytes occupied by a peer's cell delivery.
@@ -114,6 +129,10 @@ type BlobBufferFunctions struct {
 	ValidateTx func(*types.Transaction) error
 	AddToPool  func(*BlobTxForPool) error
 	DropPeer   func(string)
+
+	// Refetch requests a (blobless) transaction of the given size from the
+	// given peer. It is called without the buffer lock held.
+	Refetch func(peer string, hash common.Hash, size uint32)
 }
 
 func NewBlobBuffer(cb BlobBufferFunctions) *BlobBuffer {
@@ -153,6 +172,9 @@ func (b *BlobBuffer) Flush() ([]common.Hash, []error) {
 // AddTx buffers a blob transaction (without blobs) from an ETH/72 peer.
 // If cells are already buffered, verification and pool insertion are attempted.
 func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
+	var refetches []*refetchRequest
+	defer func() { b.refetch(refetches) }()
+
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	defer b.updateMetrics()()
@@ -175,7 +197,9 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 			continue
 		}
 		if entry, ok := b.cells[hash]; ok {
-			b.storeCompleted(hash, tx, entry)
+			if req := b.storeCompleted(hash, tx, peer, entry); req != nil {
+				refetches = append(refetches, req)
+			}
 			continue
 		}
 		// Refuse the transaction if the peer has exhausted its allowance.
@@ -196,6 +220,12 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 // AddCells buffers per-peer cell deliveries from the blob fetcher.
 // If the transaction is already buffered, verification and pool insertion are attempted.
 func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDelivery, custody types.CustodyBitmap) {
+	var req *refetchRequest
+	defer func() {
+		if req != nil {
+			b.refetch([]*refetchRequest{req})
+		}
+	}()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	defer b.updateMetrics()()
@@ -214,7 +244,7 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 
 	// Check if this delivery completes the entry
 	if txe, ok := b.txs[hash]; ok {
-		b.storeCompleted(hash, txe.tx, entry)
+		req = b.storeCompleted(hash, txe.tx, txe.peer, entry)
 		return
 	}
 
@@ -230,15 +260,47 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 
 // storeCompleted verifies cells per-peer, sorts them, and schedules them for
 // addition into the pool. The actual addition happens in Flush().
-func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cells *cellEntry) {
+//
+// The proofs come with the transaction, delivered by txPeer, while the cells
+// may come from other peers. A peer is only dropped when the verification
+// proves it at fault: its own cells failing against its own proofs, or its
+// proofs failing on cells that verify against another peer's proofs. When
+// cells only fail against proofs delivered by someone else, the transaction is
+// dropped, the cells kept, and a refetch request for the transaction from the
+// failing cell peer is returned.
+func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, txPeer string, cells *cellEntry) *refetchRequest {
 	sidecar := tx.BlobTxSidecar()
 
 	// Per-peer cell verification
-	if badPeers := b.verifyCells(cells, sidecar); len(badPeers) > 0 {
-		b.dropPeers(badPeers)
+	badPeers := b.verifyCells(cells, sidecar)
+
+	// The verifier's cells passing against these proofs convicts the suspect,
+	// whose proofs failed on them.
+	if cells.suspect != "" && !slices.Contains(badPeers, cells.verifier) {
+		b.dropPeers([]string{cells.suspect})
+	}
+	if len(badPeers) > 0 {
+		if slices.Contains(badPeers, txPeer) {
+			b.dropPeers([]string{txPeer})
+		} else if cells.verifier == "" {
+			// Nobody can be blamed yet: ask the failing cell peer for the
+			// transaction, so its own proofs decide.
+			cells.suspect, cells.verifier = txPeer, badPeers[0]
+			b.removeTx(hash)
+			if b.cells[hash] != cells {
+				for b.buffered()+cells.size > b.maxBytes && b.evictOne() {
+				}
+				b.insertCells(hash, cells)
+			}
+			return &refetchRequest{peer: cells.verifier, hash: hash, size: uint32(tx.Size())}
+		} else if slices.Contains(badPeers, cells.verifier) {
+			// Still undecided, keep waiting for the verifier's transaction.
+			b.removeTx(hash)
+			return nil
+		}
 		b.removeCells(hash)
 		b.removeTx(hash)
-		return
+		return nil
 	}
 	blobCount := len(tx.BlobHashes())
 
@@ -248,7 +310,7 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 		blobBufferDupCellsCounter.Inc(1)
 		b.removeCells(hash)
 		b.removeTx(hash)
-		return
+		return nil
 	}
 	cellSidecar := types.BlobTxCellSidecar{
 		Version:     sidecar.Version,
@@ -266,6 +328,17 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 	b.completedCount.Add(1)
 	b.removeCells(hash)
 	b.removeTx(hash)
+	return nil
+}
+
+// refetch passes refetch requests on, outside of the buffer lock.
+func (b *BlobBuffer) refetch(reqs []*refetchRequest) {
+	if b.cb.Refetch == nil {
+		return
+	}
+	for _, req := range reqs {
+		b.cb.Refetch(req.peer, req.hash, req.size)
+	}
 }
 
 func (b *BlobBuffer) HasTx(hash common.Hash) bool {

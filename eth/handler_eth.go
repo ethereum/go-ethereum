@@ -134,6 +134,14 @@ func handleTransactions(peer *eth.Peer, list []*types.Transaction, directBroadca
 				if err := tx.BlobTxSidecar().ValidateBlobCommitmentHashes(tx.BlobHashes()); err != nil {
 					return err
 				}
+				// The proofs are not covered by the transaction hash. Pin their
+				// version and count, so the encoded size of the delivery is fixed
+				// by the hash before it is checked against other peers' announcements.
+				if sc := tx.BlobTxSidecar(); sc.Version != types.BlobSidecarVersion1 {
+					return fmt.Errorf("unexpected blob sidecar version %d", sc.Version)
+				} else if len(sc.Proofs) != len(sc.Commitments)*kzg4844.CellProofsPerBlob {
+					return fmt.Errorf("invalid number of blob proofs %d, want %d", len(sc.Proofs), len(sc.Commitments)*kzg4844.CellProofsPerBlob)
+				}
 				// eth72 delivers blob transactions without the blob payload,
 				// earlier versions with all blobs.
 				if blobs := len(tx.BlobTxSidecar().Blobs); peer.Version() >= eth.ETH72 {
