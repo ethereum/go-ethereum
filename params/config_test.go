@@ -189,6 +189,18 @@ func TestQuarkChainIDs(t *testing.T) {
 	}
 }
 
+// Missing and explicit zero limits are both invalid; consumers share this cap
+// for root validation and unconfirmed-header queries.
+func TestQuarkChainMaxBlocksPerRootBlock(t *testing.T) {
+	for _, limit := range []uint64{0, 1, 100} {
+		config := NewTestQuarkChainConfig(10001)
+		config.QuarkChain.MaxBlocksPerRootBlock = limit
+		if err := config.CheckConfigForkOrder(); (err == nil) != (limit > 0) {
+			t.Fatalf("maxBlocksPerRootBlock %d: %v", limit, err)
+		}
+	}
+}
+
 func TestConfigRules(t *testing.T) {
 	c := &ChainConfig{
 		LondonBlock:  new(big.Int),
