@@ -452,13 +452,15 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
 // It returns the opaque request data returned by the contract.
 func ProcessWithdrawalQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
-	return processRequestsSystemCall(requests, rules, evm, 0x01, params.WithdrawalQueueAddress, blockAccessIndex, blockAccessList)
+	addr := requestContractAddress(evm.ChainConfig().WithdrawalRequestContractAddress, params.WithdrawalQueueAddress)
+	return processRequestsSystemCall(requests, rules, evm, 0x01, addr, blockAccessIndex, blockAccessList)
 }
 
 // ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
 // It returns the opaque request data returned by the contract.
 func ProcessConsolidationQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
-	return processRequestsSystemCall(requests, rules, evm, 0x02, params.ConsolidationQueueAddress, blockAccessIndex, blockAccessList)
+	addr := requestContractAddress(evm.ChainConfig().ConsolidationRequestContractAddress, params.ConsolidationQueueAddress)
+	return processRequestsSystemCall(requests, rules, evm, 0x02, addr, blockAccessIndex, blockAccessList)
 }
 
 // ProcessBuilderDepositQueue calls the EIP-8282 builder deposit contract.
@@ -471,6 +473,13 @@ func ProcessBuilderDepositQueue(requests *[][]byte, rules params.Rules, evm *vm.
 // It returns the opaque request data returned by the contract.
 func ProcessBuilderExitQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
 	return processRequestsSystemCall(requests, rules, evm, 0x04, params.BuilderExitAddress, blockAccessIndex, blockAccessList)
+}
+
+func requestContractAddress(configured *common.Address, defaultAddress common.Address) common.Address {
+	if configured != nil {
+		return *configured
+	}
+	return defaultAddress
 }
 
 func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.EVM, requestType byte, addr common.Address, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
