@@ -50,6 +50,10 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 		tdb     *triedb.Database
 		report  = true
 		origin  = block.NumberU64()
+
+		// The hashes of the blocks to re-execute, starting from the target and
+		// walking back along its ancestry, which need not be canonical.
+		hashes = []common.Hash{block.Hash()}
 	)
 	// The state is only for reading purposes, check the state presence in
 	// live database.
@@ -116,6 +120,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 				return nil, nil, fmt.Errorf("%w: missing block %v %d", database.ErrStateUnavailable, current.ParentHash(), current.NumberU64()-1)
 			}
 			current = parent
+			hashes = append(hashes, current.Hash())
 
 			statedb, err = state.New(current.Root(), db)
 			if err == nil {
@@ -149,7 +154,7 @@ func (eth *Ethereum) hashState(ctx context.Context, block *types.Block, base *st
 		}
 		// Retrieve the next block to regenerate and process it
 		next := current.NumberU64() + 1
-		if current = eth.blockchain.GetBlockByNumber(next); current == nil {
+		if current = eth.blockchain.GetBlock(hashes[origin-next], next); current == nil {
 			return nil, nil, fmt.Errorf("block #%d not found", next)
 		}
 		_, err := eth.blockchain.Processor().Process(ctx, current, statedb, nil, nil, vm.Config{}, nil, nil)
