@@ -372,10 +372,8 @@ func (crowdsale *Crowdsale) UnpackFundTransferEvent(log *types.Log) (*CrowdsaleF
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(CrowdsaleFundTransfer)
-	if len(log.Data) > 0 {
-		if err := crowdsale.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := crowdsale.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range crowdsale.abi.Events[event].Inputs {
