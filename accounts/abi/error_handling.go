@@ -32,6 +32,8 @@ var (
 	errBadInt16    = errors.New("abi: improperly encoded int16 value")
 	errBadInt32    = errors.New("abi: improperly encoded int32 value")
 	errBadInt64    = errors.New("abi: improperly encoded int64 value")
+	errBadUint     = errors.New("abi: improperly encoded uint value")
+	errBadInt      = errors.New("abi: improperly encoded int value")
 	errInvalidSign = errors.New("abi: negatively-signed value cannot be packed into uint parameter")
 )
 
