@@ -161,26 +161,10 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	if rbloom != header.Bloom {
 		return fmt.Errorf("invalid bloom (remote: %x  local: %x)", header.Bloom, rbloom)
 	}
-	// In stateless mode, return early because the receipt and state root are not
-	// provided through the witness, rather the cross validator needs to return it.
-	if stateless {
-		return nil
-	}
-	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
-	receiptSha := res.receiptRoot()
-	if receiptSha != header.ReceiptHash {
-		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
-	}
-	// Validate the parsed requests match the expected header value.
-	if header.RequestsHash != nil {
-		reqhash := types.CalcRequestsHash(res.Requests)
-		if reqhash != *header.RequestsHash {
-			return fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
-		}
-	} else if res.Requests != nil {
-		return errors.New("block has requests before prague fork")
-	}
-	// Verify Block-level accessList once Amsterdam is enabled
+	// Verify the block-level access list once Amsterdam is enabled. This must run
+	// in stateless mode too: stateless execution derives the post-state from the
+	// received access list, so it has to be checked against the re-executed list
+	// before returning, otherwise a forged list would be accepted.
 	if v.config.IsAmsterdam(block.Number(), block.Time()) {
 		enc, local := res.encodedAccessList()
 		if enc == nil {
@@ -195,6 +179,27 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 		if err := enc.Validate(block.GasLimit(), len(block.Transactions())); err != nil {
 			return fmt.Errorf("invalid block access list: %v", err)
 		}
+	}
+	// Validate the parsed requests match the expected header value. This must run
+	// in stateless mode too: the requests are not reflected in the state or receipt
+	// root that stateless execution returns, so they can only be checked here.
+	if header.RequestsHash != nil {
+		reqhash := types.CalcRequestsHash(res.Requests)
+		if reqhash != *header.RequestsHash {
+			return fmt.Errorf("invalid requests hash (remote: %x local: %x)", *header.RequestsHash, reqhash)
+		}
+	} else if res.Requests != nil {
+		return errors.New("block has requests before prague fork")
+	}
+	// In stateless mode, return early because the receipt and state root are not
+	// provided through the witness, rather the cross validator needs to return it.
+	if stateless {
+		return nil
+	}
+	// The receipt Trie's root (R = (Tr [[H1, R1], ... [Hn, Rn]]))
+	receiptSha := res.receiptRoot()
+	if receiptSha != header.ReceiptHash {
+		return fmt.Errorf("invalid receipt root hash (remote: %x local: %x)", header.ReceiptHash, receiptSha)
 	}
 	// Validate the state root against the received state root and throw
 	// an error if they don't match.
