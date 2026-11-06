@@ -49,9 +49,11 @@ func (st *stateTransition) executeDeposit(rules params.Rules) (*ExecutionResult,
 	if !msg.isMove || msg.To == nil || len(msg.Data) != 0 || msg.GasLimit != params.XShardSendGas {
 		return nil, fmt.Errorf("%w: sender %v, recipient %v, gas %d, data length %d", ErrDepositNotMove, msg.From, msg.To, msg.GasLimit, len(msg.Data))
 	}
-	fee, overflow := new(uint256.Int).MulOverflow(uint256.NewInt(msg.GasLimit), msg.GasPrice)
+	// The source shard validates the gross gas cost; check the after-tax miner credit here.
+	fee := new(uint256.Int)
+	overflow := fee.SetFromBig(CalcTxFeeAfterTax(st.evm.ChainConfig(), msg.GasLimit, msg.GasPrice.ToBig()))
 	if overflow {
-		return nil, fmt.Errorf("%w: deposit gas cost exceeds 256 bits (sender %v)", ErrInsufficientFunds, msg.From)
+		return nil, fmt.Errorf("%w: deposit miner fee after tax exceeds 256 bits (sender %v)", ErrInsufficientFunds, msg.From)
 	}
 	// The consensus layer only forces in the deposits that fit in the block.
 	var err error
@@ -73,7 +75,6 @@ func (st *stateTransition) executeDeposit(rules params.Rules) (*ExecutionResult,
 	}
 	st.state.AddBalance(*msg.To, msg.Value, tracing.BalanceIncreaseXShardDeposit)
 	tracer.EmitExit(0, nil, gas, tracing.Gas{}, nil, false)
-	fee.SetFromBig(CalcTxFeeAfterTax(st.evm.ChainConfig(), msg.GasLimit, msg.GasPrice.ToBig()))
 	st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
 
 	return &ExecutionResult{
