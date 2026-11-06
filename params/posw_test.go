@@ -35,6 +35,7 @@ func validQuarkChainConfig() *QuarkChainConfig {
 	return &QuarkChainConfig{
 		ChainIDs: []*big.Int{big.NewInt(10001)},
 		PoSW:     validPoSWConfig(), RewardTaxRate: big.NewRat(1, 2),
+		MaxBlocksPerRootBlock: 100,
 	}
 }
 
@@ -541,12 +542,17 @@ func TestRewardDecay(t *testing.T) {
 			if !ok {
 				t.Fatal("invalid test tax rate", test.tax)
 			}
-			config := &QuarkChainConfig{ChainIDs: []*big.Int{big.NewInt(10001)}, RewardTaxRate: new(big.Rat).Set(tax), PoSW: &PoSWConfig{
-				AdjustmentCutoff: 7, AdjustmentFactor: 512, MinimumDifficulty: big.NewInt(1),
-				CoinbaseAmount: new(big.Int).SetUint64(test.amount), EpochInterval: 1,
-				DecayFactor:         new(big.Rat).Set(factor),
-				OriginalBlockNumber: test.epoch,
-			}}
+			config := &QuarkChainConfig{
+				ChainIDs:              []*big.Int{big.NewInt(10001)},
+				RewardTaxRate:         new(big.Rat).Set(tax),
+				MaxBlocksPerRootBlock: 100,
+				PoSW: &PoSWConfig{
+					AdjustmentCutoff: 7, AdjustmentFactor: 512, MinimumDifficulty: big.NewInt(1),
+					CoinbaseAmount: new(big.Int).SetUint64(test.amount), EpochInterval: 1,
+					DecayFactor:         new(big.Rat).Set(factor),
+					OriginalBlockNumber: test.epoch,
+				},
+			}
 			if err := config.Check(); err != nil {
 				t.Fatal(err)
 			}

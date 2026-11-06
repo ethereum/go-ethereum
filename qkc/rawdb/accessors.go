@@ -122,11 +122,29 @@ func ReadXShardDeposits(db ethdb.KeyValueReader, hash common.Hash) []*coretypes.
 // WriteXShardDeposits stores the deposits sent to this shard by the block of
 // another shard with the given hash, as the RLP encoding of the list.
 func WriteXShardDeposits(db ethdb.KeyValueWriter, hash common.Hash, deposits []*coretypes.DepositTx) {
-	data, err := rlp.EncodeToBytes(deposits)
-	if err != nil {
-		log.Crit("Failed to RLP encode cross-shard deposits", "err", err)
-	}
-	if err := db.Put(xShardDepositsKey(hash), data); err != nil {
+	if err := WriteXShardDepositsWithError(db, hash, deposits); err != nil {
 		log.Crit("Failed to store cross-shard deposits", "err", err)
 	}
+}
+
+// WriteXShardDepositsWithError stores the same list as WriteXShardDeposits,
+// returning encoding and write errors to callers that can retry delivery.
+func WriteXShardDepositsWithError(db ethdb.KeyValueWriter, hash common.Hash, deposits []*coretypes.DepositTx) error {
+	data, err := rlp.EncodeToBytes(deposits)
+	if err != nil {
+		return err
+	}
+	return db.Put(xShardDepositsKey(hash), data)
+}
+
+// IsShardBlockCommitted reports whether all cross-shard lists and the header
+// have been acknowledged. Read errors must not be mistaken for a missing marker.
+func IsShardBlockCommitted(db ethdb.KeyValueReader, hash common.Hash) (bool, error) {
+	return db.Has(shardBlockCommitKey(hash))
+}
+
+// WriteShardBlockCommit records completed delivery, as pyquarkchain's commit_ key.
+// Call only after master acknowledges the header; a failed write permits retry.
+func WriteShardBlockCommit(db ethdb.KeyValueWriter, hash common.Hash) error {
+	return db.Put(shardBlockCommitKey(hash), []byte{1})
 }

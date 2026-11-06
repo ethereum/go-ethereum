@@ -23,9 +23,10 @@ import "github.com/ethereum/go-ethereum/common"
 // The fields below define the QuarkChain specific database schema. All keys
 // start with qkc_, keeping them apart from the geth ones.
 var (
-	rootBlockPrefix      = []byte("qkc_rb")     // rootBlockPrefix + hash -> root block
-	lastConfirmedPrefix  = []byte("qkc_rLM")    // lastConfirmedPrefix + root hash -> last confirmed shard block hash
-	xShardDepositsPrefix = []byte("qkc_xShard") // xShardDepositsPrefix + source block hash -> deposits sent to this shard by the block
+	rootBlockPrefix        = []byte("qkc_rb")           // rootBlockPrefix + hash -> root block
+	lastConfirmedPrefix    = []byte("qkc_rLM")          // lastConfirmedPrefix + root hash -> last confirmed shard block hash
+	xShardDepositsPrefix   = []byte("qkc_xShard")       // xShardDepositsPrefix + source block hash -> deposits sent to this shard by the block
+	shardBlockCommitPrefix = []byte("qkc_shard_commit") // shardBlockCommitPrefix + block hash -> completed shard block delivery
 )
 
 // rootBlockKey = rootBlockPrefix + hash
@@ -41,4 +42,8 @@ func lastConfirmedKey(rootHash common.Hash) []byte {
 // xShardDepositsKey = xShardDepositsPrefix + source block hash
 func xShardDepositsKey(hash common.Hash) []byte {
 	return append(common.CopyBytes(xShardDepositsPrefix), hash.Bytes()...)
+}
+
+func shardBlockCommitKey(hash common.Hash) []byte {
+	return append(common.CopyBytes(shardBlockCommitPrefix), hash.Bytes()...)
 }
