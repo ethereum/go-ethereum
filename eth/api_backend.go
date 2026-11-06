@@ -321,7 +321,7 @@ func (b *EthAPIBackend) GetCanonicalReceipt(tx *types.Transaction, blockHash com
 }
 
 func (b *EthAPIBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
-	return rawdb.ReadLogs(b.eth.chainDb, hash, number), nil
+	return b.eth.blockchain.GetLogs(hash, number), nil
 }
 
 func (b *EthAPIBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockCtx *vm.BlockContext) *vm.EVM {

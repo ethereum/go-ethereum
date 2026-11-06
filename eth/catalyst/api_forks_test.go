@@ -218,6 +218,8 @@ func testEngineRoundtrip(t *testing.T, fork engineFork) {
 	if resp.PayloadStatus.Status != engine.VALID {
 		t.Fatalf("forkchoiceUpdated (adopt) status %q, want %q", resp.PayloadStatus.Status, engine.VALID)
 	}
+	// The head update lands in the background
+	ethservice.BlockChain().WaitWrites()
 	head := ethservice.BlockChain().CurrentBlock()
 	if head.Hash() != payload.BlockHash {
 		t.Fatalf("head = %x, want %x", head.Hash(), payload.BlockHash)

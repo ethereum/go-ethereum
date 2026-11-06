@@ -141,6 +141,11 @@ func (db *MPTDatabase) TrieDB() *triedb.Database {
 // committing the changes to the underlying storage. It returns an error
 // if the commit fails.
 func (db *MPTDatabase) Commit(update *StateUpdate) error {
+	return db.commit(update, true)
+}
+
+// commit writes the state transition and flattens old layers only with capLayers.
+func (db *MPTDatabase) commit(update *StateUpdate, capLayers bool) error {
 	// Short circuit if nothing to commit
 	if update.Empty() {
 		return nil
@@ -171,13 +176,18 @@ func (db *MPTDatabase) Commit(update *StateUpdate) error {
 			log.Warn("Failed to cap snapshot tree", "root", update.Root, "layers", TriesInMemory, "err", err)
 		}
 	}
-	return db.triedb.Update(update.Root, update.OriginRoot, update.BlockNumber, update.Nodes, &triedb.StateSet{
+	states := &triedb.StateSet{
 		Accounts:       accounts,
 		AccountsOrigin: accountOrigin,
 		Storages:       storages,
 		StoragesOrigin: storageOrigin,
 		RawStorageKey:  update.StorageKeyType == StorageKeyPlain,
-	})
+	}
+	// The caller flattens the old layers itself later, with CapLayers
+	if !capLayers {
+		return db.triedb.AddLayer(update.Root, update.OriginRoot, update.BlockNumber, update.Nodes, states)
+	}
+	return db.triedb.Update(update.Root, update.OriginRoot, update.BlockNumber, update.Nodes, states)
 }
 
 // Iteratee returns a state iteratee associated with the specified state root,
