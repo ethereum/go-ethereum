@@ -370,6 +370,18 @@ func (s *StateDB) GetStorageRoot(addr common.Address) common.Hash {
 	return common.Hash{}
 }
 
+// StorageTrie returns the storage trie of the given account with all in-memory
+// storage changes applied. The returned trie is for reading purposes only, the
+// changes are not committed to the underlying database. Nil is returned if the
+// account does not exist or has no storage.
+func (s *StateDB) StorageTrie(addr common.Address) (Trie, error) {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		return nil, nil
+	}
+	return stateObject.storageTrie()
+}
+
 // TxIndex returns the current transaction index set by SetTxContext.
 func (s *StateDB) TxIndex() int {
 	return s.txIndex
