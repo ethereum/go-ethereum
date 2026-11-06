@@ -187,8 +187,17 @@ type SyncStatusSubscription struct {
 func (s *SyncStatusSubscription) Unsubscribe() {
 	s.unsubOnce.Do(func() {
 		req := uninstallSyncSubscriptionRequest{s.c, make(chan interface{})}
-		s.api.uninstallSyncSubscription <- &req
-
+	uninstallLoop:
+		for {
+			// Send the uninstall request while draining status events. This
+			// prevents a deadlock when eventLoop is blocked sending on s.c
+			// (mirrors eth/filters.Subscription.Unsubscribe).
+			select {
+			case s.api.uninstallSyncSubscription <- &req:
+				break uninstallLoop
+			case <-s.c:
+			}
+		}
 		for {
 			select {
 			case <-s.c:
