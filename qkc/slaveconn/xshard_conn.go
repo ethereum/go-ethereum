@@ -89,6 +89,9 @@ func newXshardConn(nc net.Conn, maxPayloadSize uint32, localChainID, remoteChain
 			byte(wire.ClusterOpPing):                   conn.OpSerializerFor[wire.PingRequest, wire.PongResponse](byte(wire.ClusterOpPong)),
 			byte(wire.ClusterOpAddXshardTxListRequest): conn.OpSerializerFor[wire.AddXshardTxListRequest, wire.AddXshardTxListResponse](byte(wire.ClusterOpAddXshardTxListResponse)),
 		},
+		// Connections are established only between trusted cluster slaves. We do
+		// not gate business handlers on handshake completion because unvalidated
+		// peers cannot reach this listener in the current deployment.
 		Handlers: map[byte]conn.TypedHandler{
 			byte(wire.ClusterOpPing):                   xc.handlePing,
 			byte(wire.ClusterOpAddXshardTxListRequest): xc.handleAddXshardTxList,
