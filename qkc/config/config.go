@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package config separates QuarkChain network definitions from local settings.
+// Package config loads and validates QuarkChain deployment settings.
 package config
 
 import (
@@ -37,37 +37,20 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
 )
-
-// NetworkConfig is shared by every node in a network. NetworkID identifies the
-// P2P network, independently of the EVM ChainID in each shard's chain config.
-// TOML decoding expands ShardForks into each shard's native chain config.
-type NetworkConfig struct {
-	NetworkID uint64
-	Root      RootConfig
-	Shards    []params.ChainConfig
-}
-
-// RootConfig contains root-chain consensus settings. The root is not an EVM
-// chain and does not inherit a shard's chain ID or PoSW configuration.
-type RootConfig struct {
-	ConsensusType params.ConsensusType
-	PoSW          *params.PoSWConfig
-}
 
 const (
 	RoleMaster = "master"
 	RoleSlave  = "slave"
 )
 
-// ClusterConfig describes a deployment. Every process reads the same network
-// definition and selects either Master or one entry from Slaves.
+// ClusterConfig describes a deployment. NetworkID identifies the P2P network,
+// independently of each shard's EVM chain ID.
 type ClusterConfig struct {
-	NetworkFile string
-	Master      NodeConfig
-	Slaves      []NodeConfig
+	NetworkID uint64
+	Master    NodeConfig
+	Slaves    []NodeConfig
 }
 
 // NodeConfig contains the effective settings of one process. Master has no
@@ -77,6 +60,7 @@ type ClusterConfig struct {
 // keys configure Node.HTTPHost and Node.HTTPPort without duplicating their state.
 type NodeConfig struct {
 	ChainID         *big.Int
+	GenesisFile     string // Optional path, resolved relative to the deployment file without reading it.
 	PrivateHost     string
 	PrivatePort     int
 	CoinbaseAddress common.Address // Local mining reward recipient; not a network rule.
@@ -84,7 +68,6 @@ type NodeConfig struct {
 	Eth             *ethconfig.Config
 
 	Role           string            `toml:"-"`
-	NetworkFile    string            `toml:"-"`
 	ShardEndpoints map[string]string `toml:"-"` // Keyed by decimal chain ID; derived for Master.
 }
 
@@ -140,6 +123,7 @@ func (c *NodeConfig) UnmarshalTOML(decode func(interface{}) error) error {
 	type executionConfig ethconfig.Config
 	type plain struct {
 		ChainID         *big.Int
+		GenesisFile     string
 		PrivateHost     string
 		PrivatePort     int
 		PublicHost      *string
@@ -160,6 +144,9 @@ func (c *NodeConfig) UnmarshalTOML(decode func(interface{}) error) error {
 	if err := decode(&overlay); err != nil {
 		return err
 	}
+	if overlay.Eth != nil && overlay.Eth.Genesis != nil {
+		return errors.New("Eth.Genesis is not a deployment setting; use GenesisFile")
+	}
 	// Public keys take precedence over the underlying geth HTTP settings. Pointers
 	// preserve explicit empty hosts and zero ports as overrides.
 	if overlay.PublicHost != nil {
@@ -169,14 +156,16 @@ func (c *NodeConfig) UnmarshalTOML(decode func(interface{}) error) error {
 		overlay.Node.HTTPPort = *overlay.PublicPort
 	}
 	cfg.ChainID, cfg.PrivateHost, cfg.PrivatePort = overlay.ChainID, overlay.PrivateHost, overlay.PrivatePort
+	cfg.GenesisFile = overlay.GenesisFile
 	cfg.Node, cfg.Eth = overlay.Node, (*ethconfig.Config)(overlay.Eth)
 	cfg.CoinbaseAddress = overlay.CoinbaseAddress
 	*c = cfg
 	return nil
 }
 
-// LoadCluster loads a deployment, resolving NetworkFile relative to it.
-// Validation follows process selection and explicit CLI overrides.
+// LoadCluster decodes a deployment and resolves GenesisFile paths relative to it.
+// It does not read genesis files or validate the effective configuration. Callers
+// select a process and validate after applying explicit overrides.
 func LoadCluster(file string) (*ClusterConfig, error) {
 	if file == "" {
 		return nil, errors.New("deployment file is required")
@@ -185,8 +174,13 @@ func LoadCluster(file string) (*ClusterConfig, error) {
 	if err := load(file, &cfg); err != nil {
 		return nil, err
 	}
-	if cfg.NetworkFile != "" && !filepath.IsAbs(cfg.NetworkFile) {
-		cfg.NetworkFile = filepath.Join(filepath.Dir(file), cfg.NetworkFile)
+	if path := cfg.Master.GenesisFile; path != "" && !filepath.IsAbs(path) {
+		cfg.Master.GenesisFile = filepath.Join(filepath.Dir(file), path)
+	}
+	for i := range cfg.Slaves {
+		if path := cfg.Slaves[i].GenesisFile; path != "" && !filepath.IsAbs(path) {
+			cfg.Slaves[i].GenesisFile = filepath.Join(filepath.Dir(file), path)
+		}
 	}
 	return &cfg, nil
 }
@@ -223,7 +217,6 @@ func (c *ClusterConfig) SelectNode(role string, chainID *big.Int) (*NodeConfig, 
 	default:
 		return nil, errors.New("set --qkc.role to master or slave")
 	}
-	selected.NetworkFile = c.NetworkFile
 	return selected, nil
 }
 
@@ -236,18 +229,21 @@ func (c *NodeConfig) PrivateEndpoint() string {
 	return net.JoinHostPort(c.PrivateHost, strconv.Itoa(c.PrivatePort))
 }
 
-// Validate checks the complete deployment after overrides. Every network shard
-// has one process, with distinct TCP listeners, IPC endpoints and configured data
-// directories.
-func (c *ClusterConfig) Validate(network *NetworkConfig) error {
-	if err := network.Validate(); err != nil {
-		return err
+// Validate checks the deployment after overrides without loading genesis files.
+// Each deployed shard has a unique chain ID, with distinct TCP listeners, IPC
+// endpoints and configured data directories.
+func (c *ClusterConfig) Validate() error {
+	if c.NetworkID == 0 {
+		return errors.New("NetworkID must be positive; it is not inferred from an EVM chain ID")
 	}
 	if c.Master.Role != RoleMaster || c.Master.ChainID != nil {
 		return errors.New("Master must not specify ChainID")
 	}
-	if err := c.Master.Validate(network); err != nil {
+	if err := c.Master.Validate(c.NetworkID); err != nil {
 		return fmt.Errorf("Master: %w", err)
+	}
+	if len(c.Slaves) == 0 {
+		return errors.New("deployment must define at least one shard")
 	}
 	ids, dirs, ipcEndpoints := make(map[string]bool), make(map[string]bool), make(map[string]bool)
 	tcpEndpoints := make(map[uint64][]*net.TCPAddr)
@@ -260,7 +256,7 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 				return fmt.Errorf("duplicate deployed chain ID %v", cfg.ChainID)
 			}
 			ids[cfg.ChainID.String()] = true
-			if err := cfg.Validate(network); err != nil {
+			if err := cfg.Validate(c.NetworkID); err != nil {
 				return fmt.Errorf("Slaves[%d]: %w", i-1, err)
 			}
 		}
@@ -317,9 +313,6 @@ func (c *ClusterConfig) Validate(network *NetworkConfig) error {
 			ipcEndpoints[path] = true
 		}
 	}
-	if len(ids) != len(network.Shards) {
-		return errors.New("deployment must contain every network shard")
-	}
 	return nil
 }
 
@@ -329,91 +322,6 @@ func canonicalHost(host string) string {
 		return ip.Unmap().String()
 	}
 	return strings.ToLower(host)
-}
-
-// UnmarshalTOML expands shared fork heights into independent native chain
-// configs. Per-shard definitions of these forks are rejected, even if equal.
-func (c *NetworkConfig) UnmarshalTOML(decode func(interface{}) error) error {
-	var input struct {
-		NetworkID  uint64
-		Root       RootConfig
-		ShardForks struct {
-			HomesteadBlock      *big.Int
-			EIP150Block         *big.Int
-			EIP155Block         *big.Int
-			EIP158Block         *big.Int
-			ByzantiumBlock      *big.Int
-			ConstantinopleBlock *big.Int
-			PetersburgBlock     *big.Int
-			IstanbulBlock       *big.Int
-			BerlinBlock         *big.Int
-			LondonBlock         *big.Int
-		}
-		Shards []params.ChainConfig
-	}
-	if err := decode(&input); err != nil {
-		return err
-	}
-	forks := &input.ShardForks
-	for i := range input.Shards {
-		shard := &input.Shards[i]
-		for _, fork := range []struct {
-			name   string
-			block  *big.Int
-			target **big.Int
-		}{
-			{"HomesteadBlock", forks.HomesteadBlock, &shard.HomesteadBlock},
-			{"EIP150Block", forks.EIP150Block, &shard.EIP150Block},
-			{"EIP155Block", forks.EIP155Block, &shard.EIP155Block},
-			{"EIP158Block", forks.EIP158Block, &shard.EIP158Block},
-			{"ByzantiumBlock", forks.ByzantiumBlock, &shard.ByzantiumBlock},
-			{"ConstantinopleBlock", forks.ConstantinopleBlock, &shard.ConstantinopleBlock},
-			{"PetersburgBlock", forks.PetersburgBlock, &shard.PetersburgBlock},
-			{"IstanbulBlock", forks.IstanbulBlock, &shard.IstanbulBlock},
-			{"BerlinBlock", forks.BerlinBlock, &shard.BerlinBlock},
-			{"LondonBlock", forks.LondonBlock, &shard.LondonBlock},
-		} {
-			if *fork.target != nil {
-				return fmt.Errorf("Shards[%d].%s must be configured in ShardForks", i, fork.name)
-			}
-			if fork.block != nil {
-				*fork.target = new(big.Int).Set(fork.block)
-			}
-		}
-	}
-	*c = NetworkConfig{NetworkID: input.NetworkID, Root: input.Root, Shards: input.Shards}
-	return nil
-}
-
-// LoadNetwork loads and validates a network definition. Each shard's topology
-// follows the configured shard order, with the first shard receiving root rewards.
-// Root and shard PoSW configurations are required, including when staking is disabled.
-func LoadNetwork(file string) (*NetworkConfig, error) {
-	var cfg NetworkConfig
-	if file == "" {
-		return nil, errors.New("NetworkFile is required")
-	}
-	if err := load(file, &cfg); err != nil {
-		return nil, err
-	}
-	for i := range cfg.Shards {
-		if err := checkShardChainID(cfg.Shards[i].ChainID); err != nil {
-			return nil, fmt.Errorf("%s: Shards[%d]: %w", file, i, err)
-		}
-	}
-	for _, shard := range cfg.Shards {
-		if shard.QuarkChain == nil {
-			continue
-		}
-		shard.QuarkChain.ChainIDs = make([]*big.Int, len(cfg.Shards))
-		for i := range cfg.Shards {
-			shard.QuarkChain.ChainIDs[i] = new(big.Int).Set(cfg.Shards[i].ChainID)
-		}
-	}
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("%s: %w", file, err)
-	}
-	return &cfg, nil
 }
 
 // checkShardChainID validates the EVM identifier used for execution and routing.
@@ -436,55 +344,11 @@ func load(file string, cfg interface{}) error {
 	return nil
 }
 
-// Validate checks network IDs, shard topology, algorithms, fork order and each chain's PoSW.
-func (c *NetworkConfig) Validate() error {
-	if c.NetworkID == 0 {
+// Validate checks process settings without loading genesis files. Only shard
+// execution settings bind Eth.NetworkId to the deployment's NetworkID.
+func (c *NodeConfig) Validate(networkID uint64) error {
+	if networkID == 0 {
 		return errors.New("NetworkID must be positive; it is not inferred from an EVM chain ID")
-	}
-	if err := c.Root.ConsensusType.Check(); err != nil {
-		return fmt.Errorf("Root: %w", err)
-	}
-	if err := c.Root.PoSW.Check(); err != nil {
-		return fmt.Errorf("Root: %w", err)
-	}
-	if c.Root.PoSW.RewardTaxRate.Sign() != 0 {
-		return errors.New("Root.PoSW.RewardTaxRate must be zero: root chain has no parent")
-	}
-	if len(c.Shards) == 0 {
-		return errors.New("network must define at least one shard")
-	}
-	ids := make(map[string]bool, len(c.Shards))
-	for i, shard := range c.Shards {
-		if shard.QuarkChain == nil {
-			return fmt.Errorf("Shards[%d]: QuarkChain configuration is required", i)
-		}
-		if err := checkShardChainID(shard.ChainID); err != nil {
-			return fmt.Errorf("Shards[%d]: %w", i, err)
-		}
-		if err := shard.QuarkChain.ConsensusType.Check(); err != nil {
-			return fmt.Errorf("chain %v: %w", shard.ChainID, err)
-		}
-		if ids[shard.ChainID.String()] {
-			return fmt.Errorf("duplicate ChainID %v", shard.ChainID)
-		}
-		ids[shard.ChainID.String()] = true
-		if err := shard.CheckConfigForkOrder(); err != nil {
-			return fmt.Errorf("chain %v: %w", shard.ChainID, err)
-		}
-	}
-	for _, shard := range c.Shards {
-		if !slices.EqualFunc(shard.QuarkChain.ChainIDs, c.Shards, func(id *big.Int, member params.ChainConfig) bool { return id.Cmp(member.ChainID) == 0 }) {
-			return fmt.Errorf("chain %v: routing chain IDs must match shard order", shard.ChainID)
-		}
-	}
-	return nil
-}
-
-// Validate checks effective process settings. Master uses the network definition
-// directly; only shard execution settings bind Eth.NetworkId to NetworkID.
-func (c *NodeConfig) Validate(network *NetworkConfig) error {
-	if err := network.Validate(); err != nil {
-		return err
 	}
 	switch c.Role {
 	case RoleMaster:
@@ -497,13 +361,6 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 		}
 		if err := checkShardChainID(c.ChainID); err != nil {
 			return err
-		}
-		found := false
-		for _, shard := range network.Shards {
-			found = found || shard.ChainID.Cmp(c.ChainID) == 0
-		}
-		if !found {
-			return fmt.Errorf("chain ID %v is not in the network", c.ChainID)
 		}
 		ip, err := netip.ParseAddr(c.PrivateHost)
 		if c.PrivateHost == "" || strings.ContainsAny(c.PrivateHost, " \t\r\n/[]") ||
@@ -522,14 +379,11 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 		return fmt.Errorf("invalid process role %q", c.Role)
 	}
 	if c.Eth != nil {
-		if c.Eth.NetworkId != 0 && c.Eth.NetworkId != network.NetworkID {
-			return fmt.Errorf("Eth.NetworkId %d conflicts with NetworkID %d", c.Eth.NetworkId, network.NetworkID)
-		}
-		if c.Eth.Genesis != nil {
-			return errors.New("Eth.Genesis is a network definition and cannot be set locally")
+		if c.Eth.NetworkId != 0 && c.Eth.NetworkId != networkID {
+			return fmt.Errorf("Eth.NetworkId %d conflicts with NetworkID %d", c.Eth.NetworkId, networkID)
 		}
 		if c.Eth.OverrideOsaka != nil || c.Eth.OverrideAmsterdam != nil || c.Eth.OverrideBPO1 != nil || c.Eth.OverrideBPO2 != nil || c.Eth.OverrideUBT != nil {
-			return errors.New("local fork overrides are not allowed; configure forks in the network file")
+			return errors.New("local fork overrides are not allowed; configure forks in Genesis")
 		}
 		if c.Eth.StateScheme != "" && c.Eth.StateScheme != "hash" && c.Eth.StateScheme != "path" {
 			return fmt.Errorf("invalid Eth.StateScheme %q", c.Eth.StateScheme)
@@ -542,7 +396,7 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 				return fmt.Errorf("%s must not be negative", name)
 			}
 		}
-		c.Eth.NetworkId = network.NetworkID
+		c.Eth.NetworkId = networkID
 	}
 	if c.Node.DBEngine != "" && c.Node.DBEngine != "pebble" && c.Node.DBEngine != "leveldb" {
 		return fmt.Errorf("invalid Node.DBEngine %q", c.Node.DBEngine)

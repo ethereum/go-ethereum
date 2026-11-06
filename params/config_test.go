@@ -127,7 +127,6 @@ func TestQuarkChainConfigEqual(t *testing.T) {
 		want   bool
 	}{
 		{"unchanged", func(c *QuarkChainConfig) {}, true},
-		{"consensusType", func(c *QuarkChainConfig) { c.ConsensusType = ConsensusSimulate }, false},
 		{"chainIds order", func(c *QuarkChainConfig) { c.ChainIDs[0], c.ChainIDs[1] = c.ChainIDs[1], c.ChainIDs[0] }, false},
 		{"chainIds", func(c *QuarkChainConfig) { c.ChainIDs[1] = big.NewInt(10003) }, false},
 		{"posw", func(c *QuarkChainConfig) { c.PoSW.CoinbaseAmount.SetInt64(100) }, false},
@@ -145,29 +144,6 @@ func TestQuarkChainConfigEqual(t *testing.T) {
 	var missing *QuarkChainConfig
 	if !missing.Equal(nil) || missing.Equal(&QuarkChainConfig{}) || (&QuarkChainConfig{}).Equal(missing) {
 		t.Fatal("Equal did not distinguish nil and non-nil configurations")
-	}
-}
-
-func TestQuarkChainConsensusType(t *testing.T) {
-	for _, test := range []struct {
-		name    string
-		value   ConsensusType
-		wantErr bool
-	}{
-		{"legacy empty", "", false},
-		{"ethash", ConsensusEthash, false},
-		{"simulate", ConsensusSimulate, false},
-		{"none", "NONE", true},
-		{"unknown", "unknown", true},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			config := NewTestQuarkChainConfig(10001)
-			config.QuarkChain.ConsensusType = test.value
-			err := config.CheckConfigForkOrder()
-			if (err != nil) != test.wantErr {
-				t.Fatalf("CheckConfigForkOrder() error = %v, want error = %v", err, test.wantErr)
-			}
-		})
 	}
 }
 

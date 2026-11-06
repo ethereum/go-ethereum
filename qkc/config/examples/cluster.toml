@@ -1,6 +1,6 @@
 # Single-machine deployment example; adjust endpoints and paths for your setup.
-# NetworkFile is relative to this file. Other paths follow geth: relative to cwd.
-NetworkFile = "network.toml"
+# Runtime paths follow geth: relative to the working directory.
+NetworkID = 2
 
 # Example reward recipient; replace it with your own mining address.
 [Master]

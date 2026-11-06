@@ -31,10 +31,6 @@ var (
 		Name:  "config",
 		Usage: "QKC deployment TOML file",
 	}
-	qkcNetworkFileFlag = &cli.StringFlag{
-		Name:  "qkc.network",
-		Usage: "QKC network TOML file (overrides NetworkFile in the deployment)",
-	}
 	qkcRoleFlag = &cli.StringFlag{
 		Name:  "qkc.role",
 		Usage: "Process role: master or slave",
@@ -46,7 +42,7 @@ var (
 )
 
 var qkcConfigFlags = []cli.Flag{
-	configFileFlag, qkcNetworkFileFlag, qkcRoleFlag, qkcChainFlag, utils.NetworkIdFlag,
+	configFileFlag, qkcRoleFlag, qkcChainFlag, utils.NetworkIdFlag,
 	utils.DataDirFlag, utils.DBEngineFlag, utils.SyncModeFlag, utils.StateSchemeFlag,
 	utils.ListenPortFlag, utils.MaxPeersFlag, utils.NoDiscoverFlag,
 	utils.HTTPEnabledFlag, utils.HTTPListenAddrFlag, utils.HTTPPortFlag, utils.HTTPApiFlag,
@@ -57,24 +53,19 @@ var qkcConfigFlags = []cli.Flag{
 
 var checkQKCConfigCommand = &cli.Command{
 	Name:   "checkconfig",
-	Usage:  "Select and validate a QKC process configuration without starting services",
+	Usage:  "Validate QKC deployment settings without reading genesis files or starting services",
 	Flags:  qkcConfigFlags,
 	Action: checkQKCConfig,
 }
 
-func loadQKCConfig(ctx *cli.Context) (*qkcconfig.NodeConfig, *qkcconfig.NetworkConfig, error) {
+// loadQKCConfig selects process settings and applies CLI overrides without reading genesis files.
+func loadQKCConfig(ctx *cli.Context) (*qkcconfig.NodeConfig, *qkcconfig.ClusterConfig, error) {
 	if ctx.NArg() != 0 {
 		return nil, nil, fmt.Errorf("checkconfig takes no positional arguments")
 	}
 	cluster, err := qkcconfig.LoadCluster(ctx.String(configFileFlag.Name))
 	if err != nil {
 		return nil, nil, err
-	}
-	if ctx.IsSet(qkcNetworkFileFlag.Name) {
-		cluster.NetworkFile = ctx.String(qkcNetworkFileFlag.Name)
-	}
-	if cluster.NetworkFile == "" {
-		return nil, nil, fmt.Errorf("set NetworkFile in --config or supply --qkc.network")
 	}
 	var chainID *big.Int
 	if ctx.IsSet(qkcChainFlag.Name) {
@@ -155,17 +146,10 @@ func loadQKCConfig(ctx *cli.Context) (*qkcconfig.NodeConfig, *qkcconfig.NetworkC
 	if ctx.IsSet(utils.RPCGlobalTxFeeCapFlag.Name) {
 		cfg.Eth.RPCTxFeeCap = ctx.Float64(utils.RPCGlobalTxFeeCapFlag.Name)
 	}
-	network, err := qkcconfig.LoadNetwork(cfg.NetworkFile)
-	if err != nil {
-		return nil, nil, err
+	if ctx.IsSet(utils.NetworkIdFlag.Name) && ctx.Uint64(utils.NetworkIdFlag.Name) != cluster.NetworkID {
+		return nil, nil, fmt.Errorf("--networkid must match the positive NetworkID %d in the deployment", cluster.NetworkID)
 	}
-	if ctx.IsSet(utils.NetworkIdFlag.Name) && ctx.Uint64(utils.NetworkIdFlag.Name) != network.NetworkID {
-		return nil, nil, fmt.Errorf("--networkid must match the positive NetworkID %d in the network file", network.NetworkID)
-	}
-	if err := cluster.Validate(network); err != nil {
-		return nil, nil, err
-	}
-	return cfg, network, nil
+	return cfg, cluster, nil
 }
 
 // Explicit false disables an endpoint configured in TOML; an address alone
@@ -186,14 +170,17 @@ func applyQKCEndpoint(ctx *cli.Context, enabled, address string, host *string, d
 }
 
 func checkQKCConfig(ctx *cli.Context) error {
-	cfg, network, err := loadQKCConfig(ctx)
+	cfg, cluster, err := loadQKCConfig(ctx)
 	if err != nil {
+		return err
+	}
+	if err := cluster.Validate(); err != nil {
 		return err
 	}
 	identity := cfg.Role
 	if cfg.ChainID != nil {
 		identity = fmt.Sprintf("%s, chain ID %v", cfg.Role, cfg.ChainID)
 	}
-	_, err = fmt.Fprintf(ctx.App.Writer, "QuarkChain configuration is valid (%s, network ID %d)\n", identity, network.NetworkID)
+	_, err = fmt.Fprintf(ctx.App.Writer, "QuarkChain deployment configuration is valid (%s, network ID %d)\n", identity, cluster.NetworkID)
 	return err
 }

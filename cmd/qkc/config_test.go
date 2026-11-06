@@ -33,7 +33,19 @@ import (
 )
 
 const qkcExampleCluster = "../../qkc/config/examples/cluster.toml"
-const qkcExampleNetwork = "../../qkc/config/examples/network.toml"
+
+func copyQKCExample(t *testing.T) string {
+	t.Helper()
+	content, err := os.ReadFile(qkcExampleCluster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(t.TempDir(), "cluster.toml")
+	if err := os.WriteFile(file, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
 
 func readQKCFlags(args ...string) (*qkcconfig.NodeConfig, error) {
 	savedDataDirFlag := *utils.DataDirFlag
@@ -42,8 +54,12 @@ func readQKCFlags(args ...string) (*qkcconfig.NodeConfig, error) {
 	app := &cli.App{
 		Flags: checkQKCConfigCommand.Flags,
 		Action: func(ctx *cli.Context) (err error) {
-			cfg, _, err = loadQKCConfig(ctx)
-			return err
+			var cluster *qkcconfig.ClusterConfig
+			cfg, cluster, err = loadQKCConfig(ctx)
+			if err != nil {
+				return err
+			}
+			return cluster.Validate()
 		},
 	}
 	err := app.Run(append([]string{"qkc"}, args...))
@@ -67,8 +83,8 @@ func TestQKCConfigPrecedence(t *testing.T) {
 	if cfg.Eth.TrieCleanCache != ethconfig.Defaults.TrieCleanCache || cfg.Eth.SyncMode != ethconfig.Defaults.SyncMode || cfg.Eth.RPCGasCap != ethconfig.Defaults.RPCGasCap || cfg.Eth.NetworkId != 2 {
 		t.Fatal("defaults or network ID resolved incorrectly")
 	}
-	if cfg.NetworkFile != filepath.Clean(qkcExampleNetwork) {
-		t.Fatalf("network file resolved incorrectly: %s", cfg.NetworkFile)
+	if cfg.Eth.Genesis != nil {
+		t.Fatal("deployment configuration loaded a genesis")
 	}
 
 	cfg, err = readQKCFlags("--config", qkcExampleCluster, "--qkc.role", "slave", "--qkc.chain", "100001",
@@ -101,24 +117,15 @@ func TestQKCConfigPrecedence(t *testing.T) {
 
 func TestQKCLargeChainIDSelection(t *testing.T) {
 	const chainID = "18446744073709551617" // Greater than uint64.
-	dir := t.TempDir()
-	for _, fixture := range []struct {
-		path string
-		name string
-	}{
-		{qkcExampleCluster, "cluster.toml"},
-		{qkcExampleNetwork, "network.toml"},
-	} {
-		content, err := os.ReadFile(fixture.path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		content = bytes.Replace(content, []byte(`ChainID = "100001"`), []byte(`ChainID = "`+chainID+`"`), 1)
-		if err := os.WriteFile(filepath.Join(dir, fixture.name), content, 0600); err != nil {
-			t.Fatal(err)
-		}
+	clusterFile := copyQKCExample(t)
+	content, err := os.ReadFile(clusterFile)
+	if err != nil {
+		t.Fatal(err)
 	}
-	clusterFile := filepath.Join(dir, "cluster.toml")
+	content = bytes.Replace(content, []byte(`ChainID = "100001"`), []byte(`ChainID = "`+chainID+`"`), 1)
+	if err := os.WriteFile(clusterFile, content, 0600); err != nil {
+		t.Fatal(err)
+	}
 	selected, err := readQKCFlags("--config", clusterFile, "--qkc.role", "slave", "--qkc.chain", chainID)
 	if err != nil {
 		t.Fatal(err)
@@ -135,58 +142,90 @@ func TestQKCLargeChainIDSelection(t *testing.T) {
 	}
 }
 
-func TestQKCNetworkOverride(t *testing.T) {
-	// A CLI network path is relative to cwd and overrides the deployment path.
-	input, err := os.ReadFile(qkcExampleCluster)
+func TestQKCNetworkIDOverride(t *testing.T) {
+	file := copyQKCExample(t)
+	input, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
-	content := strings.Replace(string(input), "NetworkFile = \"network.toml\"", "NetworkFile = \"missing.toml\"", 1)
-	content = strings.Replace(content, "[Slaves.Eth]", "[Slaves.Eth]\nNetworkId = 99", 1)
-	file := filepath.Join(t.TempDir(), "cluster.toml")
+	content := strings.Replace(string(input), "[Slaves.Eth]", "[Slaves.Eth]\nNetworkId = 99", 1)
 	if err := os.WriteFile(file, []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := readQKCFlags("--config", file, "--qkc.role", "slave", "--qkc.chain", "100001", "--qkc.network", qkcExampleNetwork, "--networkid", "2")
+	cfg, err := readQKCFlags("--config", file, "--qkc.role", "slave", "--qkc.chain", "100001", "--networkid", "2")
 	if err != nil || cfg.Eth.NetworkId != 2 {
 		t.Fatalf("CLI did not override local network settings: %v", err)
 	}
 	// An override must not repair the conflicting NetworkId of another process.
-	_, err = readQKCFlags("--config", file, "--qkc.role", "slave", "--qkc.chain", "100002", "--qkc.network", qkcExampleNetwork, "--networkid", "2")
+	_, err = readQKCFlags("--config", file, "--qkc.role", "slave", "--qkc.chain", "100002", "--networkid", "2")
 	if err == nil || !strings.Contains(err.Error(), "Slaves[0]: Eth.NetworkId 99 conflicts") {
 		t.Fatalf("CLI overrides affected an unselected process: %v", err)
 	}
 }
 
-func TestQKCLargeNetworkID(t *testing.T) {
-	input, err := os.ReadFile(qkcExampleNetwork)
+func TestQKCUint64NetworkID(t *testing.T) {
+	for _, test := range []struct {
+		input string
+		want  uint64
+	}{
+		{"4294967296", 1 << 32},
+		{"18446744073709551615", ^uint64(0)},
+	} {
+		t.Run(test.input, func(t *testing.T) {
+			file := copyQKCExample(t)
+			input, err := os.ReadFile(file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			input = bytes.Replace(input, []byte("NetworkID = 2"), []byte("NetworkID = "+test.input), 1)
+			if err := os.WriteFile(file, input, 0600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := readQKCFlags("--config", file, "--qkc.role", "slave", "--qkc.chain", "100001", "--networkid", test.input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Eth.NetworkId != test.want {
+				t.Fatalf("network ID = %d, want %d", cfg.Eth.NetworkId, test.want)
+			}
+		})
+	}
+}
+
+func TestCheckQKCConfigDoesNotReadGenesis(t *testing.T) {
+	savedDataDirFlag := *utils.DataDirFlag
+	t.Cleanup(func() { *utils.DataDirFlag = savedDataDirFlag })
+	file := copyQKCExample(t)
+	content, err := os.ReadFile(file)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"4294967296", "9223372036854775808", "18446744073709551615"} {
-		t.Run(id, func(t *testing.T) {
-			file := filepath.Join(t.TempDir(), "network.toml")
-			content := strings.Replace(string(input), "NetworkID = 2", "NetworkID = "+id, 1)
-			if err := os.WriteFile(file, []byte(content), 0600); err != nil {
-				t.Fatal(err)
-			}
-			args := []string{"--config", qkcExampleCluster, "--qkc.network", file, "--qkc.role", "slave", "--qkc.chain", "100001"}
-			for _, override := range [][]string{nil, {"--networkid", id}} {
-				cfg, err := readQKCFlags(append(append([]string{}, args...), override...)...)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if got := new(big.Int).SetUint64(cfg.Eth.NetworkId).String(); got != id {
-					t.Fatalf("effective network ID = %s, want %s", got, id)
-				}
-			}
-			if _, err := readQKCFlags(append(args, "--networkid", "2")...); err == nil || !strings.Contains(err.Error(), "must match the positive NetworkID") {
-				t.Fatalf("mismatched network ID accepted: %v", err)
-			}
-			if _, err := readQKCFlags("--config", qkcExampleCluster, "--qkc.network", file, "--qkc.role", "master", "--networkid", id); err != nil {
-				t.Fatalf("master rejected uint64 network ID: %v", err)
-			}
-		})
+	content = bytes.Replace(content, []byte("[Master]"), []byte("[Master]\nGenesisFile = \"missing-root.json\""), 1)
+	content = bytes.ReplaceAll(content, []byte("[[Slaves]]"), []byte("[[Slaves]]\nGenesisFile = \"missing-shard.json\""))
+	if err := os.WriteFile(file, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		args    []string
+		genesis string
+	}{
+		{[]string{"--qkc.role", "master"}, "missing-root.json"},
+		{[]string{"--qkc.role", "slave", "--qkc.chain", "100001"}, "missing-shard.json"},
+	} {
+		args := append([]string{"--config", file}, test.args...)
+		cfg, err := readQKCFlags(args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := filepath.Join(filepath.Dir(file), test.genesis); cfg.GenesisFile != want {
+			t.Fatalf("genesis path = %s, want %s", cfg.GenesisFile, want)
+		}
+		app := newApp()
+		var out bytes.Buffer
+		app.Writer = &out
+		if err := app.Run(append([]string{"qkc", "checkconfig"}, args...)); err != nil {
+			t.Fatalf("deployment check read a missing genesis: %v", err)
+		}
 	}
 }
 
@@ -223,6 +262,7 @@ func TestQKCConfigInvalidFlags(t *testing.T) {
 	}{
 		{[]string{"--networkid", "100001"}, "must match the positive NetworkID"},
 		{[]string{"--networkid", "0"}, "must match the positive NetworkID"},
+		{[]string{"--qkc.network", "network.toml"}, "flag provided but not defined: -qkc.network"},
 		{[]string{"--mainnet"}, "flag provided but not defined: -mainnet"},
 		{[]string{"--cache", "100"}, "flag provided but not defined: -cache"},
 		{[]string{"--ipcdisable", "--ipcpath", "qkc.ipc"}, "mutually exclusive"},
@@ -309,7 +349,7 @@ func TestCheckQKCConfig(t *testing.T) {
 		if _, err := os.Stat(datadir); !os.IsNotExist(err) {
 			t.Fatalf("configuration check created the data directory: %v", err)
 		}
-		if want := "QuarkChain configuration is valid (" + test.want + ", network ID 2)\n"; out.String() != want {
+		if want := "QuarkChain deployment configuration is valid (" + test.want + ", network ID 2)\n"; out.String() != want {
 			t.Fatalf("unexpected validation output: %s", &out)
 		}
 	}

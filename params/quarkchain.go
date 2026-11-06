@@ -43,34 +43,14 @@ const (
 	XShardGasLimitDivisor uint64 = 2
 )
 
-// ConsensusType identifies the PoW algorithm selected for a QKC root or shard chain.
-type ConsensusType string
-
-const (
-	ConsensusEthash   ConsensusType = "POW_ETHASH"
-	ConsensusSimulate ConsensusType = "POW_SIMULATE"
-)
-
-// Check rejects unknown algorithms and NONE, since every configured chain is active.
-func (c ConsensusType) Check() error {
-	switch c {
-	case ConsensusEthash, ConsensusSimulate:
-		return nil
-	default:
-		return fmt.Errorf("invalid ConsensusType %q: want POW_ETHASH, POW_SIMULATE", c)
-	}
-}
-
 // QuarkChainConfig is the configuration of a QuarkChain shard chain. Its
 // presence in the chain config enables the QuarkChain specific features.
 type QuarkChainConfig struct {
 	// ChainIDs lists the EVM chain IDs of all shards, this one included.
 	// The first chain receives root rewards and hosts the root staking contract.
-	// Network loading derives this list; it cannot be configured separately in TOML.
-	ChainIDs []*big.Int `json:"chainIds" toml:"-"`
+	ChainIDs []*big.Int `json:"chainIds"`
 
-	ConsensusType ConsensusType `json:"consensusType,omitempty"`
-	PoSW          *PoSWConfig   `json:"posw"` // Required consensus configuration for this shard.
+	PoSW *PoSWConfig `json:"posw"` // Required consensus configuration for this shard.
 	// MaxBlocksPerRootBlock caps the number of blocks of this shard a root
 	// block can confirm, as max_blocks_per_shard_in_one_root_block in
 	// pyquarkchain. Zero means no cap.
@@ -83,7 +63,6 @@ func (c *QuarkChainConfig) Equal(other *QuarkChainConfig) bool {
 		return c == other
 	}
 	return slices.EqualFunc(c.ChainIDs, other.ChainIDs, configBlockEqual) &&
-		c.ConsensusType == other.ConsensusType &&
 		c.PoSW.Equal(other.PoSW) &&
 		c.MaxBlocksPerRootBlock == other.MaxBlocksPerRootBlock
 }
@@ -134,11 +113,6 @@ func (c *ChainConfig) CheckQuarkChain() error {
 	}
 	if !seen[c.ChainID.String()] {
 		return fmt.Errorf("chain IDs must include local chain %v", c.ChainID)
-	}
-	if q.ConsensusType != "" {
-		if err := q.ConsensusType.Check(); err != nil {
-			return err
-		}
 	}
 	return q.PoSW.Check()
 }

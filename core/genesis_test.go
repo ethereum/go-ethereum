@@ -54,7 +54,6 @@ func TestSetupGenesisQuarkChainConfig(t *testing.T) {
 			}{
 				{"unchanged", func(c *params.ChainConfig) {}, false, false},
 				{"coinbaseAmount", func(c *params.ChainConfig) { c.QuarkChain.PoSW.CoinbaseAmount.SetInt64(200) }, false, true},
-				{"consensusType", func(c *params.ChainConfig) { c.QuarkChain.ConsensusType = params.ConsensusSimulate }, false, true},
 				{"chainId", func(c *params.ChainConfig) { c.ChainID = big.NewInt(10002) }, false, true},
 				{"chainIds", func(c *params.ChainConfig) {
 					c.QuarkChain.ChainIDs = []*big.Int{big.NewInt(10001), big.NewInt(10002), big.NewInt(10003)}
@@ -331,21 +330,6 @@ func TestGenesisCommit(t *testing.T) {
 	// This value should have been set as default in the ToBlock method.
 	if genesisBlock.Difficulty().Cmp(params.GenesisDifficulty) != 0 {
 		t.Errorf("assumption wrong: want: %d, got: %v", params.GenesisDifficulty, genesisBlock.Difficulty())
-	}
-}
-
-func TestGenesisCommitRejectsInvalidQuarkChainConsensusType(t *testing.T) {
-	db := rawdb.NewMemoryDatabase()
-	tdb := triedb.NewDatabase(db, triedb.HashDefaults)
-	defer tdb.Close()
-	config := genesisConfig(10001)
-	config.QuarkChain.ConsensusType = "NONE"
-	genesis := &Genesis{Config: config}
-	if block, err := genesis.Commit(db, tdb, nil); block != nil || err == nil || !strings.Contains(err.Error(), "invalid ConsensusType") {
-		t.Fatalf("invalid consensus type accepted: block=%v err=%v", block, err)
-	}
-	if hash := rawdb.ReadCanonicalHash(db, 0); hash != (common.Hash{}) {
-		t.Fatalf("invalid genesis was committed at %s", hash)
 	}
 }
 
