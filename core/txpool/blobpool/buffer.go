@@ -177,7 +177,7 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 			continue
 		}
 		if entry, ok := b.cells[hash]; ok {
-			b.storeCompleted(hash, tx, entry)
+			b.storeCompleted(hash, &txEntry{tx: tx, peer: peer, added: time.Now(), size: tx.Size()}, entry)
 			continue
 		}
 		// Refuse the transaction if the peer has exhausted its allowance.
@@ -216,7 +216,7 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 
 	// Check if this delivery completes the entry
 	if txe, ok := b.txs[hash]; ok {
-		b.storeCompleted(hash, txe.tx, entry)
+		b.storeCompleted(hash, txe, entry)
 		return
 	}
 
@@ -234,8 +234,8 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 // cell set when the collected cells suffice to reconstruct it (provider
 // extension), and schedules the transaction for addition into the pool. The
 // actual addition happens in Flush().
-func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cells *cellEntry) {
-	sidecar := tx.BlobTxSidecar()
+func (b *BlobBuffer) storeCompleted(hash common.Hash, txe *txEntry, cells *cellEntry) {
+	sidecar := txe.tx.BlobTxSidecar()
 
 	// Per-peer cell verification
 	if badPeers := b.verifyCells(cells, sidecar); len(badPeers) > 0 {
@@ -244,7 +244,7 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 		b.removeTx(hash)
 		return
 	}
-	blobCount := len(tx.BlobHashes())
+	blobCount := len(txe.tx.BlobHashes())
 
 	sorted, custody, err := sortCells(cells, blobCount)
 	if err != nil {
@@ -277,6 +277,7 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 			blobBufferExtendFailCounter.Inc(1)
 			b.removeCells(hash)
 			b.removeTx(hash)
+			b.cb.DropPeer(txe.peer)
 			return
 		}
 		sorted, custody = extended, types.CustodyBitmapAll
@@ -291,7 +292,7 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 		Custody:     custody,
 	}
 	pooledTx := &BlobTxForPool{
-		Tx:          tx.WithoutBlobTxSidecar(),
+		Tx:          txe.tx.WithoutBlobTxSidecar(),
 		CellSidecar: &cellSidecar,
 	}
 
