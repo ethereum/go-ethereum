@@ -214,6 +214,10 @@ type Block struct {
 	hash atomic.Pointer[common.Hash]
 	size atomic.Uint64
 
+	// roots derived from the body, set by NewBlockFromBody
+	txHash          *common.Hash
+	withdrawalsHash *common.Hash
+
 	// These fields are used by package eth to track
 	// inter-peer block relay.
 	ReceivedAt   time.Time
@@ -450,10 +454,28 @@ func (b *Block) Size() uint64 {
 	if size := b.size.Load(); size > 0 {
 		return size
 	}
-	c := writeCounter(0)
-	rlp.Encode(&c, b)
-	b.size.Store(uint64(c))
-	return uint64(c)
+	size := b.encodedSize()
+	b.size.Store(size)
+	return size
+}
+
+// encodedSize counts the block's encoding using the sizes the transactions
+// already know, instead of encoding them again.
+func (b *Block) encodedSize() uint64 {
+	var txs uint64
+	for _, tx := range b.transactions {
+		if tx.Type() == LegacyTxType {
+			txs += tx.Size()
+		} else {
+			// typed transactions are wrapped in a byte string, whose header
+			// has the same length as a list header
+			txs += rlp.ListSize(tx.Size())
+		}
+	}
+	// Encode the rest with an empty transaction list, then swap in the real one
+	enc, _ := rlp.EncodeToBytes(&extblock{Header: b.header, Uncles: b.uncles, Withdrawals: b.withdrawals})
+	_, content, _, _ := rlp.Split(enc)
+	return rlp.ListSize(uint64(len(content)) - 1 + rlp.ListSize(txs))
 }
 
 // SanityCheck can be used to prevent that unbounded fields are
@@ -498,15 +520,36 @@ func NewBlockWithHeader(header *Header) *Block {
 	return &Block{header: CopyHeader(header)}
 }
 
+// NewBlockFromBody creates a block from the given header and a deep copy of the
+// body, and sets the header's transaction and withdrawal roots from the body.
+// The block remembers the roots, so checking the body against the header later
+// does not hash it again.
+func NewBlockFromBody(header *Header, body Body, hasher ListHasher) *Block {
+	b := NewBlockWithHeader(header).WithBody(body)
+
+	txHash := DeriveSha(b.transactions, hasher)
+	b.header.TxHash, b.txHash = txHash, &txHash
+
+	b.header.WithdrawalsHash = nil
+	if b.withdrawals != nil {
+		withdrawalsHash := DeriveSha(b.withdrawals, hasher)
+		b.header.WithdrawalsHash = &withdrawalsHash
+		b.withdrawalsHash = &withdrawalsHash
+	}
+	return b
+}
+
 // WithSeal returns a new block with the data from b but the header replaced with
 // the sealed one.
 func (b *Block) WithSeal(header *Header) *Block {
 	return &Block{
-		header:       CopyHeader(header),
-		transactions: b.transactions,
-		uncles:       b.uncles,
-		withdrawals:  b.withdrawals,
-		accessList:   b.accessList,
+		header:          CopyHeader(header),
+		transactions:    b.transactions,
+		uncles:          b.uncles,
+		withdrawals:     b.withdrawals,
+		accessList:      b.accessList,
+		txHash:          b.txHash,
+		withdrawalsHash: b.withdrawalsHash,
 	}
 }
 
@@ -536,11 +579,13 @@ func (b *Block) WithAccessList(accessList *bal.BlockAccessList) *Block {
 // if the provided list may be modified by other actors.
 func (b *Block) WithAccessListUnsafe(accessList *bal.BlockAccessList) *Block {
 	return &Block{
-		header:       b.header,
-		transactions: b.transactions,
-		uncles:       b.uncles,
-		withdrawals:  b.withdrawals,
-		accessList:   accessList,
+		header:          b.header,
+		transactions:    b.transactions,
+		uncles:          b.uncles,
+		withdrawals:     b.withdrawals,
+		accessList:      accessList,
+		txHash:          b.txHash,
+		withdrawalsHash: b.withdrawalsHash,
 	}
 }
 
@@ -553,6 +598,24 @@ func (b *Block) Hash() common.Hash {
 	h := b.header.Hash()
 	b.hash.Store(&h)
 	return h
+}
+
+// DeriveTxHash returns the root of the block's transactions. Blocks made by
+// NewBlockFromBody already know it, others derive it with hasher.
+func (b *Block) DeriveTxHash(hasher ListHasher) common.Hash {
+	if b.txHash != nil {
+		return *b.txHash
+	}
+	return DeriveSha(b.transactions, hasher)
+}
+
+// DeriveWithdrawalsHash returns the root of the block's withdrawals. Blocks made
+// by NewBlockFromBody already know it, others derive it with hasher.
+func (b *Block) DeriveWithdrawalsHash(hasher ListHasher) common.Hash {
+	if b.withdrawalsHash != nil {
+		return *b.withdrawalsHash
+	}
+	return DeriveSha(b.withdrawals, hasher)
 }
 
 type Blocks []*Block
