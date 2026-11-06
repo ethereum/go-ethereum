@@ -58,7 +58,7 @@ These IDs serve different purposes:
 
 | Field | Purpose | Requirement |
 | --- | --- | --- |
-| `NetworkID` | Identifies the P2P network. | Positive `uint32`. |
+| `NetworkID` | Identifies the P2P network. | Positive `uint64`, matching geth. |
 | `Shards.ChainID` | Identifies a shard for both EVM replay protection and internal routing. | Unique positive `uint256`. |
 
 A network ID may have the same numeric value as a chain ID. The example uses
@@ -66,7 +66,7 @@ chain IDs `100001` and `100002`.
 
 Chain IDs range from `1` to `2^256 - 1`; zero is reserved for root-chain
 traffic. `Shards.ChainID`, `Slaves.ChainID`, and `--qkc.chain` use the same
-value. `NetworkID` is a separate `uint32` value.
+value. `NetworkID` is a separate `uint64` value, matching geth's network ID type.
 
 The shard count is derived from the `[[Shards]]` entries, and chain IDs may have
 gaps. The loader fills each shard's `QuarkChain.ChainIDs` in the same order as

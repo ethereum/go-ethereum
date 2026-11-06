@@ -159,7 +159,7 @@ func loadQKCConfig(ctx *cli.Context) (*qkcconfig.NodeConfig, *qkcconfig.NetworkC
 	if err != nil {
 		return nil, nil, err
 	}
-	if ctx.IsSet(utils.NetworkIdFlag.Name) && ctx.Uint64(utils.NetworkIdFlag.Name) != uint64(network.NetworkID) {
+	if ctx.IsSet(utils.NetworkIdFlag.Name) && ctx.Uint64(utils.NetworkIdFlag.Name) != network.NetworkID {
 		return nil, nil, fmt.Errorf("--networkid must match the positive NetworkID %d in the network file", network.NetworkID)
 	}
 	if err := cluster.Validate(network); err != nil {

@@ -45,7 +45,7 @@ import (
 // P2P network, independently of the EVM ChainID in each shard's chain config.
 // TOML decoding expands ShardForks into each shard's native chain config.
 type NetworkConfig struct {
-	NetworkID uint32
+	NetworkID uint64
 	Root      RootConfig
 	Shards    []params.ChainConfig
 }
@@ -335,7 +335,7 @@ func canonicalHost(host string) string {
 // configs. Per-shard definitions of these forks are rejected, even if equal.
 func (c *NetworkConfig) UnmarshalTOML(decode func(interface{}) error) error {
 	var input struct {
-		NetworkID  uint32
+		NetworkID  uint64
 		Root       RootConfig
 		ShardForks struct {
 			HomesteadBlock      *big.Int
@@ -522,7 +522,7 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 		return fmt.Errorf("invalid process role %q", c.Role)
 	}
 	if c.Eth != nil {
-		if c.Eth.NetworkId != 0 && c.Eth.NetworkId != uint64(network.NetworkID) {
+		if c.Eth.NetworkId != 0 && c.Eth.NetworkId != network.NetworkID {
 			return fmt.Errorf("Eth.NetworkId %d conflicts with NetworkID %d", c.Eth.NetworkId, network.NetworkID)
 		}
 		if c.Eth.Genesis != nil {
@@ -542,7 +542,7 @@ func (c *NodeConfig) Validate(network *NetworkConfig) error {
 				return fmt.Errorf("%s must not be negative", name)
 			}
 		}
-		c.Eth.NetworkId = uint64(network.NetworkID)
+		c.Eth.NetworkId = network.NetworkID
 	}
 	if c.Node.DBEngine != "" && c.Node.DBEngine != "pebble" && c.Node.DBEngine != "leveldb" {
 		return fmt.Errorf("invalid Node.DBEngine %q", c.Node.DBEngine)

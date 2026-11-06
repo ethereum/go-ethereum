@@ -158,6 +158,38 @@ func TestQKCNetworkOverride(t *testing.T) {
 	}
 }
 
+func TestQKCLargeNetworkID(t *testing.T) {
+	input, err := os.ReadFile(qkcExampleNetwork)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"4294967296", "9223372036854775808", "18446744073709551615"} {
+		t.Run(id, func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), "network.toml")
+			content := strings.Replace(string(input), "NetworkID = 2", "NetworkID = "+id, 1)
+			if err := os.WriteFile(file, []byte(content), 0600); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"--config", qkcExampleCluster, "--qkc.network", file, "--qkc.role", "slave", "--qkc.chain", "100001"}
+			for _, override := range [][]string{nil, {"--networkid", id}} {
+				cfg, err := readQKCFlags(append(append([]string{}, args...), override...)...)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := new(big.Int).SetUint64(cfg.Eth.NetworkId).String(); got != id {
+					t.Fatalf("effective network ID = %s, want %s", got, id)
+				}
+			}
+			if _, err := readQKCFlags(append(args, "--networkid", "2")...); err == nil || !strings.Contains(err.Error(), "must match the positive NetworkID") {
+				t.Fatalf("mismatched network ID accepted: %v", err)
+			}
+			if _, err := readQKCFlags("--config", qkcExampleCluster, "--qkc.network", file, "--qkc.role", "master", "--networkid", id); err != nil {
+				t.Fatalf("master rejected uint64 network ID: %v", err)
+			}
+		})
+	}
+}
+
 func TestQKCEndpointOverrides(t *testing.T) {
 	for _, test := range []struct {
 		args []string

@@ -86,6 +86,40 @@ func TestNetworkExample(t *testing.T) {
 	}
 }
 
+func TestNetworkIDUint64(t *testing.T) {
+	input, err := os.ReadFile("examples/network.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []uint64{0, 1 << 32, 1 << 63, math.MaxUint64} {
+		t.Run(fmt.Sprint(id), func(t *testing.T) {
+			content := strings.Replace(string(input), "NetworkID = 2", fmt.Sprintf("NetworkID = %d", id), 1)
+			network, err := LoadNetwork(writeConfig(t, []byte(content)))
+			if id == 0 {
+				if err == nil || !strings.Contains(err.Error(), "NetworkID must be positive") {
+					t.Fatalf("zero network ID accepted: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if network.NetworkID != id {
+				t.Fatalf("decoded NetworkID = %d, want %d", network.NetworkID, id)
+			}
+			cluster := exampleCluster(t)
+			if err := cluster.Validate(network); err != nil {
+				t.Fatal(err)
+			}
+			for _, slave := range cluster.Slaves {
+				if slave.Eth.NetworkId != id {
+					t.Fatalf("chain %v: Eth.NetworkId = %d, want %d", slave.ChainID, slave.Eth.NetworkId, id)
+				}
+			}
+		})
+	}
+}
+
 func TestNetworkValidation(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -450,7 +484,7 @@ func TestInvalidTOML(t *testing.T) {
 		input   string
 	}{
 		{"wrong case", true, "networkID = 2"},
-		{"network id overflow", true, "NetworkID = 4294967296"},
+		{"network id overflow", true, "NetworkID = 18446744073709551616"},
 		{"negative network id", true, "NetworkID = -1"},
 		{"duplicate key", true, "NetworkID = 2\nNetworkID = 3"},
 		{"shared fork typo", true, "[ShardForks]\nHomesteadblock = \"0\""},
@@ -551,7 +585,7 @@ func TestClusterExample(t *testing.T) {
 		if master.ShardEndpoints[entry.ChainID.String()] != fmt.Sprintf("127.0.0.1:%d", 38000+i) {
 			t.Fatal("master endpoints were not derived from deployment entries")
 		}
-		if entry.Eth.NetworkId != uint64(network.NetworkID) || entry.Node.HTTPPort != 18545+i {
+		if entry.Eth.NetworkId != network.NetworkID || entry.Node.HTTPPort != 18545+i {
 			t.Fatal("per-shard settings were not preserved")
 		}
 		if entry.Eth.SyncMode != ethconfig.Defaults.SyncMode || entry.Eth.RPCGasCap != ethconfig.Defaults.RPCGasCap {
