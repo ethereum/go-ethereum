@@ -354,6 +354,11 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		}
 	}
 	api.eth.SetSynced()
+	if api.eth.Downloader().ConfigSyncMode() == ethconfig.SnapSync {
+		if api.eth.Downloader().DisableSnap() {
+			log.Info("Switched from snap-sync to full-sync after canonical head update", "head", block.NumberU64())
+		}
+	}
 
 	// If the beacon client also advertised a finalized block, mark the local
 	// chain final and completely in PoS mode.
@@ -993,9 +998,10 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	// into the database directly will conflict with the assumptions of snap sync
 	// that it has an empty db that it can fill itself.
 	if api.eth.Downloader().ConfigSyncMode() == ethconfig.SnapSync {
-		// If the client is started at genesis of a test network with snap sync
-		// enabled, just try to import the block since there is nothing to sync.
-		if block.NumberU64() != 1 {
+		// If the parent state is already available locally (e.g. at genesis of a new
+		// chain or testnet where there is nothing to snap-sync), permit direct import.
+		// Otherwise, delay payload import until snap sync completes.
+		if !api.eth.BlockChain().HasBlockAndState(block.ParentHash(), block.NumberU64()-1) {
 			return api.delayPayloadImport(block), nil
 		}
 	}
