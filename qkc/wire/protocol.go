@@ -61,10 +61,10 @@ func NewClusterMessage(op ClusterOp) (SSZMessage, error) {
 		return &PingRequest{}, nil
 	case ClusterOpPong:
 		return &PongResponse{}, nil
-	case ClusterOpConnectToChainsRequest:
-		return &ConnectToChainsRequest{}, nil
-	case ClusterOpConnectToChainsResponse:
-		return &ConnectToChainsResponse{}, nil
+	case ClusterOpConnectToSlavesRequest:
+		return &ConnectToSlavesRequest{}, nil
+	case ClusterOpConnectToSlavesResponse:
+		return &ConnectToSlavesResponse{}, nil
 	case ClusterOpAddRootBlockRequest:
 		return &AddRootBlockRequest{}, nil
 	case ClusterOpAddRootBlockResponse:

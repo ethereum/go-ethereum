@@ -39,8 +39,8 @@ func TestNewClusterMessageRegistry(t *testing.T) {
 	}{
 		{ClusterOpPing, &PingRequest{}},
 		{ClusterOpPong, &PongResponse{}},
-		{ClusterOpConnectToChainsRequest, &ConnectToChainsRequest{}},
-		{ClusterOpConnectToChainsResponse, &ConnectToChainsResponse{}},
+		{ClusterOpConnectToSlavesRequest, &ConnectToSlavesRequest{}},
+		{ClusterOpConnectToSlavesResponse, &ConnectToSlavesResponse{}},
 		{ClusterOpAddRootBlockRequest, &AddRootBlockRequest{}},
 		{ClusterOpAddRootBlockResponse, &AddRootBlockResponse{}},
 		{ClusterOpAddMinorBlockHeaderRequest, &AddMinorBlockHeaderRequest{}},
@@ -369,8 +369,8 @@ func TestSSZLargeChainIDs(t *testing.T) {
 	for _, msg := range []SSZMessage{
 		&PingRequest{ChainID: id, HasRootTip: true, RootTip: Data{1}},
 		&PongResponse{ChainID: id},
-		&ChainInfo{Host: []byte("localhost"), Port: 38391, ChainID: id},
-		&ConnectToChainsRequest{ChainInfoList: []ChainInfo{{ChainID: id}}},
+		&SlaveInfo{Host: []byte("localhost"), Port: 38391, ChainID: id},
+		&ConnectToSlavesRequest{SlaveInfoList: []SlaveInfo{{ChainID: id}}},
 		&AddXshardTxListRequest{ChainID: id, DepositTxList: []Data{{1}}},
 	} {
 		roundTripSSZ(t, msg)
@@ -394,17 +394,17 @@ func TestChainToChainPingCarriesChainIDWithoutRootTip(t *testing.T) {
 
 		var got PingRequest
 		if err := got.UnmarshalSSZ(encoded); err != nil {
-			t.Fatalf("UnmarshalSSZ for chain ID %d: %v", chainID, err)
+			t.Fatalf("UnmarshalSSZ for chain ID %x: %v", chainID, err)
 		}
 		if got.ChainID != chainID || got.HasRootTip || len(got.RootTip) != 0 {
-			t.Fatalf("decoded ping = %+v, want ChainID=%d and no root tip", got, chainID)
+			t.Fatalf("decoded ping = %+v, want ChainID=%x and no root tip", got, chainID)
 		}
 	}
 }
 
-func TestConnectToChainsSSZRoundTrip(t *testing.T) {
-	req := &ConnectToChainsRequest{
-		ChainInfoList: []ChainInfo{
+func TestConnectToSlavesSSZRoundTrip(t *testing.T) {
+	req := &ConnectToSlavesRequest{
+		SlaveInfoList: []SlaveInfo{
 			{Host: []byte("10.0.0.1"), Port: 38391, ChainID: [UInt256Length]byte{1}},
 			{Host: []byte("10.0.0.2"), Port: 38392, ChainID: [UInt256Length]byte{2}},
 		},
@@ -412,7 +412,7 @@ func TestConnectToChainsSSZRoundTrip(t *testing.T) {
 	roundTripSSZ(t, req)
 
 	// Results mirror the request order; empty bytes mean success.
-	resp := &ConnectToChainsResponse{
+	resp := &ConnectToSlavesResponse{
 		ResultList: [][]byte{
 			nil,                    // success
 			[]byte("dial timeout"), // failure
@@ -421,8 +421,8 @@ func TestConnectToChainsSSZRoundTrip(t *testing.T) {
 	roundTripSSZ(t, resp)
 
 	// Boundary: empty lists.
-	roundTripSSZ(t, &ConnectToChainsRequest{})
-	roundTripSSZ(t, &ConnectToChainsResponse{})
+	roundTripSSZ(t, &ConnectToSlavesRequest{})
+	roundTripSSZ(t, &ConnectToSlavesResponse{})
 }
 
 func TestHelloCommandSSZRoundTrip(t *testing.T) {
@@ -455,9 +455,9 @@ func TestGeneratedCodecsRejectMalformedPayloads(t *testing.T) {
 	}{
 		{"PingRequest", 33, func() SSZMessage { return new(PingRequest) }},
 		{"PongResponse", -1, func() SSZMessage { return new(PongResponse) }},
-		{"ChainInfo", 0, func() SSZMessage { return new(ChainInfo) }},
-		{"ConnectToChainsRequest", 0, func() SSZMessage { return new(ConnectToChainsRequest) }},
-		{"ConnectToChainsResponse", 0, func() SSZMessage { return new(ConnectToChainsResponse) }},
+		{"SlaveInfo", 0, func() SSZMessage { return new(SlaveInfo) }},
+		{"ConnectToSlavesRequest", 0, func() SSZMessage { return new(ConnectToSlavesRequest) }},
+		{"ConnectToSlavesResponse", 0, func() SSZMessage { return new(ConnectToSlavesResponse) }},
 		{"AddRootBlockRequest", 0, func() SSZMessage { return new(AddRootBlockRequest) }},
 		{"AddRootBlockResponse", -1, func() SSZMessage { return new(AddRootBlockResponse) }},
 		{"HelloCommand", 58, func() SSZMessage { return new(HelloCommand) }},
@@ -496,7 +496,7 @@ func TestGeneratedCodecsRejectMalformedPayloads(t *testing.T) {
 }
 
 func TestResultListGoldenEncoding(t *testing.T) {
-	msg := &ConnectToChainsResponse{ResultList: [][]byte{nil, []byte("x")}}
+	msg := &ConnectToSlavesResponse{ResultList: [][]byte{nil, []byte("x")}}
 	got, err := msg.MarshalSSZ()
 	if err != nil {
 		t.Fatalf("MarshalSSZ: %v", err)
