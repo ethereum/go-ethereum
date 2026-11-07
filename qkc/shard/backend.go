@@ -206,9 +206,10 @@ func (s *Shard) BroadcastXShardTxList(ctx context.Context, blockHash common.Hash
 }
 
 // AddShardBlock imports a block, delivers all cross-shard lists, then reports
-// its header to master, matching pyquarkchain's propagation order. This method
-// waits for every destination to acknowledge its list, including empty lists,
-// before reporting the header, because a root may confirm it afterward.
+// its header and after-tax coinbase amount to master, matching pyquarkchain's
+// propagation order. This method waits for every destination to acknowledge its
+// list, including empty lists, before reporting the header, because a root may
+// confirm it afterward.
 //
 // Most errors can be resolved through retries or recovery. The main retry
 // paths are:
@@ -258,11 +259,16 @@ func (s *Shard) AddShardBlock(ctx context.Context, block *types.Block) error {
 	if err := s.chain.InsertShardBlock(block); err != nil {
 		return err
 	}
+	// Resolve local reporting data before sending RPCs, so calculation failures
+	// do not repeat cross-shard delivery on every retry.
+	coinbaseAmount, err := s.chain.chain.GetCoinbaseAmount(block.Hash())
+	if err != nil {
+		return err
+	}
 	if err := s.BroadcastXShardTxList(ctx, block.Hash()); err != nil {
 		return err
 	}
-	// TODO: Replace zero with the actual coinbase amount: reward plus ordinary and cross-shard fees.
-	if err := s.clusterClient.SendMinorBlockHeaderToMaster(ctx, block.Header(), new(uint256.Int)); err != nil {
+	if err := s.clusterClient.SendMinorBlockHeaderToMaster(ctx, block.Header(), coinbaseAmount); err != nil {
 		return fmt.Errorf("report block %x to master: %w", block.Hash(), err)
 	}
 	if err := rawdb.WriteShardBlockCommit(s.chain.db, block.Hash()); err != nil {
