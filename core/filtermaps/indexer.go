@@ -349,8 +349,8 @@ func (f *FilterMaps) tryIndexTail() (bool, error) {
 			"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
 			"processed", f.ptrTailIndex-f.indexedRange.blocks.First(),
 			"elapsed", common.PrettyDuration(time.Since(f.startedTailIndexAt)))
-		f.loggedTailIndex = false
 	}
+	f.loggedTailIndex, f.startedTailIndex = false, false
 	return true, nil
 }
 
