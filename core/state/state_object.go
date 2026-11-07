@@ -233,6 +233,9 @@ func (s *stateObject) SetState(key, value common.Hash) common.Hash {
 	if prev == value {
 		return prev
 	}
+	// The first write at this block access index is the pre-index value.
+	// Later writes in another scope of the same index must not replace it.
+	s.db.noteStorageBaseline(s.address, key, prev)
 	// New value is different, update and journal the change
 	s.db.journal.storageChange(s.address, key, prev, origin)
 	s.setState(key, value, origin)
@@ -498,6 +501,9 @@ func (s *stateObject) AddBalance(amount *uint256.Int) uint256.Int {
 // SetBalance sets the balance for the object, and returns the previous balance.
 func (s *stateObject) SetBalance(amount *uint256.Int) uint256.Int {
 	prev := *s.data.Balance
+	if prev.Cmp(amount) != 0 {
+		s.db.noteBalanceBaseline(s.address, &prev)
+	}
 	s.db.journal.balanceChange(s.address, s.data.Balance)
 	s.setBalance(amount)
 	return prev
@@ -596,6 +602,7 @@ func (s *stateObject) CodeSize() int {
 
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) (prev []byte) {
 	prev = slices.Clone(s.code)
+	s.db.noteCodeBaseline(s.address, s, code)
 	s.db.journal.setCode(s.address, prev)
 	s.setCode(codeHash, code)
 	return prev
@@ -608,6 +615,9 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 }
 
 func (s *stateObject) SetNonce(nonce uint64) {
+	if s.data.Nonce != nonce {
+		s.db.noteNonceBaseline(s.address, s.data.Nonce)
+	}
 	s.db.journal.nonceChange(s.address, s.data.Nonce)
 	s.setNonce(nonce)
 }

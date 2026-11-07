@@ -223,3 +223,51 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 	}
 	return res
 }
+
+// DemoteStorageWriteToRead removes a storage write at the given txIdx.
+// If no other writes remain for this slot, the slot is demoted to a storage read.
+func (b *ConstructionBlockAccessList) DemoteStorageWriteToRead(txIdx uint32, address common.Address, key common.Hash) {
+	acc, ok := b.Accounts[address]
+	if !ok {
+		return
+	}
+	writes, ok := acc.StorageWrites[key]
+	if !ok {
+		return
+	}
+	delete(writes, txIdx)
+	if len(writes) == 0 {
+		delete(acc.StorageWrites, key)
+		if acc.StorageReads == nil {
+			acc.StorageReads = make(map[common.Hash]struct{})
+		}
+		acc.StorageReads[key] = struct{}{}
+	}
+}
+
+// DropBalanceChange removes a balance change at the given txIdx.
+func (b *ConstructionBlockAccessList) DropBalanceChange(txIdx uint32, address common.Address) {
+	acc, ok := b.Accounts[address]
+	if !ok || acc.BalanceChanges == nil {
+		return
+	}
+	delete(acc.BalanceChanges, txIdx)
+}
+
+// DropNonceChange removes a nonce change at the given txIdx.
+func (b *ConstructionBlockAccessList) DropNonceChange(txIdx uint32, address common.Address) {
+	acc, ok := b.Accounts[address]
+	if !ok || acc.NonceChanges == nil {
+		return
+	}
+	delete(acc.NonceChanges, txIdx)
+}
+
+// DropCodeChange removes a code change at the given txIdx.
+func (b *ConstructionBlockAccessList) DropCodeChange(txIdx uint32, address common.Address) {
+	acc, ok := b.Accounts[address]
+	if !ok || acc.CodeChange == nil {
+		return
+	}
+	delete(acc.CodeChange, txIdx)
+}
