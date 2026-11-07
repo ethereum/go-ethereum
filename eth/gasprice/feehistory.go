@@ -339,8 +339,14 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 		}
 		i := fees.blockNumber - oldestBlock
 		if fees.results.baseFee != nil {
-			reward[i], baseFee[i], baseFee[i+1], gasUsedRatio[i] = fees.results.reward, fees.results.baseFee, fees.results.nextBaseFee, fees.results.gasUsedRatio
-			blobGasUsedRatio[i], blobBaseFee[i], blobBaseFee[i+1] = fees.results.blobGasUsedRatio, fees.results.blobBaseFee, fees.results.nextBlobBaseFee
+			reward[i], baseFee[i], gasUsedRatio[i] = fees.results.reward, fees.results.baseFee, fees.results.gasUsedRatio
+			blobGasUsedRatio[i], blobBaseFee[i] = fees.results.blobGasUsedRatio, fees.results.blobBaseFee
+			// Results arrive out of order. Never overwrite an actual fee with a
+			// prediction, which can differ at a fork boundary.
+			if baseFee[i+1] == nil {
+				baseFee[i+1] = fees.results.nextBaseFee
+				blobBaseFee[i+1] = fees.results.nextBlobBaseFee
+			}
 		} else {
 			// getting no block and no error means we are requesting into the future (might happen because of a reorg)
 			if i < firstMissing {
