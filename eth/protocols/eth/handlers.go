@@ -164,6 +164,9 @@ func serviceContiguousBlockHeaderQuery(chain *core.BlockChain, query *GetBlockHe
 		// accommodate for that.
 		from := query.Origin.Number
 		if !query.Reverse {
+			if count-1 > math.MaxUint64-from {
+				count = math.MaxUint64 - from + 1
+			}
 			from = from + count - 1
 		}
 		headers := chain.GetHeadersFrom(from, count)
