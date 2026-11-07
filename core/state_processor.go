@@ -124,11 +124,13 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 		}
 		msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
+			recordTransactionRejected()
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		statedb.SetTxContext(tx.Hash(), i, uint32(i+1))
 		receipt, bal, err := applyTransactionWithEVM(ctx, msg, gp, statedb, blockNumber, blockHash, context.Time, tx, evm, eagerBloom)
 		if err != nil {
+			recordTransactionRejected()
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 		}
 		receipts = append(receipts, receipt)
@@ -319,7 +321,12 @@ var (
 	txExecutionSuccessCounter  = metrics.NewRegisteredCounter("chain/transactions/execution/success", nil)
 	txExecutionRevertedCounter = metrics.NewRegisteredCounter("chain/transactions/execution/reverted", nil)
 	txExecutionFailedCounter   = metrics.NewRegisteredCounter("chain/transactions/execution/failed", nil)
+	txExecutionRejectedCounter = metrics.NewRegisteredCounter("chain/transactions/execution/rejected", nil)
 )
+
+func recordTransactionRejected() {
+	txExecutionRejectedCounter.Inc(1)
+}
 
 func recordTransactionOutcome(result *ExecutionResult) {
 	switch result.Err {
