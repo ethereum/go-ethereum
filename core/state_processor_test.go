@@ -440,7 +440,8 @@ func TestRecordTransactionOutcome(t *testing.T) {
 		txExecutionSuccessCounter,
 		txExecutionRevertedCounter,
 		txExecutionFailedCounter,
-	}
+		txExecutionRejectedCounter,
+}
 	for _, counter := range counters {
 		counter.Clear()
 	}
@@ -453,6 +454,7 @@ func TestRecordTransactionOutcome(t *testing.T) {
 	recordTransactionOutcome(&ExecutionResult{})
 	recordTransactionOutcome(&ExecutionResult{Err: vm.ErrExecutionReverted})
 	recordTransactionOutcome(&ExecutionResult{Err: vm.ErrOutOfGas})
+	recordTransactionRejected()
 
 	for i, counter := range counters {
 		if got := counter.Snapshot().Count(); got != 1 {
