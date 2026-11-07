@@ -179,7 +179,10 @@ func (b *batchIndexer) finish(force bool) error {
 			defer batchMu.Unlock()
 
 			fn(batch)
-			if batch.ValueSize() >= ethdb.IdealBatchSize {
+
+			// An unindexing is written in one batch along with the metadata: an
+			// interrupted one can't be retried, as an element can't be popped twice.
+			if !b.delete && batch.ValueSize() >= ethdb.IdealBatchSize {
 				batchSize += batch.ValueSize()
 				if err := batch.Write(); err != nil {
 					return err
@@ -484,14 +487,17 @@ func (i *indexIniter) run(recover bool) {
 				<-done
 				done, interrupt = nil, nil
 			}
-			// If all state histories, including the one to be reverted, have
-			// been fully indexed, unindex it here and shut down the initializer.
-			if checkDone() {
+			// Unindex the reverted history if it has been indexed already.
+			if metadata := loadIndexMetadata(i.disk, i.typ); metadata != nil && metadata.Last == oldLastID {
 				i.log.Info("Truncate the extra history", "id", oldLastID)
 				if err := unindexSingle(oldLastID, i.disk, i.freezer, i.typ); err != nil {
+					i.last.Store(oldLastID)
 					signal.result <- err
-					return
+					continue
 				}
+			}
+			// Shut down the initializer if the remaining histories are all indexed.
+			if checkDone() {
 				close(i.done)
 				signal.result <- nil
 				i.log.Info("Histories have been fully indexed", "last", i.last.Load())
