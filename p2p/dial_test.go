@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
@@ -774,4 +775,61 @@ func (t *dialTestResolver) Resolve(n *enode.Node) *enode.Node {
 
 	t.calls = append(t.calls, n.ID())
 	return t.answers[n.ID()]
+}
+
+// This test checks that tcpDialer falls back to the other address family when the
+// preferred endpoint of a dual-stack node cannot be reached, and that the fallback
+// respects the netrestrict list.
+func TestTCPDialerAltEndpoint(t *testing.T) {
+	ln6, err := net.Listen("tcp", "[::1]:0")
+	if err != nil {
+		t.Skip("IPv6 loopback not available:", err)
+	}
+	defer ln6.Close()
+	go func() {
+		for {
+			c, err := ln6.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+
+	// Find a closed IPv4 port, so the preferred endpoint refuses the dial.
+	ln4, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	closedPort := ln4.Addr().(*net.TCPAddr).Port
+	ln4.Close()
+
+	var r enr.Record
+	r.Set(enr.IPv4Addr(netip.MustParseAddr("127.0.0.1")))
+	r.Set(enr.TCP(closedPort))
+	r.Set(enr.IPv6Addr(netip.MustParseAddr("::1")))
+	r.Set(enr.TCP6(ln6.Addr().(*net.TCPAddr).Port))
+	node := enode.SignNull(&r, enode.ID{1})
+	if ip := node.IPAddr(); !ip.Is4() {
+		t.Fatalf("preferred IP is %v, want the IPv4 address", ip)
+	}
+
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	conn, err := tcpDialer{d: dialer}.Dial(context.Background(), node)
+	if err != nil {
+		t.Fatalf("dial failed, want fallback to the IPv6 endpoint: %v", err)
+	}
+	if got := conn.RemoteAddr().(*net.TCPAddr).IP; got.To4() != nil {
+		t.Errorf("connected to %v, want the IPv6 endpoint", got)
+	}
+	conn.Close()
+
+	restrict, err := netutil.ParseNetlist("127.0.0.0/8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conn, err := (tcpDialer{d: dialer, netRestrict: restrict}).Dial(context.Background(), node); err == nil {
+		conn.Close()
+		t.Fatal("dial succeeded, want the IPv6 fallback to be blocked by netrestrict")
+	}
 }
