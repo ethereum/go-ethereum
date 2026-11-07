@@ -2586,6 +2586,27 @@ func TestSetCodeTransactions(t *testing.T) {
 				}
 			},
 		},
+		{
+			// A sender that adopted code (EIP-8298) has its transactions dropped on reset and rejected.
+			name:    "drop-sender-with-code-on-reset",
+			pending: 0,
+			run: func(name string) {
+				key, _ := crypto.GenerateKey()
+				addr := crypto.PubkeyToAddress(key.PublicKey)
+				testAddBalance(pool, addr, big.NewInt(params.Ether))
+				if err := pool.addRemoteSync(pricedTransaction(0, 100000, big.NewInt(1), key)); err != nil {
+					t.Fatalf("%s: failed to add pending transaction: %v", name, err)
+				}
+				if err := pool.addRemoteSync(pricedTransaction(2, 100000, big.NewInt(1), key)); err != nil {
+					t.Fatalf("%s: failed to add queued transaction: %v", name, err)
+				}
+				statedb.SetCode(addr, []byte{byte(vm.STOP)}, tracing.CodeChangeUnspecified)
+				<-pool.requestReset(nil, nil)
+				if err := pool.addRemoteSync(pricedTransaction(1, 100000, big.NewInt(1), key)); !errors.Is(err, core.ErrSenderNoEOA) {
+					t.Fatalf("%s: error mismatch: want %v, have %v", name, core.ErrSenderNoEOA, err)
+				}
+			},
+		},
 	} {
 		tt.run(tt.name)
 		pending, queued := pool.Stats()

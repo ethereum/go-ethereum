@@ -73,7 +73,8 @@ type stateObject struct {
 	uncommittedStorage Storage
 
 	// Cache flags.
-	dirtyCode bool // true if the code was updated
+	dirtyCode   bool // true if the code was updated
+	codeAdopted bool // true if the code was adopted through SETCODEFROM (EIP-8298)
 
 	// Flag whether the account was marked as self-destructed. The self-destructed
 	// account is still accessible in the scope of same transaction.
@@ -520,6 +521,7 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 		dirtyStorage:       s.dirtyStorage.Copy(),
 		uncommittedStorage: s.uncommittedStorage.Copy(),
 		dirtyCode:          s.dirtyCode,
+		codeAdopted:        s.codeAdopted,
 		selfDestructed:     s.selfDestructed,
 		newContract:        s.newContract,
 	}
@@ -596,7 +598,7 @@ func (s *stateObject) CodeSize() int {
 
 func (s *stateObject) SetCode(codeHash common.Hash, code []byte) (prev []byte) {
 	prev = slices.Clone(s.code)
-	s.db.journal.setCode(s.address, prev)
+	s.db.journal.setCode(s.address, prev, s.codeAdopted)
 	s.setCode(codeHash, code)
 	return prev
 }
@@ -605,6 +607,7 @@ func (s *stateObject) setCode(codeHash common.Hash, code []byte) {
 	s.code = code
 	s.data.CodeHash = codeHash[:]
 	s.dirtyCode = true
+	s.codeAdopted = false
 }
 
 func (s *stateObject) SetNonce(nonce uint64) {

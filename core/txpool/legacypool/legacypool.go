@@ -1538,12 +1538,16 @@ func (pool *LegacyPool) demoteUnexecutables() {
 	for addr, list := range pool.pending {
 		nonce := pool.currentState.GetNonce(addr)
 
-		// Drop all transactions that are deemed too old (low nonce)
+		// Drop all transactions that are deemed too old (low nonce), and all of
+		// them if the sender holds code by now
 		olds := list.Forward(nonce)
+		if !txpool.IsEOA(pool.currentState, addr) {
+			olds = append(olds, list.Cap(0)...)
+		}
 		for _, tx := range olds {
 			hash := tx.Hash()
 			pool.all.Remove(hash)
-			log.Trace("Removed old pending transaction", "hash", hash)
+			log.Trace("Removed unexecutable pending transaction", "hash", hash)
 		}
 		// Drop all transactions that are too costly (low balance or out of gas), and queue any invalids back for later
 		drops, invalids := list.Filter(pool.currentState.GetBalance(addr), gasLimit)

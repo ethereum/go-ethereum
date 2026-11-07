@@ -204,13 +204,15 @@ const (
 	SWAP16
 )
 
-// 0xa0 range - logging ops.
+// 0xa0 range - logging ops, and the account code op (EIP-8298).
 const (
 	LOG0 OpCode = 0xa0 + iota
 	LOG1
 	LOG2
 	LOG3
 	LOG4
+
+	SETCODEFROM OpCode = 0xa7
 )
 
 // 0xd0 range - eof operations.
@@ -411,12 +413,13 @@ var opCodeToString = [256]string{
 	SWAP15: "SWAP15",
 	SWAP16: "SWAP16",
 
-	// 0xa0 range - logging ops.
-	LOG0: "LOG0",
-	LOG1: "LOG1",
-	LOG2: "LOG2",
-	LOG3: "LOG3",
-	LOG4: "LOG4",
+	// 0xa0 range - logging ops, and the account code op.
+	LOG0:        "LOG0",
+	LOG1:        "LOG1",
+	LOG2:        "LOG2",
+	LOG3:        "LOG3",
+	LOG4:        "LOG4",
+	SETCODEFROM: "SETCODEFROM",
 
 	// 0xd range - eof ops.
 	DATALOAD:  "DATALOAD",
@@ -607,6 +610,7 @@ var stringToOp = map[string]OpCode{
 	"LOG2":            LOG2,
 	"LOG3":            LOG3,
 	"LOG4":            LOG4,
+	"SETCODEFROM":     SETCODEFROM,
 	"DATALOAD":        DATALOAD,
 	"DATALOADN":       DATALOADN,
 	"DATASIZE":        DATASIZE,

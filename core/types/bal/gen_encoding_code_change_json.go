@@ -5,6 +5,7 @@ package bal
 import (
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
@@ -15,10 +16,12 @@ func (e encodingCodeChange) MarshalJSON() ([]byte, error) {
 	type encodingCodeChange struct {
 		BlockAccessIndex hexutil.Uint64 `json:"blockAccessIndex"`
 		NewCode          hexutil.Bytes  `json:"newCode"`
+		NewCodeHash      *common.Hash   `json:"newCodeHash,omitempty" rlp:"optional"`
 	}
 	var enc encodingCodeChange
 	enc.BlockAccessIndex = hexutil.Uint64(e.BlockAccessIndex)
 	enc.NewCode = e.NewCode
+	enc.NewCodeHash = e.NewCodeHash
 	return json.Marshal(&enc)
 }
 
@@ -27,6 +30,7 @@ func (e *encodingCodeChange) UnmarshalJSON(input []byte) error {
 	type encodingCodeChange struct {
 		BlockAccessIndex *hexutil.Uint64 `json:"blockAccessIndex"`
 		NewCode          *hexutil.Bytes  `json:"newCode"`
+		NewCodeHash      *common.Hash    `json:"newCodeHash,omitempty" rlp:"optional"`
 	}
 	var dec encodingCodeChange
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -37,6 +41,9 @@ func (e *encodingCodeChange) UnmarshalJSON(input []byte) error {
 	}
 	if dec.NewCode != nil {
 		e.NewCode = *dec.NewCode
+	}
+	if dec.NewCodeHash != nil {
+		e.NewCodeHash = dec.NewCodeHash
 	}
 	return nil
 }

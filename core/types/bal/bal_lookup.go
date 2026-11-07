@@ -48,6 +48,9 @@ type codeHash struct {
 // Lookup is a read-optimized, index-addressable view over a block access list.
 type Lookup struct {
 	accounts map[common.Address]*accountLookup
+
+	codeByHashOnce sync.Once
+	codeByHash     map[common.Hash][]byte // code deposited by the list, keyed by hash
 }
 
 // Lookup builds a Lookup over the access list. The returned view aliases the
@@ -72,6 +75,16 @@ func (e *BlockAccessList) Lookup() *Lookup {
 		l.accounts[acc.Address] = al
 	}
 	return l
+}
+
+// hash returns the code hash set by the i-th code change of the account.
+func (acc *accountLookup) hash(i int) common.Hash {
+	if h := acc.codes[i].NewCodeHash; h != nil {
+		return *h
+	}
+	h := &acc.codeHashes[i]
+	h.once.Do(func() { h.hash = crypto.Keccak256Hash(acc.codes[i].NewCode) })
+	return h.hash
 }
 
 // searchLatest returns the position of the entry with the highest block-access
@@ -99,24 +112,44 @@ func (l *Lookup) AccountChanges(addr common.Address, limit uint32) (balance *uin
 		nonce, hasNonce = acc.nonces[i].PostNonce, true
 	}
 	if i := searchLatest(acc.codes, limit, func(e encodingCodeChange) uint32 { return e.BlockAccessIndex }); i >= 0 {
-		h := &acc.codeHashes[i]
-		h.once.Do(func() { h.hash = crypto.Keccak256Hash(acc.codes[i].NewCode) })
-		codeHash, hasCode = h.hash, true
+		codeHash, hasCode = acc.hash(i), true
 	}
 	return balance, nonce, codeHash, hasBalance, hasNonce, hasCode
 }
 
 // Code returns the contract code observed at block-access index limit, and
-// whether the code was set before limit.
+// whether the access list carries it. A code hash adopted through SETCODEFROM
+// (EIP-8298) resolves to the code another change of the list deposits; code
+// that predates the block is not carried, so the caller reads it by hash.
 func (l *Lookup) Code(addr common.Address, limit uint32) ([]byte, bool) {
 	acc, ok := l.accounts[addr]
 	if !ok {
 		return nil, false
 	}
 	if i := searchLatest(acc.codes, limit, func(e encodingCodeChange) uint32 { return e.BlockAccessIndex }); i >= 0 {
+		if h := acc.codes[i].NewCodeHash; h != nil {
+			return l.CodeByHash(*h)
+		}
 		return acc.codes[i].NewCode, true
 	}
 	return nil, false
+}
+
+// CodeByHash returns the code with the given hash if a change of the access
+// list deposits it.
+func (l *Lookup) CodeByHash(hash common.Hash) ([]byte, bool) {
+	l.codeByHashOnce.Do(func() {
+		l.codeByHash = make(map[common.Hash][]byte)
+		for _, acc := range l.accounts {
+			for i, change := range acc.codes {
+				if change.NewCodeHash == nil && len(change.NewCode) > 0 {
+					l.codeByHash[acc.hash(i)] = change.NewCode
+				}
+			}
+		}
+	})
+	code, ok := l.codeByHash[hash]
+	return code, ok
 }
 
 // Storage returns the value of the storage slot observed at block-access index
