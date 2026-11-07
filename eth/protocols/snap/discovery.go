@@ -16,14 +16,21 @@
 
 package snap
 
-import (
-	"github.com/ethereum/go-ethereum/rlp"
-)
+import "slices"
 
 // enrEntry is the ENR entry which advertises `snap` protocol on the discovery.
+// It lists the served protocol versions in ascending order. An empty list means
+// snap/1 only.
 type enrEntry struct {
-	// Ignore additional fields (for forward compatibility).
-	Rest []rlp.RawValue `rlp:"tail"`
+	Versions []uint `rlp:"tail"`
+}
+
+// newENREntry creates the entry for the given served versions.
+func newENREntry(versions []uint) *enrEntry {
+	if len(versions) == 1 && versions[0] == SNAP1 {
+		return &enrEntry{}
+	}
+	return &enrEntry{Versions: slices.Sorted(slices.Values(versions))}
 }
 
 // ENRKey implements enr.Entry.
