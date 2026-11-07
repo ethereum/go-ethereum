@@ -290,7 +290,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope 
 		return
 	}
 	// check if already accumulated the size of the response.
-	if l.cfg.Limit != 0 && l.resultSize > l.cfg.Limit {
+	if l.cfg.Limit != 0 && l.resultSize >= l.cfg.Limit {
 		return
 	}
 	var (
