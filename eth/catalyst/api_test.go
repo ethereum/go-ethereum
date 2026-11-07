@@ -562,6 +562,49 @@ func TestForkchoiceUpdatedCanonicalAboveHead(t *testing.T) {
 	}
 }
 
+// TestForkchoiceUpdatedMissingFields checks that a forkchoice state missing one
+// of its fields is rejected with invalid params instead of read as a zero hash.
+func TestForkchoiceUpdatedMissingFields(t *testing.T) {
+	genesis, blocks := generateMergeChain(10, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	handler, err := n.RPCHandler()
+	if err != nil {
+		t.Fatalf("failed to get rpc handler: %v", err)
+	}
+	if err := handler.RegisterName("engine", newConsensusAPIWithoutHeartbeat(ethservice)); err != nil {
+		t.Fatalf("failed to register engine api: %v", err)
+	}
+	client := rpc.DialInProc(handler)
+	defer client.Close()
+
+	head := blocks[9].Hash()
+	for _, missing := range []string{"headBlockHash", "safeBlockHash", "finalizedBlockHash"} {
+		state := map[string]common.Hash{
+			"headBlockHash":      head,
+			"safeBlockHash":      head,
+			"finalizedBlockHash": head,
+		}
+		delete(state, missing)
+		var resp engine.ForkChoiceResponse
+		err := client.Call(&resp, "engine_forkchoiceUpdatedV1", state, nil)
+		var rpcErr rpc.Error
+		if !errors.As(err, &rpcErr) || rpcErr.ErrorCode() != -32602 {
+			t.Errorf("missing %s: want invalid params (-32602), have %v", missing, err)
+		}
+	}
+	// A complete state is still accepted.
+	state := engine.ForkchoiceStateV1{HeadBlockHash: head, SafeBlockHash: head, FinalizedBlockHash: head}
+	var resp engine.ForkChoiceResponse
+	if err := client.Call(&resp, "engine_forkchoiceUpdatedV1", state, nil); err != nil {
+		t.Fatalf("complete forkchoice state rejected: %v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("unexpected payload status: %s", resp.PayloadStatus.Status)
+	}
+}
+
 func TestFullAPI(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)
