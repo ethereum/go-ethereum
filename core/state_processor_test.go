@@ -32,6 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/keccak"
+	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -431,4 +433,30 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		body.Withdrawals = []*types.Withdrawal{}
 	}
 	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
+}
+
+func TestRecordTransactionOutcome(t *testing.T) {
+	counters := []*metrics.Counter{
+		txExecutionSuccessCounter,
+		txExecutionRevertedCounter,
+		txExecutionFailedCounter,
+	}
+	for _, counter := range counters {
+		counter.Clear()
+	}
+	defer func() {
+		for _, counter := range counters {
+			counter.Clear()
+		}
+	}()
+
+	recordTransactionOutcome(&ExecutionResult{})
+	recordTransactionOutcome(&ExecutionResult{Err: vm.ErrExecutionReverted})
+	recordTransactionOutcome(&ExecutionResult{Err: vm.ErrOutOfGas})
+
+	for i, counter := range counters {
+		if got := counter.Snapshot().Count(); got != 1 {
+			t.Errorf("counter %d: have %d, want 1", i, got)
+		}
+	}
 }
