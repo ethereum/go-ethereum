@@ -272,10 +272,11 @@ func (p *PoSW) Prepare(chain consensus.ChainHeaderReader, header *types.Header) 
 	return nil
 }
 
-// Finalize credits the subsidy after decay and reward tax. BlockRewardAt handles
-// the old height offset and rounding; transaction fees are accounted for elsewhere.
+// Finalize credits the subsidy after separately rounding epoch decay and reward
+// tax, as in pyquarkchain. Transaction fees are accounted for elsewhere.
 func (p *PoSW) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
 	reward := p.config.QuarkChain.PoSW.BlockRewardAt(header.Number)
+	reward = p.config.QuarkChain.AfterTax(reward)
 	if reward.Sign() != 0 {
 		state.AddBalance(header.Coinbase, uint256.MustFromBig(reward), tracing.BalanceIncreaseRewardMineBlock)
 	}

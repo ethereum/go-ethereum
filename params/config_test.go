@@ -131,6 +131,8 @@ func TestQuarkChainConfigEqual(t *testing.T) {
 		{"chainIds", func(c *QuarkChainConfig) { c.ChainIDs[1] = big.NewInt(10003) }, false},
 		{"posw", func(c *QuarkChainConfig) { c.PoSW.CoinbaseAmount.SetInt64(100) }, false},
 		{"missing posw", func(c *QuarkChainConfig) { c.PoSW = nil }, false},
+		{"rewardTaxRate", func(c *QuarkChainConfig) { c.RewardTaxRate.SetFrac64(1, 4) }, false},
+		{"missing rewardTaxRate", func(c *QuarkChainConfig) { c.RewardTaxRate = nil }, false},
 		{"maxBlocksPerRootBlock", func(c *QuarkChainConfig) { c.MaxBlocksPerRootBlock = 12 }, false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -144,6 +146,46 @@ func TestQuarkChainConfigEqual(t *testing.T) {
 	var missing *QuarkChainConfig
 	if !missing.Equal(nil) || missing.Equal(&QuarkChainConfig{}) || (&QuarkChainConfig{}).Equal(missing) {
 		t.Fatal("Equal did not distinguish nil and non-nil configurations")
+	}
+	// Values, rather than pointer identity or rational representation, determine equality.
+	stored, next := validQuarkChainConfig(), validQuarkChainConfig()
+	stored.RewardTaxRate = new(big.Rat)
+	next.RewardTaxRate, _ = new(big.Rat).SetString("0.00")
+	if !stored.Equal(next) {
+		t.Fatal("equal consensus values compared unequal")
+	}
+}
+
+// TestQuarkChainConfigTaxValidation checks the tax at initialization alongside
+// PoSW parameters; missing and endpoint rates must be rejected before root
+// reward reconstruction can divide by zero.
+func TestQuarkChainConfigTaxValidation(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		tax  *big.Rat
+	}{
+		{"missing", nil},
+		{"negative", big.NewRat(-1, 2)},
+		{"zero", new(big.Rat)},
+		{"one", big.NewRat(1, 1)},
+		{"above one", big.NewRat(3, 2)},
+		{"denominator", big.NewRat(1, 1000)},
+		{"repeating decimal", big.NewRat(1, 3)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			config := NewTestQuarkChainConfig(10001)
+			config.QuarkChain.RewardTaxRate = test.tax
+			if config.CheckConfigForkOrder() == nil {
+				t.Fatal("invalid tax accepted during initialization")
+			}
+		})
+	}
+	for _, tax := range []*big.Rat{big.NewRat(1, 100), big.NewRat(1, 8), big.NewRat(1, 2), big.NewRat(99, 100)} {
+		config := NewTestQuarkChainConfig(10001)
+		config.QuarkChain.RewardTaxRate = tax
+		if err := config.CheckConfigForkOrder(); err != nil {
+			t.Fatalf("valid tax %s rejected: %v", tax, err)
+		}
 	}
 }
 
