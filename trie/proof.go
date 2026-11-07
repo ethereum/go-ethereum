@@ -82,7 +82,7 @@ func (t *Trie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
-	hasher := newHasher(false)
+	hasher := newHasher(false, false)
 	defer returnHasherToPool(hasher)
 
 	for i, n := range nodes {

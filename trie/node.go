@@ -80,12 +80,14 @@ func (n *fullNode) EncodeRLP(w io.Writer) error {
 // nodeFlag contains caching-related metadata about a node.
 type nodeFlag struct {
 	hash  hashNode // cached hash of the node (may be nil)
+	blob  []byte   // cached rlp encoding of the node, set along with the hash (may be nil)
 	dirty bool     // whether the node has changes that must be written to the database
 }
 
 func (n nodeFlag) copy() nodeFlag {
 	return nodeFlag{
 		hash:  common.CopyBytes(n.hash),
+		blob:  common.CopyBytes(n.blob),
 		dirty: n.dirty,
 	}
 }
