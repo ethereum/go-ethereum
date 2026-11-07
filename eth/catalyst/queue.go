@@ -75,20 +75,27 @@ func (q *payloadQueue) put(id engine.PayloadID, payload *miner.Payload) {
 // get retrieves a previously stored payload item or nil if it does not exist.
 func (q *payloadQueue) get(id engine.PayloadID, full bool) *engine.ExecutionPayloadEnvelope {
 	q.lock.RLock()
-	defer q.lock.RUnlock()
-
+	var payload *miner.Payload
 	for _, item := range q.payloads {
 		if item == nil {
-			return nil // no more items
+			break // no more items
 		}
 		if item.id == id {
-			if !full {
-				return item.payload.Resolve()
-			}
-			return item.payload.ResolveFull()
+			payload = item.payload
+			break
 		}
 	}
-	return nil
+	q.lock.RUnlock()
+
+	// Resolving may wait for construction. Do not block new payload IDs while
+	// an earlier payload is being built.
+	if payload == nil {
+		return nil
+	}
+	if !full {
+		return payload.Resolve()
+	}
+	return payload.ResolveFull()
 }
 
 // getWithDetails returns the tracked local payload with the given state root,
