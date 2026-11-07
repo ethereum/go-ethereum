@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/forkid"
+	"github.com/ethereum/go-ethereum/core/history"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -402,9 +403,16 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 			return nil, &invalidParamsError{fmt.Sprintf("%v: %q", err, hexKey)}
 		}
 	}
-	statedb, header, err := api.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHashOrLatest(blockNrOrHash))
-	if statedb == nil || err != nil {
+	bNrOrHash := blockNrOrHashOrLatest(blockNrOrHash)
+	statedb, header, err := api.b.StateAndHeaderByNumberOrHash(ctx, bNrOrHash)
+	if err != nil {
+		if h, herr := api.b.HeaderByNumberOrHash(ctx, bNrOrHash); herr == nil && h != nil {
+			return nil, api.proofStateError(ctx, bNrOrHash, err)
+		}
 		return nil, err
+	}
+	if statedb == nil {
+		return nil, nil
 	}
 	codeHash := statedb.GetCodeHash(address)
 	storageRoot := statedb.GetStorageRoot(address)
@@ -414,7 +422,7 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		if storageRoot != types.EmptyRootHash && storageRoot != (common.Hash{}) {
 			st, err := statedb.Database().OpenStorageTrie(header.Root, address, storageRoot, nil)
 			if err != nil {
-				return nil, err
+				return nil, api.proofStateError(ctx, bNrOrHash, err)
 			}
 			storageTrie = st
 		}
@@ -448,7 +456,7 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 	// Create the accountProof.
 	tr, err := statedb.Database().OpenTrie(header.Root)
 	if err != nil {
-		return nil, err
+		return nil, api.proofStateError(ctx, bNrOrHash, err)
 	}
 	var accountProof proofList
 	if err := tr.Prove(crypto.Keccak256(address.Bytes()), &accountProof); err != nil {
@@ -464,6 +472,21 @@ func (api *BlockChainAPI) GetProof(ctx context.Context, address common.Address, 
 		StorageHash:  storageRoot,
 		StorageProof: storageProof,
 	}, statedb.Error()
+}
+
+// proofStateError converts a failure to open the state of an existing block
+// into a pruned history error. Once the initial sync and history indexing are
+// done, the node either never kept that state or has dropped it, so no proof
+// can be served. Before that the state may still arrive, hence the error is kept.
+// The pending state is never persisted, so its failures keep their error too.
+func (api *BlockChainAPI) proofStateError(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash, err error) error {
+	if nr, ok := blockNrOrHash.Number(); ok && nr == rpc.PendingBlockNumber {
+		return err
+	}
+	if ctx.Err() != nil || !api.b.SyncProgress(ctx).Done() {
+		return err
+	}
+	return &history.PrunedHistoryError{}
 }
 
 // decodeStorageKey parses a hex-encoded 32-byte hash.
