@@ -241,6 +241,7 @@ type LegacyPool struct {
 	reserver      txpool.Reserver              // Address reserver to ensure exclusivity across subpools
 
 	pending map[common.Address]*list // All currently processable transactions
+	size    *pendingSize             // Count of the pending transactions, kept by their lists
 	queue   *queue
 	all     *lookup     // All transactions to allow lookups
 	priced  *pricedList // All transactions sorted by price
@@ -274,6 +275,7 @@ func New(config Config, chain BlockChain) *LegacyPool {
 		chainconfig:     chain.Config(),
 		signer:          signer,
 		pending:         make(map[common.Address]*list),
+		size:            newPendingSize(config.AccountSlots),
 		queue:           newQueue(config, signer),
 		all:             newLookup(),
 		reqResetCh:      make(chan *txpoolResetRequest),
@@ -845,7 +847,7 @@ func (pool *LegacyPool) enqueueTx(hash common.Hash, tx *types.Transaction, addAl
 func (pool *LegacyPool) promoteTx(addr common.Address, hash common.Hash, tx *types.Transaction) bool {
 	// Try to insert the transaction into the pending queue
 	if pool.pending[addr] == nil {
-		pool.pending[addr] = newList(true)
+		pool.pending[addr] = newPendingList(addr, pool.size)
 		pendingAddrsGauge.Inc(1)
 	}
 	list := pool.pending[addr]
@@ -1429,20 +1431,16 @@ func (pool *LegacyPool) promoteExecutables(accounts []common.Address) []*types.T
 // pending limit. The algorithm tries to reduce transaction counts by an approximately
 // equal number for all for accounts with many pending transactions.
 func (pool *LegacyPool) truncatePending() {
-	pending := uint64(0)
-
+	// Only accounts over their allowance lose transactions here.
+	pending := uint64(pool.size.total)
+	if pending <= pool.config.GlobalSlots || len(pool.size.heavy) == 0 {
+		return
+	}
 	// Assemble a spam order to penalize large transactors first
 	spammers := prque.New[uint64, common.Address](nil)
-	for addr, list := range pool.pending {
+	for addr := range pool.size.heavy {
 		// Only evict transactions from high rollers
-		length := uint64(list.Len())
-		pending += length
-		if length > pool.config.AccountSlots {
-			spammers.Push(addr, length)
-		}
-	}
-	if pending <= pool.config.GlobalSlots {
-		return
+		spammers.Push(addr, uint64(pool.pending[addr].Len()))
 	}
 	pendingBeforeCap := pending
 
@@ -1837,6 +1835,7 @@ func (pool *LegacyPool) Clear() {
 	pool.all.Clear()
 	pool.priced.Reheap()
 	pool.pending = make(map[common.Address]*list)
+	pool.size = newPendingSize(pool.config.AccountSlots)
 	pool.queue = newQueue(pool.config, pool.signer)
 	pool.pendingNonces = newNoncer(pool.currentState)
 

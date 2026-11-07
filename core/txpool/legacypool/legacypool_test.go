@@ -262,6 +262,23 @@ func validatePoolInternals(pool *LegacyPool) error {
 	if priced != remote {
 		return fmt.Errorf("total priced transaction count %d != %d", priced, remote)
 	}
+	// Ensure the pending count kept by the lists is right
+	if pool.size.total != pending {
+		return fmt.Errorf("pending transaction count %d != %d", pool.size.total, pending)
+	}
+	heavy := 0
+	for addr, list := range pool.pending {
+		_, counted := pool.size.heavy[addr]
+		if counted != (uint64(list.Len()) > pool.config.AccountSlots) {
+			return fmt.Errorf("account %x with %d pending transactions counted as heavy: %v", addr, list.Len(), counted)
+		}
+		if counted {
+			heavy++
+		}
+	}
+	if heavy != len(pool.size.heavy) {
+		return fmt.Errorf("%d heavy accounts counted, %d pending", len(pool.size.heavy), heavy)
+	}
 	// Ensure the next nonce to assign is the correct one
 	for addr, txs := range pool.pending {
 		// Find the last transaction
@@ -778,6 +795,9 @@ func TestDropping(t *testing.T) {
 	if pool.all.Count() != 2 {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), 2)
 	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
 }
 
 // Tests that if a transaction is dropped from the current pending pool (e.g. out
@@ -893,6 +913,9 @@ func TestPostponing(t *testing.T) {
 	}
 	if pool.all.Count() != len(txs)/2 {
 		t.Errorf("total transaction mismatch: have %d, want %d", pool.all.Count(), len(txs)/2)
+	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 }
 
@@ -2659,6 +2682,9 @@ func TestSetCodeTransactionsReorg(t *testing.T) {
 	if err := pool.addRemoteSync(pricedTransaction(3, 100000, big.NewInt(1000), keyA)); err != nil {
 		t.Fatalf("failed to added single transaction: %v", err)
 	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
 }
 
 // Benchmarks the speed of validating the contents of the pending queue of the
@@ -2756,5 +2782,43 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	b.ResetTimer()
 	for _, tx := range batches {
 		pool.addRemotesSync([]*types.Transaction{tx})
+	}
+}
+
+// BenchmarkTruncatePending measures the truncation a pool runs after every
+// reorg, just over its limit with no account over its allowance, so nothing is
+// dropped. The senders follow a 20,000-slot pool's distribution: 20,531
+// transactions from 12,550 senders, shape[n] of them holding n+1 each.
+func BenchmarkTruncatePending(b *testing.B) {
+	pool, _ := setupPool()
+	defer pool.Close()
+
+	// Fill the lists and truncate under the pool's lock, as a reorg does: the
+	// pool's own loop reads the lists.
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+
+	shape := []int{10736, 1113, 63, 34, 21, 26, 25, 32, 51, 50, 52, 58, 50, 56, 37, 146}
+	var total uint64
+	for n, senders := range shape {
+		for s := 0; s < senders; s++ {
+			key, _ := crypto.GenerateKey()
+			account := crypto.PubkeyToAddress(key.PublicKey)
+			pool.currentState.AddBalance(account, uint256.NewInt(1e18), tracing.BalanceChangeUnspecified)
+			for nonce := uint64(0); nonce <= uint64(n); nonce++ {
+				tx := dynamicFeeTx(nonce, 100000, big.NewInt(2e9), big.NewInt(1e9), key)
+				pool.promoteTx(account, tx.Hash(), tx)
+				total++
+			}
+		}
+	}
+	pool.config.GlobalSlots = total - 1
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pool.truncatePending()
+	}
+	b.StopTimer()
+	if pending, _ := pool.stats(); uint64(pending) != total {
+		b.Fatalf("pending %d, want %d", pending, total)
 	}
 }
