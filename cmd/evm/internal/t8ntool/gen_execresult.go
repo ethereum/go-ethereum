@@ -34,6 +34,7 @@ func (e ExecutionResult) MarshalJSON() ([]byte, error) {
 		Requests             []hexutil.Bytes       `json:"requests"`
 		BlockAccessList      hexutil.Bytes         `json:"blockAccessList,omitempty"`
 		BlockAccessListHash  *common.Hash          `json:"blockAccessListHash,omitempty"`
+		ExecutionWitness     *executionWitness     `json:"executionWitness,omitempty"`
 	}
 	var enc ExecutionResult
 	enc.StateRoot = e.StateRoot
@@ -58,6 +59,7 @@ func (e ExecutionResult) MarshalJSON() ([]byte, error) {
 	}
 	enc.BlockAccessList = e.BlockAccessList
 	enc.BlockAccessListHash = e.BlockAccessListHash
+	enc.ExecutionWitness = e.ExecutionWitness
 	return json.Marshal(&enc)
 }
 
@@ -81,6 +83,7 @@ func (e *ExecutionResult) UnmarshalJSON(input []byte) error {
 		Requests             []hexutil.Bytes       `json:"requests"`
 		BlockAccessList      *hexutil.Bytes        `json:"blockAccessList,omitempty"`
 		BlockAccessListHash  *common.Hash          `json:"blockAccessListHash,omitempty"`
+		ExecutionWitness     *executionWitness     `json:"executionWitness,omitempty"`
 	}
 	var dec ExecutionResult
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -141,6 +144,9 @@ func (e *ExecutionResult) UnmarshalJSON(input []byte) error {
 	}
 	if dec.BlockAccessListHash != nil {
 		e.BlockAccessListHash = dec.BlockAccessListHash
+	}
+	if dec.ExecutionWitness != nil {
+		e.ExecutionWitness = dec.ExecutionWitness
 	}
 	return nil
 }
