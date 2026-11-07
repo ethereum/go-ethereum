@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/telemetry"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/holiman/uint256"
@@ -313,9 +314,28 @@ func MakeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 	return receipt
 }
 
+// Transaction execution outcome counters.
+var (
+	txExecutionSuccessCounter  = metrics.NewRegisteredCounter("chain/transactions/execution/success", nil)
+	txExecutionRevertedCounter = metrics.NewRegisteredCounter("chain/transactions/execution/reverted", nil)
+	txExecutionFailedCounter   = metrics.NewRegisteredCounter("chain/transactions/execution/failed", nil)
+)
+
+func recordTransactionOutcome(result *ExecutionResult) {
+	switch result.Err {
+	case nil:
+		txExecutionSuccessCounter.Inc(1)
+	case vm.ErrExecutionReverted:
+		txExecutionRevertedCounter.Inc(1)
+	default:
+		txExecutionFailedCounter.Inc(1)
+	}
+}
+
 // makeReceipt generates the receipt object without its bloom filter, which the
 // caller either computes itself or leaves to the receipt pipeline.
 func makeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, blockNumber *big.Int, blockHash common.Hash, blockTime uint64, tx *types.Transaction, cumulativeGas uint64, root []byte) *types.Receipt {
+	recordTransactionOutcome(result)
 	// Create a new receipt for the transaction, storing the intermediate root
 	// and gas used by the tx.
 	//
