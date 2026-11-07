@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -1280,6 +1281,52 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 		}
 		if err := checkHistoricalState(env, root, uint64(i+1), hr); err != nil {
 			t.Fatal(err)
+		}
+	}
+}
+
+// TestDatabaseRecoverAfterInterruptedRevert tests a rollback retried after the
+// previous one stopped between unindexing a history and reverting the state.
+func TestDatabaseRecoverAfterInterruptedRevert(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	env := newTester(t, &testerConfig{layers: 32, enableIndex: true})
+	defer env.release()
+	if err := env.db.Commit(env.lastHash(), false); err != nil {
+		t.Fatalf("Failed to commit the states: %v", err)
+	}
+	// Wait for the initial indexing to end: the rollback below then takes the
+	// path for indexed histories, and its retry after the restart the initer's
+	for _, indexer := range []*historyIndexer{env.db.stateIndexer, env.db.trienodeIndexer} {
+		select {
+		case <-indexer.initer.done:
+		case <-time.After(time.Minute):
+			t.Fatal("The histories haven't been indexed")
+		}
+	}
+	// Unindex the newest history from the state index, and stop before the
+	// trie node index and the state
+	if err := env.db.stateIndexer.shorten(env.db.tree.bottom().stateID()); err != nil {
+		t.Fatalf("Failed to unindex the history: %v", err)
+	}
+	env.db.Close()
+
+	// Reopen with the indexer waiting for the sync, and retry the rollback
+	config := *env.db.config
+	config.NoHistoryIndexDelay = false
+	env.db = New(env.db.diskdb, &config)
+
+	target := env.roots[len(env.roots)-5]
+	if err := env.db.Recover(target); err != nil {
+		t.Fatalf("Failed to retry the rollback: %v", err)
+	}
+	want := *rawdb.ReadStateID(env.db.diskdb, target)
+	for _, typ := range []historyType{typeStateHistory, typeTrienodeHistory} {
+		if metadata := loadIndexMetadata(env.db.diskdb, typ); metadata == nil || metadata.Last != want {
+			t.Fatalf("Unexpected %v index position after the rollback: %+v, want %d", typ, metadata, want)
 		}
 	}
 }
