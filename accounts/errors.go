@@ -25,10 +25,6 @@ import (
 // provides the specified account.
 var ErrUnknownAccount = errors.New("unknown account")
 
-// ErrUnknownWallet is returned for any requested operation for which no backend
-// provides the specified wallet.
-var ErrUnknownWallet = errors.New("unknown wallet")
-
 // ErrNotSupported is returned when an operation is requested from an account
 // backend that it does not support.
 var ErrNotSupported = errors.New("not supported")
