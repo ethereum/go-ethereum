@@ -17,6 +17,7 @@
 package tracetest
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -136,7 +137,7 @@ func testCallTracer(tracerName string, dirPath string, t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}
-			tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
+			tracer.EmitTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, vmRet.GasUsage, nil)
 			// Retrieve the trace result and compare against the expected.
 			res, err := tracer.GetResult()
 			if err != nil {
@@ -228,8 +229,8 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		if err != nil {
 			b.Fatalf("failed to execute transaction: %v", err)
 		}
-		if tracer.OnTxEnd != nil {
-			tracer.OnTxEnd(&types.Receipt{GasUsed: tx.Gas()}, nil)
+		if tracer.HasTxEndHook() {
+			tracer.EmitTxEnd(&types.Receipt{GasUsed: tx.Gas()}, nil, nil)
 		}
 		if _, err = tracer.GetResult(); err != nil {
 			b.Fatal(err)
@@ -378,7 +379,7 @@ func TestInternals(t *testing.T) {
 			if err != nil {
 				t.Fatalf("test %v: failed to execute transaction: %v", tc.name, err)
 			}
-			tc.tracer.OnTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, nil)
+			tc.tracer.EmitTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, vmRet.GasUsage, nil)
 			// Retrieve the trace result and compare against the expected
 			res, err := tc.tracer.GetResult()
 			if err != nil {
@@ -388,5 +389,63 @@ func TestInternals(t *testing.T) {
 				t.Errorf("test %v: trace mismatch\n have: %v\n want: %v\n", tc.name, string(res), tc.want)
 			}
 		})
+	}
+}
+
+// TestCallTracerGasDimensionsAmsterdam checks the EIP-8037 settlement on the
+// callTracer root frame: a value transfer creating an account, and the same
+// transfer with calldata whose floor binds the execution dimension only.
+func TestCallTracerGasDimensionsAmsterdam(t *testing.T) {
+	var (
+		config  = *params.MergedTestChainConfig
+		key, _  = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+		origin  = crypto.PubkeyToAddress(key.PublicKey)
+		to      = common.HexToAddress("0x00000000000000000000000000000000000c0ffe")
+		signer  = types.LatestSigner(&config)
+		context = vm.BlockContext{
+			CanTransfer:      core.CanTransfer,
+			Transfer:         core.Transfer,
+			BlockNumber:      big.NewInt(1),
+			Random:           &common.Hash{},
+			GasLimit:         60_000_000,
+			BaseFee:          new(big.Int),
+			BlobBaseFee:      new(big.Int),
+			CostPerStateByte: params.CostPerStateByte,
+		}
+	)
+	config.AmsterdamTime = new(uint64)
+
+	for _, tc := range []struct {
+		data []byte
+		want string
+	}{
+		{nil, `{"from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x40000","gasUsed":"0x31f38","to":"0x00000000000000000000000000000000000c0ffe","input":"0x","value":"0x1","regularGasUsed":"0x5208","stateGasUsed":"0x2cd30","gasRefund":"0x0","type":"CALL"}`},
+		{bytes.Repeat([]byte{0xff}, 64), `{"from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x40000","gasUsed":"0x32338","to":"0x00000000000000000000000000000000000c0ffe","input":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","value":"0x1","regularGasUsed":"0x6208","stateGasUsed":"0x2cd30","gasRefund":"0x0","type":"CALL"}`},
+	} {
+		st := tests.MakePreState(rawdb.NewMemoryDatabase(), types.GenesisAlloc{origin: {Balance: big.NewInt(params.Ether)}}, false, rawdb.HashScheme)
+		tracer, err := tracers.DefaultDirectory.New("callTracer", new(tracers.Context), nil, &config)
+		if err != nil {
+			t.Fatalf("failed to create call tracer: %v", err)
+		}
+		tx := types.MustSignNewTx(key, signer, &types.DynamicFeeTx{ChainID: config.ChainID, To: &to, Value: big.NewInt(1), Gas: 0x40000, Data: tc.data})
+		msg, err := core.TransactionToMessage(tx, signer, context.BaseFee)
+		if err != nil {
+			t.Fatalf("failed to create message: %v", err)
+		}
+		evm := vm.NewEVM(context, state.NewHookedState(st.StateDB, tracer.Hooks), &config, vm.Config{Tracer: tracer.Hooks})
+		tracer.OnTxStart(evm.GetVMContext(), tx, msg.From)
+		vmRet, err := core.ApplyMessage(evm, msg, core.NewGasPool(context.GasLimit))
+		if err != nil {
+			t.Fatalf("failed to execute transaction: %v", err)
+		}
+		tracer.EmitTxEnd(&types.Receipt{GasUsed: vmRet.UsedGas}, vmRet.GasUsage, nil)
+		res, err := tracer.GetResult()
+		st.Close()
+		if err != nil {
+			t.Fatalf("failed to retrieve trace result: %v", err)
+		}
+		if string(res) != tc.want {
+			t.Errorf("trace mismatch\n have: %s\n want: %s", res, tc.want)
+		}
 	}
 }
