@@ -326,6 +326,20 @@ func (tx *Transaction) GasTipCap() *big.Int { return new(big.Int).Set(tx.inner.g
 // GasFeeCap returns the fee cap per gas of the transaction.
 func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.gasFeeCap()) }
 
+// GasTipCapUint256 returns the gasTipCap per gas of the transaction as a
+// uint256, and whether it overflowed, without the copy GasTipCap makes.
+func (tx *Transaction) GasTipCapUint256() (tip uint256.Int, overflow bool) {
+	overflow = tip.SetFromBig(tx.inner.gasTipCap())
+	return tip, overflow
+}
+
+// GasFeeCapUint256 returns the fee cap per gas of the transaction as a
+// uint256, and whether it overflowed, without the copy GasFeeCap makes.
+func (tx *Transaction) GasFeeCapUint256() (fee uint256.Int, overflow bool) {
+	overflow = fee.SetFromBig(tx.inner.gasFeeCap())
+	return fee, overflow
+}
+
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
 
