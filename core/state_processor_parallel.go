@@ -442,6 +442,7 @@ func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block 
 				tx := txs[i]
 				msg, err := TransactionToMessage(tx, signer, header.BaseFee)
 				if err != nil {
+					recordTransactionRejected()
 					return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 				}
 
@@ -459,6 +460,7 @@ func (p *StateProcessor) executeTransactionsParallel(ctx context.Context, block 
 				gp := NewGasPool(gasLimit)
 				receipt, accessList, err := ApplyTransactionWithEVM(ctx, msg, gp, sdb, blockNumber, blockHash, context.Time, tx, evm)
 				if err != nil {
+					recordTransactionRejected()
 					return fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
 				}
 				if dbErr := sdb.Error(); dbErr != nil {
