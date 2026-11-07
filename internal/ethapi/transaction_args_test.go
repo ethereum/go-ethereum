@@ -225,6 +225,13 @@ func TestSetFeeDefaults(t *testing.T) {
 			errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified"),
 		},
 		{
+			"set gas price and blob hashes",
+			"cancun",
+			&TransactionArgs{GasPrice: fortytwo, BlobHashes: []common.Hash{{0x01}}},
+			nil,
+			errors.New("both gasPrice and blobVersionedHashes specified"),
+		},
+		{
 			"fill maxFeePerBlobGas",
 			"cancun",
 			&TransactionArgs{BlobHashes: []common.Hash{}},
