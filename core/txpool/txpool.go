@@ -39,7 +39,7 @@ func HeadState(config *params.ChainConfig, stateAt func(common.Hash, *big.Int, u
 		return statedb, nil
 	}
 	root := types.EmptyRootHash
-	if config.IsUBT(head.Number, head.Time) {
+	if config.IsUBT(head.Number, head.Time) || config.IsPBT(head.Number, head.Time) {
 		root = types.EmptyBinaryHash
 	}
 	return stateAt(root, head.Number, head.Time)
