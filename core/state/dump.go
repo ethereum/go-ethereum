@@ -192,6 +192,12 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 				}
 				account.Storage[key] = common.Bytes2Hex(common.TrimLeftZeroes(val[:]))
 			}
+			// Next returns false on both exhaustion and error, surface the
+			// error instead of reporting truncated storage as complete.
+			if err := storageIt.Error(); err != nil {
+				storageIt.Release()
+				return nil, err
+			}
 			storageIt.Release()
 		}
 		c.OnAccount(address, account)
@@ -206,6 +212,11 @@ func (s *StateDB) DumpToCollector(c DumpCollector, conf *DumpConfig) (nextKey []
 			}
 			break
 		}
+	}
+	// Next returns false on both exhaustion and error, surface the error
+	// instead of reporting a truncated dump (with a nil next key) as complete.
+	if err := acctIt.Error(); err != nil {
+		return nil, err
 	}
 	if missingPreimages > 0 {
 		log.Warn("Dump incomplete due to missing preimages", "missing", missingPreimages)
