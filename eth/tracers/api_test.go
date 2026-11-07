@@ -1742,7 +1742,11 @@ func TestIntermediateRoots(t *testing.T) {
 			},
 		}
 	)
-	backend := newTestBackend(t, 1, genesis, func(i int, b *core.BlockGen) {
+	backend := newTestBackend(t, 2, genesis, func(i int, b *core.BlockGen) {
+		// Leave block 2 empty
+		if i != 0 {
+			return
+		}
 		// tx 0: plain transfer
 		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
 			Nonce:    0,
@@ -1799,6 +1803,16 @@ func TestIntermediateRoots(t *testing.T) {
 	}
 	if roots[1] == roots[2] {
 		t.Error("root[1] and root[2] should differ (sstore to different slots)")
+	}
+
+	// Block without transactions: should return an empty list, not null
+	empty := backend.chain.GetBlockByNumber(2)
+	emptyRoots, err := api.IntermediateRoots(context.Background(), empty.Hash(), nil)
+	if err != nil {
+		t.Fatalf("want no error for empty block, have %v", err)
+	}
+	if emptyRoots == nil || len(emptyRoots) != 0 {
+		t.Errorf("want empty roots for empty block, have %v", emptyRoots)
 	}
 
 	// Intermediate roots of a bad block

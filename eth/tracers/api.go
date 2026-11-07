@@ -514,7 +514,7 @@ func (api *API) IntermediateRoots(ctx context.Context, hash common.Hash, config 
 	defer release()
 
 	var (
-		roots       []common.Hash
+		roots       = make([]common.Hash, 0, len(block.Transactions()))
 		signer      = types.MakeSigner(api.backend.ChainConfig(), block.Number(), block.Time())
 		chainConfig = api.backend.ChainConfig()
 		rules       = chainConfig.Rules(block.Number(), block.Difficulty().Sign() == 0, block.Time())
