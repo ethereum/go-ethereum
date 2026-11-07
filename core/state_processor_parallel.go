@@ -137,7 +137,7 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 		txs    = block.Transactions()
 		start  = time.Now()
 
-		signer    = types.MakeSigner(config, header.Number, header.Time)
+		signer    = p.getSigner(header)
 		context   = NewEVMBlockContext(header, p.chain, nil)
 		postIndex = uint32(len(txs) + 1)
 		db        = statedb.Database()

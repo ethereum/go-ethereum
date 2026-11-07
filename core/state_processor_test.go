@@ -17,6 +17,7 @@
 package core
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"math"
 	"math/big"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/keccak"
 	"github.com/ethereum/go-ethereum/params"
@@ -431,4 +433,79 @@ func GenerateBadBlock(parent *types.Block, engine consensus.Engine, txs types.Tr
 		body.Withdrawals = []*types.Withdrawal{}
 	}
 	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
+}
+
+// mockSigner is a signer that returns a predefined sender without verifying signatures.
+type mockSigner struct {
+	types.Signer
+	sender common.Address
+}
+
+func (s *mockSigner) Sender(tx *types.Transaction) (common.Address, error) {
+	return s.sender, nil
+}
+
+func TestStateProcessorCustomSigner(t *testing.T) {
+	var (
+		db     = rawdb.NewMemoryDatabase()
+		sender = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")
+		to     = common.HexToAddress("0x1111111111111111111111111111111111111111")
+		gspec  = &Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: withSystemContracts(types.GenesisAlloc{
+				sender: types.Account{
+					Balance: big.NewInt(1000000000000000000), // 1 ether
+				},
+			}),
+		}
+		blockchain, _ = NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), nil)
+	)
+	defer blockchain.Stop()
+
+	// Create an unsigned transaction (no signature values set).
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    0,
+		To:       &to,
+		Value:    big.NewInt(1000),
+		Gas:      params.TxGas,
+		GasPrice: big.NewInt(params.InitialBaseFee),
+	})
+	block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), []*types.Transaction{tx}, gspec.Config, false)
+
+	// 1. Processing with default StateProcessor should fail due to signature verification.
+	statedb, err := blockchain.State()
+	if err != nil {
+		t.Fatalf("failed to get state: %v", err)
+	}
+	proc := NewStateProcessor(blockchain)
+	_, err = proc.Process(context.Background(), block, statedb, nil, nil, vm.Config{}, nil, nil)
+	if err == nil {
+		t.Fatal("expected failure with default signer on unsigned tx, got nil")
+	}
+
+	// 2. Processing with custom signer should succeed.
+	statedb, err = blockchain.State()
+	if err != nil {
+		t.Fatalf("failed to get state: %v", err)
+	}
+	proc = NewStateProcessor(blockchain)
+	proc.SetSigner(func(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) types.Signer {
+		return &mockSigner{
+			Signer: types.MakeSigner(config, blockNumber, blockTime),
+			sender: sender,
+		}
+	})
+	res, err := proc.Process(context.Background(), block, statedb, nil, nil, vm.Config{}, nil, nil)
+	if err != nil {
+		t.Fatalf("failed to process block with custom signer: %v", err)
+	}
+	if len(res.Receipts) != 1 {
+		t.Fatalf("expected 1 receipt, got %d", len(res.Receipts))
+	}
+	if res.Receipts[0].Status != types.ReceiptStatusSuccessful {
+		t.Fatalf("expected receipt status successful, got %d", res.Receipts[0].Status)
+	}
+	if have := statedb.GetBalance(to); have.Cmp(uint256.NewInt(1000)) != 0 {
+		t.Fatalf("recipient balance mismatch: have %v, want 1000", have)
+	}
 }
