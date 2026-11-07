@@ -246,11 +246,9 @@ func (p *StateProcessor) processParallel(ctx context.Context, block *types.Block
 
 		gasLimit := txs[i].Gas()
 		if err := gp.CheckGasAmsterdam(min(gasLimit, params.MaxTxGas), gasLimit); err != nil {
-			recordTransactionRejected()
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
 		}
 		if err := gp.ChargeGasAmsterdam(res.execution, res.state, receipt.GasUsed); err != nil {
-			recordTransactionRejected()
 			return nil, fmt.Errorf("could not apply tx %d [%v]: %w", i, txs[i].Hash().Hex(), err)
 		}
 		// Correct the receipt object with block-level fields
