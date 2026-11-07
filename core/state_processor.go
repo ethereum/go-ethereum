@@ -44,14 +44,30 @@ import (
 //
 // StateProcessor implements Processor.
 type StateProcessor struct {
-	chain ChainContext // Chain context interface
+	chain      ChainContext   // Chain context interface
+	makeSigner types.SignerFn // Function to create a transaction signer
 }
 
 // NewStateProcessor initialises a new StateProcessor.
 func NewStateProcessor(chain ChainContext) *StateProcessor {
 	return &StateProcessor{
-		chain: chain,
+		chain:      chain,
+		makeSigner: types.MakeSigner,
 	}
+}
+
+// SetSigner sets a custom signer function for creating signers during block processing.
+func (p *StateProcessor) SetSigner(fn types.SignerFn) {
+	p.makeSigner = fn
+}
+
+// getSigner returns the signer for the given header, falling back to types.MakeSigner
+// if no custom signer function was provided.
+func (p *StateProcessor) getSigner(header *types.Header) types.Signer {
+	if p.makeSigner != nil {
+		return p.makeSigner(p.chainConfig(), header.Number, header.Time)
+	}
+	return types.MakeSigner(p.chainConfig(), header.Number, header.Time)
 }
 
 // chainConfig returns the chain configuration.
@@ -100,7 +116,7 @@ func (p *StateProcessor) Process(ctx context.Context, block *types.Block, stated
 	}
 	var (
 		context         = NewEVMBlockContext(header, p.chain, nil)
-		signer          = types.MakeSigner(config, header.Number, header.Time)
+		signer          = p.getSigner(header)
 		evm             = vm.NewEVM(context, tracingStateDB, config, cfg)
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	)

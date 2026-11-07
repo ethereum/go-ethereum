@@ -37,6 +37,9 @@ type sigCache struct {
 	from   common.Address
 }
 
+// SignerFn is a function that creates a Signer for a given block.
+type SignerFn func(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer
+
 // MakeSigner returns a Signer based on the given chain config and block number.
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int, blockTime uint64) Signer {
 	var signer Signer
