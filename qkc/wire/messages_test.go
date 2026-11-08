@@ -18,6 +18,7 @@ package wire
 
 import (
 	"bytes"
+	"math"
 	"math/big"
 	"reflect"
 	"testing"
@@ -426,16 +427,25 @@ func TestConnectToSlavesSSZRoundTrip(t *testing.T) {
 }
 
 func TestHelloCommandSSZRoundTrip(t *testing.T) {
-	msg := &HelloCommand{
-		Version:              1,
-		NetworkID:            2,
-		PeerID:               common.Hash{1, 2, 3},
-		PeerIP:               [UInt128Length]byte{127, 0, 0, 1},
-		PeerPort:             38291,
-		RootBlockHeader:      []byte{0xaa, 0xbb},
-		GenesisRootBlockHash: common.Hash{4, 5, 6},
+	for _, networkID := range []uint64{2, 1<<32 + 1, math.MaxUint64} {
+		msg := &HelloCommand{
+			Version:              1,
+			NetworkID:            networkID,
+			PeerID:               common.Hash{1, 2, 3},
+			PeerIP:               [UInt128Length]byte{127, 0, 0, 1},
+			PeerPort:             38291,
+			RootBlockHeader:      []byte{0xaa, 0xbb},
+			GenesisRootBlockHash: common.Hash{4, 5, 6},
+		}
+		roundTripSSZ(t, msg)
+		var decoded HelloCommand
+		if err := decoded.UnmarshalSSZ(mustMarshalSSZ(t, msg)); err != nil {
+			t.Fatal(err)
+		}
+		if decoded.NetworkID != networkID {
+			t.Fatalf("NetworkID = %d, want %d", decoded.NetworkID, networkID)
+		}
 	}
-	roundTripSSZ(t, msg)
 }
 
 func TestSSZRejectsInvalidOffset(t *testing.T) {
@@ -460,7 +470,7 @@ func TestGeneratedCodecsRejectMalformedPayloads(t *testing.T) {
 		{"ConnectToSlavesResponse", 0, func() SSZMessage { return new(ConnectToSlavesResponse) }},
 		{"AddRootBlockRequest", 0, func() SSZMessage { return new(AddRootBlockRequest) }},
 		{"AddRootBlockResponse", -1, func() SSZMessage { return new(AddRootBlockResponse) }},
-		{"HelloCommand", 58, func() SSZMessage { return new(HelloCommand) }},
+		{"HelloCommand", 62, func() SSZMessage { return new(HelloCommand) }},
 		{"AddMinorBlockHeaderRequest", 0, func() SSZMessage { return new(AddMinorBlockHeaderRequest) }},
 		{"AddMinorBlockHeaderResponse", -1, func() SSZMessage { return new(AddMinorBlockHeaderResponse) }},
 		{"AddXshardTxListRequest", 64, func() SSZMessage { return new(AddXshardTxListRequest) }},
@@ -516,6 +526,31 @@ func TestResultListGoldenEncoding(t *testing.T) {
 }
 
 // ---- golden encoding ----
+
+func TestHelloCommandGoldenEncoding(t *testing.T) {
+	msg := &HelloCommand{
+		Version:              1,
+		NetworkID:            0x0102030405060708,
+		PeerID:               common.Hash{1, 2, 3},
+		PeerIP:               [UInt128Length]byte{127, 0, 0, 1},
+		PeerPort:             38291,
+		RootBlockHeader:      []byte{0xaa, 0xbb},
+		GenesisRootBlockHash: common.Hash{4, 5, 6},
+	}
+	// The fixed section is 98 bytes. NetworkID occupies eight little-endian
+	// bytes after Version, and RootBlockHeader's offset starts at byte 62.
+	want := make([]byte, 100)
+	copy(want, []byte{1, 0, 0, 0, 8, 7, 6, 5, 4, 3, 2, 1})
+	want[12], want[13], want[14] = 1, 2, 3
+	want[44], want[47] = 127, 1
+	want[60], want[61] = 0x93, 0x95
+	want[62] = 98
+	want[66], want[67], want[68] = 4, 5, 6
+	want[98], want[99] = 0xaa, 0xbb
+	if got := mustMarshalSSZ(t, msg); !bytes.Equal(got, want) {
+		t.Fatalf("HELLO encoding mismatch:\n  got  %x\n  want %x", got, want)
+	}
+}
 
 // TestSSZGoldenEncoding pins the encoding of a PingRequest with a fixed-width
 // ChainID, HasRootTip=false, and an empty RootTip.
