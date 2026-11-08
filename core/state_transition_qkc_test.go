@@ -53,7 +53,7 @@ func xShardTestMove(logIndex uint64, from, to common.Address, value, gasPrice ui
 // TestDepositExecution runs cross-shard deposits at the start of a block of a
 // shard, followed by a transaction of the sender of one of them, and checks
 // that each deposit credits its value to its recipient without running any
-// code, and pays its gas to the coinbase.
+// code, and pays its gas to the coinbase after reward tax.
 func TestDepositExecution(t *testing.T) {
 	t.Run("pre-amsterdam", func(t *testing.T) { testDepositExecution(t, false) })
 	t.Run("amsterdam", func(t *testing.T) { testDepositExecution(t, true) })
@@ -139,7 +139,9 @@ func testDepositExecution(t *testing.T, amsterdam bool) {
 		if r.EffectiveGasPrice.Cmp(gasPrice) != 0 {
 			t.Errorf("deposit %d: effective gas price %v, want %v", i, r.EffectiveGasPrice, gasPrice)
 		}
-		coinbaseFee.Add(coinbaseFee, new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(params.XShardSendGas)))
+		// The test configuration taxes each fee at 50%, as in pyquarkchain.
+		fee := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(params.XShardSendGas))
+		coinbaseFee.Add(coinbaseFee, fee.Div(fee, big.NewInt(2)))
 		if received[*d.To] == nil {
 			received[*d.To] = new(big.Int)
 		}
@@ -150,11 +152,12 @@ func testDepositExecution(t *testing.T, amsterdam bool) {
 			t.Errorf("deposit %d: sender exists with balance %v", i, statedb.GetBalance(d.From))
 		}
 	}
-	// The coinbase is paid all the gas of the deposits, at their gas price, and
-	// the tip of the transaction.
+	// Deposits pay their full gas price before tax; ordinary transactions pay
+	// the effective tip before tax. The sender still pays the untaxed gas cost.
 	tx := receipts[0][len(deposits)]
 	tip := new(big.Int).Sub(tx.EffectiveGasPrice, block.BaseFee())
-	coinbaseFee.Add(coinbaseFee, tip.Mul(tip, new(big.Int).SetUint64(tx.GasUsed)))
+	fee := tip.Mul(tip, new(big.Int).SetUint64(tx.GasUsed))
+	coinbaseFee.Add(coinbaseFee, fee.Div(fee, big.NewInt(2)))
 	if have := statedb.GetBalance(coinbase).ToBig(); have.Cmp(coinbaseFee) != 0 {
 		t.Errorf("coinbase balance %v, want %v", have, coinbaseFee)
 	}

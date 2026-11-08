@@ -54,41 +54,45 @@ type Data []byte
 // sizes. Actual message size is primarily constrained by the per-frame size
 // limit. Revisit these bounds if QKC defines protocol-specific field limits.
 
-// PingRequest (ClusterOp.PING, 0x81) initializes a chain connection.
-// Chain↔chain PINGs use HasRootTip=false. pyquarkchain sent a dummy root block
+// PingRequest (ClusterOp.PING, 0x81) initializes a slave connection.
+// Slave↔slave PINGs use HasRootTip=false. pyquarkchain sent a dummy root block
 // on these links, but the receiver ignored it.
 type PingRequest struct {
-	// ChainID identifies the dialing chain on chain↔chain links, whose frames
-	// have no metadata. It encodes ChainConfig.ChainID as a little-endian
-	// uint256. Master→chain handlers ignore it.
+	// ChainID identifies the chain hosted by the dialing slave on
+	// slave↔slave links, whose frames have no metadata. It encodes
+	// ChainConfig.ChainID as a little-endian uint256. Master→slave
+	// handlers ignore it.
 	ChainID    [UInt256Length]byte
 	HasRootTip bool
 	RootTip    Data `ssz-max:"4294967295"` // SSZ-encoded RootBlock when HasRootTip is true.
 }
 
-// PongResponse (ClusterOp.PONG, 0x82) is the chain's response to PING and
+// PongResponse (ClusterOp.PONG, 0x82) is the slave's response to PING and
 // echoes the request RPCID in the frame header.
 type PongResponse struct {
 	ChainID [UInt256Length]byte
 }
 
-// ChainInfo describes a remote chain for ConnectToChainsRequest.
-type ChainInfo struct {
+// SlaveInfo describes a slave endpoint and the chain it hosts.
+type SlaveInfo struct {
 	Host    []byte `ssz-max:"4294967295"`
 	Port    uint16
 	ChainID [UInt256Length]byte
 }
 
-// ConnectToChainsRequest (opcode 0x83) asks a chain to connect to the listed
-// chains and report each result.
-type ConnectToChainsRequest struct {
-	ChainInfoList []ChainInfo `ssz-max:"4294967295"`
+// ConnectToSlavesRequest (opcode 0x83) asks a slave to connect to the listed
+// slaves and report each result.
+// Master must send this request to one slave at a time and wait for its response
+// before sending to the next. Together with inbound registration before PONG,
+// this ensures each slave pair establishes a single connection.
+type ConnectToSlavesRequest struct {
+	SlaveInfoList []SlaveInfo `ssz-max:"4294967295"`
 }
 
-// ConnectToChainsResponse (opcode 0x84) reports one result per requested
-// chain, in request order. Empty means success; non-empty contains the error
+// ConnectToSlavesResponse (opcode 0x84) reports one result per requested
+// slave, in request order. Empty means success; non-empty contains the error
 // payload.
-type ConnectToChainsResponse struct {
+type ConnectToSlavesResponse struct {
 	ResultList [][]byte `ssz-max:"4294967295,4294967295" ssz-size:"?,?"`
 }
 
@@ -127,7 +131,7 @@ type AddXshardTxListResponse struct {
 	ErrorCode uint32
 }
 
-// AddRootBlockRequest sends a root block from Master to every chain. RootBlock
+// AddRootBlockRequest sends a root block from Master to every slave. RootBlock
 // carries an SSZ-encoded QKC RootBlock.
 type AddRootBlockRequest struct {
 	RootBlock Data `ssz-max:"4294967295"`
