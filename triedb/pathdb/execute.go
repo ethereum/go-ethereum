@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -80,14 +79,17 @@ func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash,
 	// Write the accounts present in prev-state first and delete the others
 	// afterwards. The modified nodes depend on the order: a deletion can
 	// collapse a node that a later insertion recreates unchanged.
-	for _, deletes := range []bool{false, true} {
-		for _, r := range reverts {
-			if (r.prev == nil) != deletes {
-				continue
-			}
-			if err := finishRevert(ctx, r); err != nil {
-				return nil, fmt.Errorf("failed to revert state, err: %w", err)
-			}
+	var updates, deletes []*accountRevert
+	for _, r := range reverts {
+		if r.prev == nil {
+			deletes = append(deletes, r)
+		} else {
+			updates = append(updates, r)
+		}
+	}
+	for _, r := range append(updates, deletes...) {
+		if err := finishRevert(ctx, r); err != nil {
+			return nil, fmt.Errorf("failed to revert state, err: %w", err)
 		}
 	}
 	root, result := tr.Commit(false)
@@ -100,37 +102,30 @@ func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash,
 	return ctx.nodes.Nodes(), nil
 }
 
-// revertAccounts reverts the storage tries of all accounts concurrently. Each
-// worker reads the accounts from its own copy of the account trie, as a trie
-// isn't safe for concurrent use.
+// revertAccounts reads the accounts after resolving their paths in the account
+// trie in parallel, and reverts their storage tries concurrently.
 func revertAccounts(ctx *context, db database.NodeDatabase) ([]*accountRevert, error) {
-	addrs := make(chan common.Address, len(ctx.accounts))
+	keys := make([][]byte, 0, len(ctx.accounts))
 	for addr := range ctx.accounts {
-		addrs <- addr
+		keys = append(keys, crypto.Keccak256(addr.Bytes()))
 	}
-	close(addrs)
-
+	if err := ctx.accountTrie.Prefetch(keys); err != nil {
+		return nil, err
+	}
 	var (
-		lock    sync.Mutex
 		reverts = make([]*accountRevert, 0, len(ctx.accounts))
 		workers errgroup.Group
 	)
-	for range min(runtime.GOMAXPROCS(0), len(ctx.accounts)) {
-		accountTrie := ctx.accountTrie.Copy()
+	workers.SetLimit(runtime.GOMAXPROCS(0))
+	for addr := range ctx.accounts {
+		r, postStorageRoot, err := prepareRevert(ctx, addr)
+		if err != nil {
+			workers.Wait()
+			return nil, err
+		}
+		reverts = append(reverts, r)
 		workers.Go(func() error {
-			for addr := range addrs {
-				r, postStorageRoot, err := prepareRevert(ctx, accountTrie, addr)
-				if err != nil {
-					return err
-				}
-				if err := revertStorage(ctx, db, r, postStorageRoot); err != nil {
-					return err
-				}
-				lock.Lock()
-				reverts = append(reverts, r)
-				lock.Unlock()
-			}
-			return nil
+			return revertStorage(ctx, db, r, postStorageRoot)
 		})
 	}
 	if err := workers.Wait(); err != nil {
@@ -142,7 +137,7 @@ func revertAccounts(ctx *context, db database.NodeDatabase) ([]*accountRevert, e
 // prepareRevert decodes the account's prev-state value and resolves its
 // post-state storage root. An account absent in prev-state must exist in
 // post-state, and its storage changes must all be deletions.
-func prepareRevert(ctx *context, accountTrie *trie.Trie, addr common.Address) (*accountRevert, common.Hash, error) {
+func prepareRevert(ctx *context, addr common.Address) (*accountRevert, common.Hash, error) {
 	r := &accountRevert{
 		addr:     addr,
 		addrHash: crypto.Keccak256Hash(addr.Bytes()),
@@ -156,7 +151,7 @@ func prepareRevert(ctx *context, accountTrie *trie.Trie, addr common.Address) (*
 		}
 		r.prev = prev
 	}
-	blob, err := accountTrie.Get(r.addrHash.Bytes())
+	blob, err := ctx.accountTrie.Get(r.addrHash.Bytes())
 	if err != nil {
 		return nil, common.Hash{}, err
 	}
