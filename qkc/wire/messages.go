@@ -99,7 +99,7 @@ type ConnectToSlavesResponse struct {
 // HelloCommand (CommandOp.HELLO, 0x00) is the non-RPC Master↔Master handshake.
 type HelloCommand struct {
 	Version              uint32
-	NetworkID            uint32
+	NetworkID            uint64
 	PeerID               common.Hash
 	PeerIP               [UInt128Length]byte
 	PeerPort             uint16
