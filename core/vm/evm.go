@@ -104,6 +104,11 @@ type EVM struct {
 	// depth is the current call stack
 	depth int
 
+	// failedCalls counts the nested calls and creations that ended in an
+	// error, reverts included. Gas estimation reads it to tell a sufficient
+	// gas limit apart from one that starves an inner call.
+	failedCalls int
+
 	// chainConfig contains information about the current chain
 	chainConfig *params.ChainConfig
 
@@ -272,6 +277,19 @@ func (evm *EVM) Cancelled() bool {
 	return evm.abort.Load()
 }
 
+// FailedCalls returns how many nested calls and creations have ended in an
+// error, reverts included, since the EVM was created.
+func (evm *EVM) FailedCalls() int {
+	return evm.failedCalls
+}
+
+// countFailure records a nested call or creation that ended in err.
+func (evm *EVM) countFailure(err error) {
+	if err != nil && evm.depth > 0 {
+		evm.failedCalls++
+	}
+}
+
 func isSystemCall(caller common.Address) bool {
 	return caller == params.SystemAddress
 }
@@ -281,6 +299,8 @@ func isSystemCall(caller common.Address) bool {
 // the necessary steps to create accounts and reverses the state in case of an
 // execution error or failed value transfer.
 func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, gas GasBudget, value *uint256.Int) (ret []byte, result GasBudget, err error) {
+	defer func() { evm.countFailure(err) }()
+
 	// Capture the tracer start/end events in debug mode
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, CALL, caller, addr, input, gas, value.ToBig())
@@ -363,6 +383,8 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 // CallCode differs from Call in the sense that it executes the given address'
 // code with the caller as context.
 func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byte, gas GasBudget, value *uint256.Int) (ret []byte, result GasBudget, err error) {
+	defer func() { evm.countFailure(err) }()
+
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, CALLCODE, caller, addr, input, gas, value.ToBig())
@@ -407,6 +429,8 @@ func (evm *EVM) CallCode(caller common.Address, addr common.Address, input []byt
 // DelegateCall differs from CallCode in the sense that it executes the given address'
 // code with the caller as context and the caller is set to the caller of the caller.
 func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address, addr common.Address, input []byte, gas GasBudget, value *uint256.Int) (ret []byte, result GasBudget, err error) {
+	defer func() { evm.countFailure(err) }()
+
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		// DELEGATECALL inherits value from parent call
@@ -445,6 +469,8 @@ func (evm *EVM) DelegateCall(originCaller common.Address, caller common.Address,
 // Opcodes that attempt to perform such modifications will result in exceptions
 // instead of performing the modifications.
 func (evm *EVM) StaticCall(caller common.Address, addr common.Address, input []byte, gas GasBudget) (ret []byte, result GasBudget, err error) {
+	defer func() { evm.countFailure(err) }()
+
 	// Invoke tracer hooks that signal entering/exiting a call frame
 	if evm.Config.Tracer != nil {
 		evm.captureBegin(evm.depth, STATICCALL, caller, addr, input, gas, nil)
@@ -548,6 +574,8 @@ func (evm *EVM) chargeAccountCreation(scope *ScopeContext, contractAddr common.A
 
 // create creates a new contract using code as deployment code.
 func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value *uint256.Int, address common.Address, typ OpCode) (ret []byte, createAddress common.Address, result GasBudget, err error) {
+	defer func() { evm.countFailure(err) }()
+
 	// Since Amsterdam, the precheck has been folded into the parent frame
 	// due to account-creation determination, so skip the duplicate check here.
 	if !evm.chainRules.IsAmsterdam {
