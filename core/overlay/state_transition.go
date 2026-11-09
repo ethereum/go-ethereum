@@ -17,9 +17,6 @@
 package overlay
 
 import (
-	"bytes"
-	"encoding/gob"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -78,18 +75,12 @@ func LoadTransitionState(db ethdb.KeyValueReader, root common.Hash, isUBT bool) 
 
 	// if a state could be read from the db, attempt to decode it
 	if len(data) > 0 {
-		var (
-			newts TransitionState
-			buf   = bytes.NewBuffer(data[:])
-			dec   = gob.NewDecoder(buf)
-		)
-		// Decode transition state
-		err := dec.Decode(&newts)
+		newts, err := decodeTransitionState(data)
 		if err != nil {
 			log.Error("failed to decode transition state", "err", err)
 			return nil
 		}
-		ts = &newts
+		ts = newts
 	}
 
 	// Fallback that should only happen before the transition
