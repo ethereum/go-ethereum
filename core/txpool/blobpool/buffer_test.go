@@ -526,9 +526,8 @@ func TestOverlappingDeliveryReleasesAccounting(t *testing.T) {
 	}
 }
 
-// TestProviderExtension checks that a transaction completed with the data cells
-// only (a full fetch) is extended to the full cell set before being handed to
-// the pool, with all-ones custody and cells matching the ground truth.
+// TestProviderExtension checks that a transaction delivered with only the data
+// cells is extended to the full cell set.
 func TestProviderExtension(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	blobCount := 2
@@ -565,7 +564,6 @@ func TestProviderExtension(t *testing.T) {
 	if len(cs.Cells) != blobCount*kzg4844.CellsPerBlob {
 		t.Fatalf("expected %d cells, got %d", blobCount*kzg4844.CellsPerBlob, len(cs.Cells))
 	}
-	// Compare every cell (data and extension) against the ground truth.
 	for b := 0; b < blobCount; b++ {
 		truth, err := kzg4844.ComputeCells([]kzg4844.Blob{*testBlobs[b]})
 		if err != nil {
@@ -579,10 +577,8 @@ func TestProviderExtension(t *testing.T) {
 	}
 }
 
-// TestProviderExtensionBadProof checks that a transaction whose shipped
-// extension proofs don't match its (verified) data is discarded rather than
-// stored: the extension cells are correct by construction, so a proof mismatch
-// means the transaction's own sidecar is inconsistent.
+// TestProviderExtensionBadProof checks that a transaction with an invalid
+// extension proof is discarded.
 func TestProviderExtensionBadProof(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	blobCount := 1
@@ -598,8 +594,7 @@ func TestProviderExtensionBadProof(t *testing.T) {
 	})
 
 	tx := makeV1Tx(t, 0, blobCount, 0, key)
-	// Corrupt one extension proof (an index outside the delivered custody, so
-	// per-peer verification cannot catch it).
+	// Corrupt a proof outside the delivered custody.
 	tx.BlobTxSidecar().Proofs[kzg4844.DataPerBlob][0] ^= 0xff
 	hash := tx.Hash()
 	buf.AddTx([]*types.Transaction{tx}, "peerA")
@@ -623,8 +618,8 @@ func TestProviderExtensionBadProof(t *testing.T) {
 	}
 }
 
-// TestNoExtensionBelowThreshold checks that a partial (sampler) transaction
-// with fewer than DataPerBlob cells is stored as delivered, unextended.
+// TestNoExtensionBelowThreshold checks that a transaction with fewer than
+// DataPerBlob cells is stored without extension.
 func TestNoExtensionBelowThreshold(t *testing.T) {
 	key, _ := crypto.GenerateKey()
 	blobCount := 2
