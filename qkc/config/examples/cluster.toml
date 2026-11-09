@@ -1,0 +1,60 @@
+# Single-machine deployment example; adjust endpoints and paths for your setup.
+# Runtime paths follow geth: relative to the working directory.
+NetworkID = 2
+
+# Example reward recipient; replace it with your own mining address.
+[Master]
+CoinbaseAddress = "0x1111111111111111111111111111111111111111"
+
+# Field definitions: node.Config in node/config.go (path relative to repository root).
+[Master.Node]
+DataDir = "./qkc-data/master"
+IPCPath = "qkc-master.ipc"
+
+[Master.Node.P2P]
+ListenAddr = ":30303"
+# Example peer limit; discovery is disabled for this single-cluster setup.
+MaxPeers = 25
+NoDiscovery = true
+
+[[Slaves]]
+ChainID = "100001"
+# Internal QKC TCP endpoint for Master and other shards.
+PrivateHost = "127.0.0.1"
+PrivatePort = 38000
+# Client-facing HTTP JSON-RPC endpoint.
+PublicHost = "127.0.0.1"
+PublicPort = 18545
+CoinbaseAddress = "0x2222222222222222222222222222222222222222"
+
+# Field definitions: node.Config in node/config.go (path relative to repository root).
+[Slaves.Node]
+DataDir = "./qkc-data/shard-100001"
+
+# Demonstrates how each shard can override geth runtime settings.
+# This section is optional; omitted settings inherit geth defaults.
+# Field definitions: ethconfig.Config in eth/ethconfig/config.go (repository root).
+[Slaves.Eth]
+# Example database-cache budget in MiB, not a QKC default or total memory limit.
+DatabaseCache = 512
+
+[[Slaves]]
+ChainID = "100002"
+# Internal QKC TCP endpoint for Master and other shards.
+PrivateHost = "127.0.0.1"
+PrivatePort = 38001
+# Client-facing HTTP JSON-RPC endpoint.
+PublicHost = "127.0.0.1"
+PublicPort = 18546
+CoinbaseAddress = "0x3333333333333333333333333333333333333333"
+
+# Field definitions: node.Config in node/config.go (path relative to repository root).
+[Slaves.Node]
+DataDir = "./qkc-data/shard-100002"
+
+# Demonstrates how each shard can override geth runtime settings.
+# This section is optional; omitted settings inherit geth defaults.
+# Field definitions: ethconfig.Config in eth/ethconfig/config.go (repository root).
+[Slaves.Eth]
+# A different example budget (MiB) to demonstrate independent shard overrides.
+DatabaseCache = 256
