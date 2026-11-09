@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/mclock"
-	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/txpool/txorder"
@@ -525,11 +524,11 @@ func (c *Cache) selectTopTxs() []common.Hash {
 		return nil
 	}
 	config := p.chain.Config()
-	baseFee := eip1559.CalcBaseFee(config, head)
+	baseFee := p.nextBaseFee(head)
 
 	filter := txpool.PendingFilter{
 		BlobTxs:      true,
-		BaseFee:      uint256.MustFromBig(baseFee),
+		BaseFee:      baseFee,
 		PartialCells: c.needCell,
 	}
 	if head.ExcessBlobGas != nil {
@@ -543,7 +542,7 @@ func (c *Cache) selectTopTxs() []common.Hash {
 	pending, _ := p.Pending(filter)
 	vhashesOf := p.vhashesByTx()
 
-	order := txorder.NewTransactionsByPriceAndNonce(p.signer, pending, baseFee)
+	order := txorder.NewTransactionsByPriceAndNonce(p.signer, pending, baseFee.ToBig())
 
 	// Bound the selection by the active fork's blob limit so the cache follows
 	// BPO changes to maxBlobsPerBlock.

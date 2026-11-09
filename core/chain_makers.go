@@ -243,7 +243,7 @@ func (b *BlockGen) AddUncle(h *types.Header) {
 	// The gas limit and price should be derived from the parent
 	h.GasLimit = parent.GasLimit
 	if b.cm.config.IsLondon(h.Number) {
-		h.BaseFee = eip1559.CalcBaseFee(b.cm.config, parent)
+		h.BaseFee = eip1559.CalcBaseFee(b.cm.config, parent, h)
 		if !b.cm.config.IsLondon(parent.Number) {
 			parentGasLimit := parent.GasLimit * b.cm.config.ElasticityMultiplier()
 			h.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
@@ -294,14 +294,17 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 }
 
 // OffsetTime modifies the time instance of a block, implicitly changing its
-// associated difficulty. It's useful to test scenarios where forking is not
-// tied to chain length directly.
+// associated difficulty and base fee. It's useful to test scenarios where
+// forking is not tied to chain length directly.
 func (b *BlockGen) OffsetTime(seconds int64) {
 	b.header.Time += uint64(seconds)
 	if b.header.Time <= b.cm.bottom.Header().Time {
 		panic("block time out of range")
 	}
 	b.header.Difficulty = b.engine.CalcDifficulty(b.cm, b.header.Time, b.parent.Header())
+	if b.cm.config.IsLondon(b.header.Number) {
+		b.header.BaseFee = eip1559.CalcBaseFee(b.cm.config, b.parent.Header(), b.header)
+	}
 }
 
 // ConsensusLayerRequests returns the EIP-7685 requests which have accumulated so far.
@@ -528,8 +531,15 @@ func (cm *chainMaker) makeHeader(parent *types.Block, engine consensus.Engine) *
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
 		Time:       time,
 	}
+	if cm.config.IsAmsterdam(header.Number, header.Time) {
+		var slot uint64
+		if parentHeader.SlotNumber != nil {
+			slot = *parentHeader.SlotNumber + 1
+		}
+		header.SlotNumber = &slot
+	}
 	if cm.config.IsLondon(header.Number) {
-		header.BaseFee = eip1559.CalcBaseFee(cm.config, parentHeader)
+		header.BaseFee = eip1559.CalcBaseFee(cm.config, parentHeader, header)
 		if !cm.config.IsLondon(parent.Number()) {
 			parentGasLimit := parent.GasLimit() * cm.config.ElasticityMultiplier()
 			header.GasLimit = CalcGasLimit(parentGasLimit, parentGasLimit)
@@ -540,13 +550,6 @@ func (cm *chainMaker) makeHeader(parent *types.Block, engine consensus.Engine) *
 		header.ExcessBlobGas = &excessBlobGas
 		header.BlobGasUsed = new(uint64)
 		header.ParentBeaconRoot = new(common.Hash)
-	}
-	if cm.config.IsAmsterdam(header.Number, header.Time) {
-		var slot uint64
-		if parentHeader.SlotNumber != nil {
-			slot = *parentHeader.SlotNumber + 1
-		}
-		header.SlotNumber = &slot
 	}
 	return header
 }

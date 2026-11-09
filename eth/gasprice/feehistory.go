@@ -52,7 +52,8 @@ type blockFees struct {
 	// set by the caller
 	blockNumber uint64
 	header      *types.Header
-	block       *types.Block // only set if reward percentiles are requested
+	parent      *types.Header // used to estimate the next base fee
+	block       *types.Block  // only set if reward percentiles are requested
 	receipts    types.Receipts
 	// filled by processBlock
 	results processedFees
@@ -90,7 +91,7 @@ func (oracle *Oracle) processBlock(bf *blockFees, percentiles []float64) {
 		bf.results.baseFee = new(big.Int)
 	}
 	if config.IsLondon(big.NewInt(int64(bf.blockNumber + 1))) {
-		bf.results.nextBaseFee = eip1559.CalcBaseFee(config, bf.header)
+		bf.results.nextBaseFee = eip1559.CalcNextBaseFee(config, bf.header, bf.parent)
 	} else {
 		bf.results.nextBaseFee = new(big.Int)
 	}
@@ -293,6 +294,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 				if pendingBlock != nil && blockNumber >= pendingBlock.NumberU64() {
 					fees.block, fees.receipts = pendingBlock, pendingReceipts
 					fees.header = fees.block.Header()
+					fees.parent, _ = oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNumber-1))
 					oracle.processBlock(fees, rewardPercentiles)
 					results <- fees
 				} else {
@@ -312,6 +314,9 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 							fees.header, fees.err = oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNumber))
 						}
 						if fees.header != nil && fees.err == nil {
+							if blockNumber > 0 {
+								fees.parent, _ = oracle.backend.HeaderByNumber(ctx, rpc.BlockNumber(blockNumber-1))
+							}
 							oracle.processBlock(fees, rewardPercentiles)
 							if fees.err == nil {
 								oracle.historyCache.Add(cacheKey, fees.results)
@@ -327,6 +332,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 	var (
 		reward           = make([][]*big.Int, blocks)
 		baseFee          = make([]*big.Int, blocks+1)
+		nextBaseFee      = make([]*big.Int, blocks)
 		gasUsedRatio     = make([]float64, blocks)
 		blobGasUsedRatio = make([]float64, blocks)
 		blobBaseFee      = make([]*big.Int, blocks+1)
@@ -339,7 +345,7 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 		}
 		i := fees.blockNumber - oldestBlock
 		if fees.results.baseFee != nil {
-			reward[i], baseFee[i], baseFee[i+1], gasUsedRatio[i] = fees.results.reward, fees.results.baseFee, fees.results.nextBaseFee, fees.results.gasUsedRatio
+			reward[i], baseFee[i], nextBaseFee[i], gasUsedRatio[i] = fees.results.reward, fees.results.baseFee, fees.results.nextBaseFee, fees.results.gasUsedRatio
 			blobGasUsedRatio[i], blobBaseFee[i], blobBaseFee[i+1] = fees.results.blobGasUsedRatio, fees.results.blobBaseFee, fees.results.nextBlobBaseFee
 		} else {
 			// getting no block and no error means we are requesting into the future (might happen because of a reorg)
@@ -351,6 +357,8 @@ func (oracle *Oracle) FeeHistory(ctx context.Context, blocks uint64, unresolvedL
 	if firstMissing == 0 {
 		return common.Big0, nil, nil, nil, nil, nil, nil
 	}
+	// Only the base fee after the last block is an estimate, the others are real.
+	baseFee[firstMissing] = nextBaseFee[firstMissing-1]
 	if len(rewardPercentiles) != 0 {
 		reward = reward[:firstMissing]
 	} else {
