@@ -248,6 +248,12 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 		misc.ApplyDAOHardFork(statedb)
 	}
 	evm := vm.NewEVM(vmContext, statedb, chainConfig, vmConfig)
+
+	// EIP-8253 applies on the first block whose parent is before Bogota.
+	if pre.Env.Number > 0 && chainConfig.IsBogota(vmContext.BlockNumber, pre.Env.Timestamp) &&
+		!chainConfig.IsBogota(new(big.Int).SetUint64(pre.Env.Number-1), pre.Env.ParentTimestamp) {
+		core.ProcessZeroNonceStorageAccounts(evm, blockAccessList)
+	}
 	if beaconRoot := pre.Env.ParentBeaconBlockRoot; beaconRoot != nil {
 		core.ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
 	}
