@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io/fs"
 	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -148,13 +150,23 @@ type dirCopy struct {
 	journal string
 }
 
+// withoutLockFiles leaves the freezers' FLOCK files out of a copy. Windows
+// doesn't let another handle read a held one, and the copy's freezers create
+// their own.
+type withoutLockFiles struct{ fs.FS }
+
+func (f withoutLockFiles) ReadDir(name string) ([]fs.DirEntry, error) {
+	entries, err := fs.ReadDir(f.FS, name)
+	return slices.DeleteFunc(entries, func(e fs.DirEntry) bool { return e.Name() == "FLOCK" }), err
+}
+
 // takeCopy copies the data directory of a chain on the given key-value store,
 // ancient directory and journal directory, which may be empty.
 func takeCopy(t *testing.T, store *syncedStore, ancient, journal string) *dirCopy {
 	t.Helper()
 
 	c := &dirCopy{kv: store.copy(), ancient: t.TempDir()}
-	if err := os.CopyFS(c.ancient, os.DirFS(ancient)); err != nil {
+	if err := os.CopyFS(c.ancient, withoutLockFiles{os.DirFS(ancient)}); err != nil {
 		t.Fatalf("Failed to copy the ancient store: %v", err)
 	}
 	if journal != "" {
