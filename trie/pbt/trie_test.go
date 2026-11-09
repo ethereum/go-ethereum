@@ -123,3 +123,122 @@ func TestCommitRemovesCollapsedRecords(t *testing.T) {
 		}
 	}
 }
+
+// largeGroupSlots are 20 header slots of one account: a single group large
+// enough for its record to carry the top branch's child hashes.
+func largeGroupSlots() map[string][]byte {
+	slots := make(map[string][]byte)
+	for i := range 20 {
+		slots[string(common.BigToHash(big.NewInt(int64(i))).Bytes())] = common.Hash{30: 1, 31: byte(i + 1)}.Bytes()
+	}
+	return slots
+}
+
+// TestGroupRecordHashCommitsToValues changes a value inside the record of a
+// large group. The hash the database computes for the record must change
+// with it: stored intermediate hashes must not stand in for the values.
+func TestGroupRecordHashCommitsToValues(t *testing.T) {
+	x := common.HexToAddress("0x1234")
+
+	// x's header group is the only stem, so its record is the root record,
+	// which the path database hashes to find its persisted state root.
+	db := newMemNodeDB()
+	tr, _ := New(types.EmptyBinaryHash, db)
+	for slot, value := range largeGroupSlots() {
+		if err := tr.UpdateStorage(x, []byte(slot), value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	root := db.commit(tr)
+
+	blob := db.nodes[""]
+	if len(blob) == 0 || blob[0] != tagGroup {
+		t.Fatalf("root record is not a group record")
+	}
+	if h, err := DeserializeAndHash(blob); err != nil || h != root {
+		t.Fatalf("root record hashes to %x (err %v), want root %x", h, err, root)
+	}
+	// Overwrite the first value; the bitmap and every length stay valid.
+	modified := common.CopyBytes(blob)
+	modified[4+int(blob[3])+32] ^= 0xff
+
+	h, err := DeserializeAndHash(modified)
+	if err == nil && h == root {
+		t.Fatalf("record with a modified value still hashes to the committed root %x", root)
+	}
+}
+
+// TestLoadedGroupRehashesAfterWrites loads a large group, whose record
+// carries the top branch's child hashes, then modifies and moves it. Every
+// commit must match the same state built from scratch, record for record.
+func TestLoadedGroupRehashesAfterWrites(t *testing.T) {
+	var (
+		x     = common.HexToAddress("0x1234")
+		other = common.HexToAddress("0xaaaa")
+		slots = largeGroupSlots()
+		slot0 = common.Hash{}.Bytes()
+	)
+	db := newMemNodeDB()
+	tr, _ := New(types.EmptyBinaryHash, db)
+	for slot, value := range slots {
+		if err := tr.UpdateStorage(x, []byte(slot), value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tr.UpdateStorage(other, slot0, common.Hash{31: 0xee}.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+	root := db.commit(tr)
+
+	// expect compares the database with the given state built from scratch.
+	expect := func(step string, root common.Hash, withOther bool) {
+		t.Helper()
+		want := newMemNodeDB()
+		ref, _ := New(types.EmptyBinaryHash, want)
+		for slot, value := range slots {
+			ref.UpdateStorage(x, []byte(slot), value)
+		}
+		if withOther {
+			ref.UpdateStorage(other, slot0, common.Hash{31: 0xee}.Bytes())
+		}
+		if wantRoot := want.commit(ref); root != wantRoot {
+			t.Fatalf("%s: root %x, want %x", step, root, wantRoot)
+		}
+		for path, blob := range want.nodes {
+			if !bytes.Equal(db.nodes[path], blob) {
+				t.Fatalf("%s: record at path %x differs from a fresh build", step, path)
+			}
+		}
+		if len(db.nodes) != len(want.nodes) {
+			t.Fatalf("%s: %d records, want %d", step, len(db.nodes), len(want.nodes))
+		}
+	}
+
+	// Modify a value of the loaded group.
+	tr, _ = New(root, db)
+	first := string(common.BigToHash(big.NewInt(0)).Bytes())
+	slots[first] = common.Hash{31: 0x77}.Bytes()
+	if err := tr.UpdateStorage(x, []byte(first), slots[first]); err != nil {
+		t.Fatal(err)
+	}
+
+	root = db.commit(tr)
+	expect("modify", root, true)
+
+	// Move the loaded, unmodified group to the root by deleting its sibling.
+	tr, _ = New(root, db)
+	if err := tr.DeleteStorage(other, slot0); err != nil {
+		t.Fatal(err)
+	}
+	root = db.commit(tr)
+	expect("move", root, false)
+
+	// Modify the group again where it now sits.
+	tr, _ = New(root, db)
+	slots[first] = common.Hash{31: 0x78}.Bytes()
+	if err := tr.UpdateStorage(x, []byte(first), slots[first]); err != nil {
+		t.Fatal(err)
+	}
+	root = db.commit(tr)
+	expect("modify after move", root, false)
+}
