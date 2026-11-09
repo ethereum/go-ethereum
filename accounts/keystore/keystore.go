@@ -69,6 +69,7 @@ type KeyStore struct {
 	updateFeed  event.Feed              // Event feed to notify wallet additions/removals
 	updateScope event.SubscriptionScope // Subscription scope tracking current live listeners
 	updating    bool                    // Whether the event notification loop is running
+	eventsSent  chan struct{}           // Closed once the last computed wallet events are sent
 
 	mu       sync.RWMutex
 	importMu sync.Mutex // Import Mutex locks the import to prevent two insertions from racing
@@ -94,6 +95,8 @@ func (ks *KeyStore) init(keydir string) {
 
 	// Initialize the set of unlocked keys and the account cache
 	ks.unlocked = make(map[common.Address]*unlocked)
+	ks.eventsSent = make(chan struct{})
+	close(ks.eventsSent)
 	ks.cache, ks.changes = newAccountCache(keydir)
 
 	// TODO: In order for this finalizer to work, there must be no references
@@ -164,7 +167,18 @@ func (ks *KeyStore) refreshWallets() {
 		events = append(events, accounts.WalletEvent{Wallet: wallet, Kind: accounts.WalletDropped})
 	}
 	ks.wallets = wallets
+	if len(events) == 0 {
+		ks.mu.Unlock()
+		return
+	}
+	// Concurrent refreshes must deliver their events in the order they computed
+	// them, so wait for the previous refresh's events to be sent first.
+	prev, done := ks.eventsSent, make(chan struct{})
+	ks.eventsSent = done
 	ks.mu.Unlock()
+
+	<-prev
+	defer close(done)
 
 	// Fire all wallet events and return
 	for _, event := range events {
