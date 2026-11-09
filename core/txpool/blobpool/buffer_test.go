@@ -610,8 +610,8 @@ func TestProviderExtensionBadProof(t *testing.T) {
 	if len(stored) != 0 {
 		t.Fatalf("tx with bad extension proof must not be stored, got %d", len(stored))
 	}
-	if len(dropped) != 0 {
-		t.Fatalf("cell-delivering peers must not be dropped for a bad tx sidecar, got: %v", dropped)
+	if len(dropped) != 1 || dropped[0] != "peerA" {
+		t.Fatalf("only tx-delivering peers should be dropped for a bad tx proof, got: %v", dropped)
 	}
 	if buf.HasTx(hash) || buf.HasCells(hash) {
 		t.Fatal("buffer should be empty after drop")
