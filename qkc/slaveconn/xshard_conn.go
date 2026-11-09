@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/qkc/cluster"
 	"github.com/ethereum/go-ethereum/qkc/conn"
 	"github.com/ethereum/go-ethereum/qkc/wire"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -39,7 +40,7 @@ import (
 // implemented by the business layer. Implementations must be safe for
 // concurrent calls.
 //
-// A *wire.RemoteError reports a business rejection. Other errors signal a
+// A *cluster.RemoteError reports a business rejection. Other errors signal a
 // handler failure and close the connection via BaseConn.
 type XshardRequestHandler interface {
 	AddXshardTxList(minorBlockHash common.Hash, deposits []*types.DepositTx) error
@@ -114,7 +115,7 @@ func (x *XshardConn) RemoteChainID() *big.Int {
 }
 
 // SendAddXshardTxList sends deposits from one source block to the remote slave.
-// A nonzero ErrorCode is returned as *wire.RemoteError; transport and context
+// A nonzero ErrorCode is returned as *cluster.RemoteError; transport and context
 // errors are returned unchanged.
 func (x *XshardConn) SendAddXshardTxList(ctx context.Context, minorBlockHash common.Hash, deposits []*types.DepositTx) error {
 	if x.remoteChainID == nil {
@@ -146,7 +147,7 @@ func (x *XshardConn) SendAddXshardTxList(ctx context.Context, minorBlockHash com
 		return fmt.Errorf("unexpected response %T", resp)
 	}
 	if r.ErrorCode != 0 {
-		return &wire.RemoteError{Code: r.ErrorCode}
+		return &cluster.RemoteError{Code: r.ErrorCode}
 	}
 
 	return nil

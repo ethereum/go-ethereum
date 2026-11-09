@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/qkc/cluster"
 	"github.com/ethereum/go-ethereum/qkc/conn"
 	"github.com/ethereum/go-ethereum/qkc/wire"
 	"github.com/holiman/uint256"
@@ -158,14 +159,14 @@ func TestXshardConnRemoteErrorKeepsConnection(t *testing.T) {
 	const errorCode = 404
 	peer := newTestXshardPeer(t, xshardHandlerFunc(func(hash common.Hash, _ []*types.DepositTx) error {
 		if hash == (common.Hash{1}) {
-			return &wire.RemoteError{Code: errorCode}
+			return &cluster.RemoteError{Code: errorCode}
 		}
 		return nil
 	}))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	err := peer.SendAddXshardTxList(ctx, common.Hash{1}, nil)
-	var remoteErr *wire.RemoteError
+	var remoteErr *cluster.RemoteError
 	if !errors.As(err, &remoteErr) || remoteErr.Code != errorCode {
 		t.Fatalf("expected RemoteError with code %d, got %T: %v", errorCode, err, err)
 	}
@@ -232,7 +233,7 @@ func TestXshardConnContextErrorsKeepConnection(t *testing.T) {
 				cancel()
 			}
 			err := <-result
-			var remoteErr *wire.RemoteError
+			var remoteErr *cluster.RemoteError
 			if !errors.Is(err, tc.wantErr) || errors.As(err, &remoteErr) {
 				t.Fatalf("expected context error %v, got %T: %v", tc.wantErr, err, err)
 			}

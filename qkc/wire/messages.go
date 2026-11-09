@@ -141,7 +141,7 @@ type AddRootBlockResponse struct {
 	ErrorCode uint32
 }
 
-// GetUnconfirmedHeadersRequest asks the master for unconfirmed shard headers.
+// GetUnconfirmedHeadersRequest asks a slave for its unconfirmed shard headers.
 type GetUnconfirmedHeadersRequest struct{}
 
 // GetUnconfirmedHeadersResponse returns unconfirmed headers for the chain

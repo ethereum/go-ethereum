@@ -38,7 +38,7 @@ import (
 )
 
 // MasterRequestHandler serves requests received from the master. Calls may run
-// concurrently. Return *wire.RemoteError for business rejections; other errors
+// concurrently. Return *cluster.RemoteError for business rejections; other errors
 // indicate handler failures and close the connection.
 type MasterRequestHandler interface {
 	CreateShards(rootTip *qkctypes.RootBlock) error
@@ -64,7 +64,8 @@ type MasterConnConfig struct {
 }
 
 // MasterConn handles master requests and sends shard block notifications.
-// Closing the master connection invokes the owning slave's shutdown callback.
+// Any close, including the slave's own Close during shutdown, invokes
+// ShutdownSlave once on a separate goroutine, so it must be idempotent.
 type MasterConn struct {
 	*conn.BaseConn
 
@@ -155,7 +156,7 @@ func (mc *MasterConn) watchConnection() {
 }
 
 // SendAddMinorBlockHeader reports a shard header and its coinbase reward to
-// the master. A nonzero business error code is returned as *wire.RemoteError.
+// the master. A nonzero business error code is returned as *cluster.RemoteError.
 func (mc *MasterConn) SendAddMinorBlockHeader(ctx context.Context, header *types.Header, coinbaseAmount *uint256.Int) error {
 	if header == nil {
 		return errors.New("minor block header must not be nil")
@@ -181,7 +182,7 @@ func (mc *MasterConn) SendAddMinorBlockHeader(ctx context.Context, header *types
 		return fmt.Errorf("unexpected add minor block header response %T", resp)
 	}
 	if result.ErrorCode != 0 {
-		return &wire.RemoteError{Code: result.ErrorCode}
+		return &cluster.RemoteError{Code: result.ErrorCode}
 	}
 	return nil
 }
