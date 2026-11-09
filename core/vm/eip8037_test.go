@@ -21,6 +21,7 @@
 package vm
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"math/rand"
@@ -145,6 +146,93 @@ func TestSStoreClearZeroAtStart(t *testing.T) {
 	}
 	if res.UsedStateGas != 0 {
 		t.Fatalf("state gas = %d, want 0 (refilled)", res.UsedStateGas)
+	}
+}
+
+func TestSStoreRefillCost(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		original byte
+		current  byte
+		value    byte
+		execGas  uint64
+		spilled  uint64
+		refill   uint64
+		wantErr  error
+	}{
+		{name: "reservoir", current: 1, execGas: 3000, refill: uint64(stateGasNewSlot)},
+		{name: "spill", current: 1, execGas: 3000, spilled: uint64(stateGasNewSlot), refill: uint64(stateGasNewSlot)},
+		{name: "partial spill", current: 1, execGas: 3000, spilled: uint64(stateGasNewSlot) / 2, refill: uint64(stateGasNewSlot)},
+		{name: "preexisting slot", original: 1, current: 2, value: 1, execGas: 3000},
+		{name: "dirty update", current: 1, value: 2, execGas: 3000},
+		{name: "noop", execGas: 3000},
+		{name: "sentry before refill", current: 1, execGas: params.SstoreSentryGasEIP2200, spilled: uint64(stateGasNewSlot), wantErr: ErrOutOfGas},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			self := common.BytesToAddress([]byte("self"))
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			statedb.CreateAccount(self)
+			statedb.SetCode(self, []byte{byte(STOP)}, tracing.CodeChangeUnspecified)
+			statedb.SetState(self, common.Hash{}, common.BytesToHash([]byte{tc.original}))
+			statedb.Finalise(params.Rules{IsEIP158: true})
+			statedb.SetState(self, common.Hash{}, common.BytesToHash([]byte{tc.current}))
+			statedb.AddSlotToAccessList(self, common.Hash{})
+
+			evm := amsterdam8037EVM(statedb)
+			gas := NewGasBudget(tc.execGas, 0)
+			gas.UsedStateGas = int64(tc.refill)
+			gas.Spilled = tc.spilled
+			contract := NewContract(common.Address{}, self, new(uint256.Int), gas, nil)
+
+			stack := newStackForTesting()
+			stack.push(uint256.NewInt(uint64(tc.value))) // value
+			stack.push(new(uint256.Int))                 // slot
+
+			mem := NewMemory()
+			defer mem.Free()
+
+			cost, err := gasSStore8037And8038(evm, contract, stack, mem, 0)
+			wantCost := GasCosts{
+				ExecutionGas:   params.WarmStorageAccessAmsterdam,
+				StateGasRefill: tc.refill,
+			}
+			if tc.wantErr == nil {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if cost != wantCost {
+					t.Errorf("calculated cost = %v, want %v", cost, wantCost)
+				}
+			} else if err == nil {
+				t.Fatal("expected gas calculation to fail before refilling")
+			}
+			if contract.Gas != gas {
+				t.Fatalf("calculator changed budget: have %v, want %v", contract.Gas, gas)
+			}
+
+			// The metering layer applies the returned refill exactly once.
+			cost, err = contract.chargeDynamicGas(gasSStore8037And8038, evm, stack, mem, 0)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("metering error = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
+				if contract.Gas != gas {
+					t.Fatalf("failed metering changed budget: have %v, want %v", contract.Gas, gas)
+				}
+				return
+			}
+			if cost != wantCost {
+				t.Errorf("metered cost = %v, want %v", cost, wantCost)
+			}
+			want := gas
+			if !want.ChargeExecutionOnly(cost.ExecutionGas) {
+				t.Fatal("insufficient execution gas in test")
+			}
+			want.RefundState(tc.refill)
+			if contract.Gas != want {
+				t.Errorf("metered budget = %v, want %v", contract.Gas, want)
+			}
+		})
 	}
 }
 
