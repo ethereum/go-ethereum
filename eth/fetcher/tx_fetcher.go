@@ -94,9 +94,10 @@ var errTerminated = errors.New("terminated")
 // txAnnounce is the notification of the availability of a batch
 // of new transactions in the network.
 type txAnnounce struct {
-	origin string        // Identifier of the peer originating the notification
-	hashes []common.Hash // Batch of transaction hashes being announced
-	metas  []txMetadata  // Batch of metadata associated with the hashes
+	origin  string        // Identifier of the peer originating the notification
+	hashes  []common.Hash // Batch of transaction hashes being announced
+	metas   []txMetadata  // Batch of metadata associated with the hashes
+	refetch bool          // Whether the origin must serve the hashes, even if delivered by others
 }
 
 // txMetadata provides the extra data transmitted along with the announcement
@@ -206,6 +207,11 @@ type TxFetcher struct {
 	requests   map[string]*txRequest               // In-flight transaction retrievals
 	alternates map[common.Hash]map[string]struct{} // In-flight transaction alternate origins if retrieval fails
 
+	// Transactions that must be retrieved from a specific peer, even if another
+	// peer delivers them first. The peer's announcement survives such deliveries
+	// until it delivers the transaction itself, times out or is dropped.
+	refetches map[common.Hash]string
+
 	// Callbacks
 	validateMeta func(common.Hash, byte) error           // Validate a tx metadata based on the local txpool
 	addTxs       func([]*types.Transaction) []error      // Insert a batch of transactions into local txpool
@@ -248,6 +254,7 @@ func NewTxFetcherForTests(
 		fetching:       make(map[common.Hash]string),
 		requests:       make(map[string]*txRequest),
 		alternates:     make(map[common.Hash]map[string]struct{}),
+		refetches:      make(map[common.Hash]string),
 		underpriced:    lru.NewCache[common.Hash, time.Time](maxTxUnderpricedSetSize),
 		txOnChainCache: lru.NewCache[common.Hash, struct{}](txOnChainCacheLimit),
 		chain:          chain,
@@ -332,6 +339,24 @@ func (f *TxFetcher) Notify(peer string, version uint, kinds []byte, sizes []uint
 		return blobFetchHashes, nil
 	case <-f.quit:
 		return nil, errTerminated
+	}
+}
+
+// Refetch schedules a transaction for retrieval from the given peer, even if
+// it is (or gets) delivered by another peer before. It is used to obtain a
+// peer's own copy of a transaction already received from someone else.
+func (f *TxFetcher) Refetch(peer string, version uint, kind byte, size uint32, hash common.Hash) error {
+	announce := &txAnnounce{
+		origin:  peer,
+		hashes:  []common.Hash{hash},
+		metas:   []txMetadata{{kind: kind, size: size, version: version}},
+		refetch: true,
+	}
+	select {
+	case f.notify <- announce:
+		return nil
+	case <-f.quit:
+		return errTerminated
 	}
 }
 
@@ -576,8 +601,11 @@ func (f *TxFetcher) loop() {
 			// Note, we could but do not filter already known transactions here as
 			// the probability of something arriving between this call and the pre-
 			// filter outside is essentially zero.
+			//
+			// Refetches are requested locally (bounded by the blob buffer) and
+			// are not subject to the announcement limits.
 			used := len(f.waitslots[ann.origin]) + len(f.announces[ann.origin])
-			if used >= maxTxAnnounces {
+			if used >= maxTxAnnounces && !ann.refetch {
 				// This can happen if a set of transactions are requested but not
 				// all fulfilled, so the remainder are rescheduled without the cap
 				// check. Should be fine as the limit is in the thousands and the
@@ -586,11 +614,16 @@ func (f *TxFetcher) loop() {
 				break
 			}
 			want := used + len(ann.hashes)
-			if want > maxTxAnnounces {
+			if want > maxTxAnnounces && !ann.refetch {
 				txAnnounceDOSMeter.Mark(int64(want - maxTxAnnounces))
 
 				ann.hashes = ann.hashes[:maxTxAnnounces-used]
 				ann.metas = ann.metas[:maxTxAnnounces-used]
+			}
+			if ann.refetch {
+				for _, hash := range ann.hashes {
+					f.refetches[hash] = ann.origin
+				}
 			}
 			// All is well, schedule the remainder of the transactions
 			var (
@@ -759,6 +792,9 @@ func (f *TxFetcher) loop() {
 
 					// Reschedule all the not-yet-delivered fetches to alternate peers
 					for _, hash := range req.hashes {
+						if f.refetches[hash] == peer {
+							delete(f.refetches, hash)
+						}
 						// Skip rescheduling hashes already delivered by someone else
 						if req.stolen != nil {
 							if _, ok := req.stolen[hash]; ok {
@@ -799,7 +835,12 @@ func (f *TxFetcher) loop() {
 			// Independent if the delivery was direct or broadcast, remove all
 			// traces of the hash from internal trackers. That said, compare any
 			// advertised metadata with the real ones and drop bad peers.
+			refetched := make(map[string]struct{})
 			for i, hash := range delivery.hashes {
+				// A refetch from another peer outlives this delivery: set its
+				// announcement aside and queue it again after the cleanup.
+				rpeer, rmeta := f.takeRefetch(hash, delivery.origin)
+
 				if _, ok := f.waitlist[hash]; ok {
 					for peer, txset := range f.waitslots {
 						if meta := txset[hash]; meta != nil {
@@ -870,6 +911,18 @@ func (f *TxFetcher) loop() {
 					}
 					delete(f.fetching, hash)
 				}
+				if rmeta != nil {
+					f.announced[hash] = map[string]struct{}{rpeer: {}}
+					if f.announces[rpeer] == nil {
+						f.announces[rpeer] = make(map[common.Hash]*txMetadataWithSeq)
+					}
+					f.announces[rpeer][hash] = rmeta
+					refetched[rpeer] = struct{}{}
+				}
+			}
+			// Expected direct deliveries reschedule everything below
+			if len(refetched) > 0 && (!delivery.direct || f.requests[delivery.origin] == nil) {
+				f.scheduleFetches(timeoutTimer, timeoutTrigger, refetched)
 			}
 			// In case of a direct delivery, also reschedule anything missing
 			// from the original query
@@ -903,6 +956,13 @@ func (f *TxFetcher) loop() {
 				}
 				// Reschedule missing hashes from alternates, not-fulfilled from alt+self
 				for i, hash := range req.hashes {
+					// The refetch peer did not deliver the transaction: unless it is
+					// requested from it again, the refetch is over.
+					if _, ok := delivered[hash]; !ok && f.refetches[hash] == delivery.origin {
+						if _, stolen := req.stolen[hash]; stolen || i < cutoff {
+							delete(f.refetches, hash)
+						}
+					}
 					// Skip rescheduling hashes already delivered by someone else
 					if req.stolen != nil {
 						if _, ok := req.stolen[hash]; ok {
@@ -991,6 +1051,11 @@ func (f *TxFetcher) loop() {
 				}
 				delete(f.announces, drop.peer)
 			}
+			for hash, peer := range f.refetches {
+				if peer == drop.peer {
+					delete(f.refetches, hash)
+				}
+			}
 			// If a request was cancelled, check if anything needs to be rescheduled
 			if request != nil {
 				f.scheduleFetches(timeoutTimer, timeoutTrigger, nil)
@@ -1028,6 +1093,43 @@ func (f *TxFetcher) loop() {
 			f.step <- struct{}{}
 		}
 	}
+}
+
+// takeRefetch removes and returns the announcement of a pending refetch of the
+// hash from a peer other than origin, unless it is being retrieved already. A
+// delivery from the refetch peer itself, or a missing announcement, ends the
+// refetch.
+func (f *TxFetcher) takeRefetch(hash common.Hash, origin string) (string, *txMetadataWithSeq) {
+	peer, ok := f.refetches[hash]
+	if !ok {
+		return "", nil
+	}
+	if peer == origin {
+		delete(f.refetches, hash)
+		return "", nil
+	}
+	if f.fetching[hash] == peer {
+		return "", nil
+	}
+	if meta := f.waitslots[peer][hash]; meta != nil {
+		delete(f.waitlist[hash], peer)
+		delete(f.waitslots[peer], hash)
+		if len(f.waitslots[peer]) == 0 {
+			delete(f.waitslots, peer)
+		}
+		return peer, meta
+	}
+	if meta := f.announces[peer][hash]; meta != nil {
+		delete(f.alternates[hash], peer)
+		delete(f.announced[hash], peer)
+		delete(f.announces[peer], hash)
+		if len(f.announces[peer]) == 0 {
+			delete(f.announces, peer)
+		}
+		return peer, meta
+	}
+	delete(f.refetches, hash)
+	return "", nil
 }
 
 // rescheduleWait iterates over all the transactions currently in the waitlist

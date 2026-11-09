@@ -68,6 +68,13 @@ type doTxEnqueue struct {
 	txs     []*types.Transaction
 	direct  bool
 }
+type doTxRefetch struct {
+	peer    string
+	version uint
+	hash    common.Hash
+	kind    byte
+	size    uint32
+}
 type doWait struct {
 	time time.Duration
 	step bool
@@ -83,6 +90,7 @@ type isScheduled struct {
 	dangling map[string][]common.Hash
 }
 type isUnderpriced int
+type isRefetching map[common.Hash]string
 
 // txFetcherTest represents a test scenario that can be executed by the test
 // runner.
@@ -1743,6 +1751,200 @@ func TestTransactionFetcherDropAlternates(t *testing.T) {
 	})
 }
 
+// Tests that a transaction refetched from a peer is still requested from that
+// peer when another peer's delivery of it is processed afterwards.
+func TestTransactionFetcherRefetchKeptOnDelivery(t *testing.T) {
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: newTestTxFetcher,
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doTxNotify{peer: "B", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doTxRefetch{peer: "B", hash: testTxsHashes[0], kind: testTxs[0].Type(), size: uint32(testTxs[0].Size())},
+			isRefetching{testTxsHashes[0]: "B"},
+			isScheduled{
+				tracking: map[string][]announce{
+					"A": {
+						{testTxsHashes[0], testTxs[0].Type(), uint32(testTxs[0].Size())},
+					},
+					"B": {
+						{testTxsHashes[0], testTxs[0].Type(), uint32(testTxs[0].Size())},
+					},
+				},
+				fetching: map[string][]common.Hash{
+					"A": {testTxsHashes[0]},
+				},
+			},
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			isScheduled{
+				tracking: map[string][]announce{
+					"B": {
+						{testTxsHashes[0], testTxs[0].Type(), uint32(testTxs[0].Size())},
+					},
+				},
+				fetching: map[string][]common.Hash{
+					"B": {testTxsHashes[0]},
+				},
+			},
+			doTxEnqueue{peer: "B", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			isScheduled{nil, nil, nil},
+			isRefetching{},
+		},
+	})
+}
+
+// Tests that a transaction refetched from a peer is still requested from that
+// peer when another peer broadcasts it.
+func TestTransactionFetcherRefetchKeptOnBroadcast(t *testing.T) {
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: newTestTxFetcher,
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doTxRefetch{peer: "B", hash: testTxsHashes[0], kind: testTxs[0].Type(), size: uint32(testTxs[0].Size())},
+			doTxEnqueue{peer: "C", txs: []*types.Transaction{testTxs[0]}, direct: false},
+			isRefetching{testTxsHashes[0]: "B"},
+			isScheduled{
+				tracking: map[string][]announce{
+					"B": {
+						{testTxsHashes[0], testTxs[0].Type(), uint32(testTxs[0].Size())},
+					},
+				},
+				fetching: map[string][]common.Hash{
+					"B": {testTxsHashes[0]},
+				},
+				dangling: map[string][]common.Hash{
+					"A": {testTxsHashes[0]},
+				},
+			},
+		},
+	})
+}
+
+// Tests that a transaction refetched from a peer after its delivery by another
+// peer is requested from that peer.
+func TestTransactionFetcherRefetchAfterDelivery(t *testing.T) {
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: newTestTxFetcher,
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			isScheduled{nil, nil, nil},
+
+			doTxRefetch{peer: "B", hash: testTxsHashes[0], kind: testTxs[0].Type(), size: uint32(testTxs[0].Size())},
+			doWait{time: txArriveTimeout, step: true},
+			isRefetching{testTxsHashes[0]: "B"},
+			isScheduled{
+				tracking: map[string][]announce{
+					"B": {
+						{testTxsHashes[0], testTxs[0].Type(), uint32(testTxs[0].Size())},
+					},
+				},
+				fetching: map[string][]common.Hash{
+					"B": {testTxsHashes[0]},
+				},
+			},
+		},
+	})
+}
+
+// Tests that dropping the refetch peer ends the refetch.
+func TestTransactionFetcherRefetchDrop(t *testing.T) {
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: newTestTxFetcher,
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doTxRefetch{peer: "B", hash: testTxsHashes[0], kind: testTxs[0].Type(), size: uint32(testTxs[0].Size())},
+			doDrop("B"),
+			isRefetching{},
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			isScheduled{nil, nil, nil},
+		},
+	})
+}
+
+// Tests that a refetch is requested after an unrequested direct delivery of the
+// transaction by another peer.
+func TestTransactionFetcherRefetchUnexpectedDelivery(t *testing.T) {
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: newTestTxFetcher,
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doTxRefetch{peer: "B", hash: testTxsHashes[0], kind: testTxs[0].Type(), size: uint32(testTxs[0].Size())},
+			doTxEnqueue{peer: "C", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			isScheduled{
+				tracking: map[string][]announce{
+					"B": {
+						{testTxsHashes[0], testTxs[0].Type(), uint32(testTxs[0].Size())},
+					},
+				},
+				fetching: map[string][]common.Hash{
+					"B": {testTxsHashes[0]},
+				},
+				dangling: map[string][]common.Hash{
+					"A": {testTxsHashes[0]},
+				},
+			},
+			isRefetching{testTxsHashes[0]: "B"},
+		},
+	})
+}
+
+// Tests that a refetch in flight ends when the peer's response leaves out the
+// transaction, after another peer delivered it meanwhile.
+func TestTransactionFetcherRefetchStolenMissing(t *testing.T) {
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: newTestTxFetcher,
+		steps: []interface{}{
+			doTxNotify{peer: "B", hashes: []common.Hash{testTxsHashes[0], testTxsHashes[1]}, types: []byte{testTxs[0].Type(), testTxs[1].Type()}, sizes: []uint32{uint32(testTxs[0].Size()), uint32(testTxs[1].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doTxRefetch{peer: "B", hash: testTxsHashes[1], kind: testTxs[1].Type(), size: uint32(testTxs[1].Size())},
+			doTxEnqueue{peer: "C", txs: []*types.Transaction{testTxs[1]}, direct: false},
+			isRefetching{testTxsHashes[1]: "B"},
+			doTxEnqueue{peer: "B", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			isScheduled{nil, nil, nil},
+			isRefetching{},
+		},
+	})
+}
+
+// Tests that a refetch ends when its request times out.
+func TestTransactionFetcherRefetchTimeout(t *testing.T) {
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: newTestTxFetcher,
+		steps: []interface{}{
+			doTxNotify{peer: "B", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doTxRefetch{peer: "B", hash: testTxsHashes[0], kind: testTxs[0].Type(), size: uint32(testTxs[0].Size())},
+			isRefetching{testTxsHashes[0]: "B"},
+			doWait{time: txFetchTimeout, step: true},
+			isRefetching{},
+		},
+	})
+}
+
+// Tests that a refetch is accepted from a peer at its announcement limit.
+func TestTransactionFetcherRefetchAnnounceLimit(t *testing.T) {
+	hashes := make([]common.Hash, maxTxAnnounces)
+	kinds := make([]byte, maxTxAnnounces)
+	sizes := make([]uint32, maxTxAnnounces)
+	for i := range hashes {
+		hashes[i] = common.Hash{0xff, byte(i >> 8), byte(i)}
+		sizes[i] = 111
+	}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: newTestTxFetcher,
+		steps: []interface{}{
+			doTxNotify{peer: "B", hashes: hashes, types: kinds, sizes: sizes},
+			doTxRefetch{peer: "B", hash: testTxsHashes[0], kind: testTxs[0].Type(), size: uint32(testTxs[0].Size())},
+			isRefetching{testTxsHashes[0]: "B"},
+		},
+	})
+}
+
 func TestTransactionFetcherWrongMetadata(t *testing.T) {
 	testTransactionFetcherParallel(t, txFetcherTest{
 		init: func() *TxFetcher {
@@ -1956,6 +2158,12 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 
 		case doTxEnqueue:
 			if err := fetcher.Enqueue(step.peer, step.version, step.txs, step.direct); err != nil {
+				t.Errorf("step %d: %v", i, err)
+			}
+			<-wait // Fetcher needs to process this, wait until it's done
+
+		case doTxRefetch:
+			if err := fetcher.Refetch(step.peer, step.version, step.kind, step.size, step.hash); err != nil {
 				t.Errorf("step %d: %v", i, err)
 			}
 			<-wait // Fetcher needs to process this, wait until it's done
@@ -2183,6 +2391,16 @@ func testTransactionFetcher(t *testing.T, tt txFetcherTest) {
 			for hash := range fetcher.announced {
 				if !slices.Contains(queued, hash) {
 					t.Errorf("step %d: hash %x extra in announced", i, hash)
+				}
+			}
+
+		case isRefetching:
+			if len(fetcher.refetches) != len(step) {
+				t.Errorf("step %d: refetch count mismatch: have %d, want %d", i, len(fetcher.refetches), len(step))
+			}
+			for hash, peer := range step {
+				if have, ok := fetcher.refetches[hash]; !ok || have != peer {
+					t.Errorf("step %d, hash %x: refetch peer mismatch: have %q, want %q", i, hash, have, peer)
 				}
 			}
 

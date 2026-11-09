@@ -232,6 +232,13 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		ValidateTx: h.blobpool.ValidateTxBasics,
 		AddToPool:  h.blobpool.AddPooledTx,
 		DropPeer:   h.removePeer,
+		Refetch: func(peer string, hash common.Hash, size uint32) {
+			p := h.peers.peer(peer)
+			if p == nil || p.Version() < eth.ETH72 {
+				return
+			}
+			h.txFetcher.Refetch(peer, p.Version(), types.BlobTxType, size, hash)
+		},
 	})
 
 	addTxs := func(txs []*types.Transaction) []error {
