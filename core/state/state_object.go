@@ -28,9 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/pbt"
-	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/holiman/uint256"
 )
@@ -466,11 +464,11 @@ func (s *stateObject) commit() (*AccountUpdate, *trienode.NodeSet, error) {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
-	// In Verkle/binary trie mode, all state objects share one unified trie.
+	// In binary tree mode, all state objects share one unified trie.
 	// The main account trie commit in stateDB.commit() already calls
 	// CollectNodes on this trie, so calling Commit here again would
 	// redundantly traverse and serialize the entire tree per dirty account.
-	if s.db.GetTrie().IsUBT() || s.db.GetTrie().IsPBT() {
+	if s.db.GetTrie().IsPBT() {
 		s.origin = s.data.Copy()
 		return op, nil, nil
 	}
@@ -526,13 +524,9 @@ func (s *stateObject) deepCopy(db *StateDB) *stateObject {
 	}
 
 	switch s.trie.(type) {
-	case *bintrie.BinaryTrie, *pbt.PartitionedTrie:
-		// UBT uses only one tree, and the copy has already been
+	case *pbt.PartitionedTrie:
+		// PBT uses only one tree, and the copy has already been
 		// made in mustCopyTrie.
-		obj.trie = db.trie
-	case *transitiontrie.TransitionTrie:
-		// Same thing for the transition tree, since the MPT is
-		// read-only.
 		obj.trie = db.trie
 	case *trie.StateTrie:
 		obj.trie = mustCopyTrie(s.trie)

@@ -170,15 +170,8 @@ func (db *Database) loadLayers() layer {
 		root common.Hash
 		err  error
 	)
-	if db.isUBT {
-		root = rawdb.ReadSnapshotRoot(db.diskdb)
-		if root == (common.Hash{}) {
-			root = types.EmptyBinaryHash
-		}
-	} else {
-		blob := rawdb.ReadAccountTrieNode(db.diskdb, nil)
-		root, err = db.hasher(blob)
-	}
+	blob := rawdb.ReadAccountTrieNode(db.diskdb, nil)
+	root, err = db.hasher(blob)
 	if err != nil {
 		log.Crit("Failed to compute node hash", "err", err)
 	}

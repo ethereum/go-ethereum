@@ -200,22 +200,9 @@ func (g *generator) tierOf(code byte) tier {
 	return g.tiers[code]
 }
 
-// skippedForks are forks the switch gets no lane for. Verkle/UBT is the only one,
-// and the skip is a no-op today, since LookupInstructionSet has no verkle table yet
-// and hands back Cancun's. It matters once there is one: enable4762 only repoints
-// existing opcodes, which the switch picks up from the active table anyway, and
-// PUSH1-PUSH32 among them would stop generation as fork-varying.
-var skippedForks = map[string]bool{"IsUBT": true}
-
 // genForks returns the fork lanes the generator derives its specs from.
 func genForks() []vm.GenFork {
-	var out []vm.GenFork
-	for _, fork := range vm.GenForks() {
-		if !skippedForks[fork.RuleField] {
-			out = append(out, fork)
-		}
-	}
-	return out
+	return vm.GenForks()
 }
 
 // opSpec holds the per-opcode facts the generator emits from: the metadata the

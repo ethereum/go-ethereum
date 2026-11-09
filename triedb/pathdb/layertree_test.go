@@ -29,7 +29,7 @@ import (
 )
 
 func newTestLayerTree() *layerTree {
-	db := New(rawdb.NewMemoryDatabase(), nil, false)
+	db := New(rawdb.NewMemoryDatabase(), nil)
 	l := newDiskLayer(common.Hash{0x1}, 0, db, nil, nil, newBuffer(0, nil, nil, 0), nil)
 	t := newLayerTree(l)
 	return t
@@ -601,8 +601,8 @@ func TestStorageLookup(t *testing.T) {
 // merkle trie hashes to types.EmptyRootHash (a concrete non-zero
 // keccak), so the disk layer's root was never the zero hash in
 // practice. The bug only surfaces once the disk layer root can
-// legitimately be zero (for example a fresh verkle/bintrie database
-// where the empty binary trie hashes to EmptyVerkleHash ==
+// legitimately be zero (for example a fresh binary trie database
+// where the empty trie hashes to
 // common.Hash{}).
 //
 // The test constructs a layer tree whose base layer's root IS the zero
@@ -622,10 +622,10 @@ func TestStorageLookup(t *testing.T) {
 //     fail here.
 func TestLookupZeroBaseRootFallback(t *testing.T) {
 	// Build a layer tree whose disk-layer root is common.Hash{} —
-	// mirrors the bintrie/verkle configuration where the empty trie
-	// hashes to EmptyVerkleHash. newTestLayerTree can't be reused
+	// mirrors a binary trie configuration where the empty trie
+	// hashes to the zero hash. newTestLayerTree can't be reused
 	// because it hard-codes common.Hash{0x1}.
-	db := New(rawdb.NewMemoryDatabase(), nil, false)
+	db := New(rawdb.NewMemoryDatabase(), nil)
 	base := newDiskLayer(common.Hash{}, 0, db, nil, nil, newBuffer(0, nil, nil, 0), nil)
 	tr := newLayerTree(base)
 

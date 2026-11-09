@@ -225,7 +225,7 @@ type HistoricDB struct {
 
 // Type returns the trie type of the underlying database.
 func (db *HistoricDB) Type() DatabaseType {
-	// TODO(rjl493456442) support UBT in the future
+	// TODO(rjl493456442) support PBT in the future
 	return TypeMPT
 }
 

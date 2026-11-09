@@ -51,7 +51,7 @@ func (db *PBTDatabase) StateReader(stateRoot common.Hash) (StateReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	readers = append(readers, &ubtTrieReader{root: stateRoot, db: db.triedb, tr: tr})
+	readers = append(readers, &pbtTrieReader{root: stateRoot, db: db.triedb, tr: tr})
 	return newMultiStateReader(readers...)
 }
 

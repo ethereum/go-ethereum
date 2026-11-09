@@ -24,9 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/pbt"
-	"github.com/ethereum/go-ethereum/trie/transitiontrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb"
 )
@@ -37,9 +35,6 @@ type DatabaseType int
 const (
 	// TypeMPT indicates a Merkle Patricia Trie (MPT) backed database.
 	TypeMPT DatabaseType = iota
-
-	// TypeUBT indicates a Unified Binary Trie (UBT) backed database.
-	TypeUBT
 
 	// TypePBT indicates an EIP-8297 Partitioned Binary Tree (PBT) backed database.
 	TypePBT
@@ -52,7 +47,7 @@ func (typ DatabaseType) Is(t DatabaseType) bool {
 
 // Database wraps access to tries and contract code.
 type Database interface {
-	// Type returns the trie type backing this database (MPT or UBT).
+	// Type returns the trie type backing this database (MPT or PBT).
 	Type() DatabaseType
 
 	// Reader returns a state reader associated with the specified state root.
@@ -164,20 +159,14 @@ type Trie interface {
 	// with the node that proves the absence of the key.
 	Prove(key []byte, proofDb ethdb.KeyValueWriter) error
 
-	// IsUBT returns true if the trie is unified binary trie based.
-	IsUBT() bool
-
 	// IsPBT returns true if the trie is the EIP-8297 partitioned binary tree.
 	IsPBT() bool
 }
 
 // NewDatabase creates a state database with the provided data sources.
 //
-// Deprecated, please use NewMPTDatabase or NewUBTDatabase directly.
+// Deprecated, please use NewMPTDatabase or NewPBTDatabase directly.
 func NewDatabase(tdb *triedb.Database, codedb *CodeDB) Database {
-	if tdb.IsUBT() {
-		return NewUBTDatabase(tdb, codedb)
-	}
 	if tdb.IsPBT() {
 		return NewPBTDatabase(tdb, codedb)
 	}
@@ -195,10 +184,6 @@ func NewDatabaseForTesting() Database {
 func mustCopyTrie(t Trie) Trie {
 	switch t := t.(type) {
 	case *trie.StateTrie:
-		return t.Copy()
-	case *transitiontrie.TransitionTrie:
-		return t.Copy()
-	case *bintrie.BinaryTrie:
 		return t.Copy()
 	case *pbt.PartitionedTrie:
 		return t.Copy()

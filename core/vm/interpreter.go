@@ -128,10 +128,9 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 	}()
 
 	// The generated fast path resolves its fork gates at generate time, so it
-	// cannot see table changes made by ExtraEips. The same goes for verkle, which
-	// the generator gets no lane for at all. Those configs run the table
+	// cannot see table changes made by ExtraEips. Those configs run the table
 	// loop, as do tracing and the differential test via forceTableLoop.
-	if evm.forceTableLoop || evm.chainRules.IsEIP4762 || len(evm.Config.ExtraEips) > 0 || evm.Config.Tracer != nil {
+	if evm.forceTableLoop || len(evm.Config.ExtraEips) > 0 || evm.Config.Tracer != nil {
 		return evm.execTraced(scope)
 	}
 	return evm.execUntraced(scope)
@@ -161,12 +160,11 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 		stateCost uint64 // state dimension of the current opcode's cost
 
 		// copies used by tracer
-		pcCopy    uint64    // needed for the deferred EVMLogger
-		gasCopy   GasBudget // budget before the opcode, for the tracer hooks
-		logged    bool      // deferred EVMLogger should ignore already logged steps
-		res       []byte    // result of the opcode execution function
-		debug     = evm.Config.Tracer != nil
-		isEIP4762 = evm.chainRules.IsEIP4762
+		pcCopy  uint64    // needed for the deferred EVMLogger
+		gasCopy GasBudget // budget before the opcode, for the tracer hooks
+		logged  bool      // deferred EVMLogger should ignore already logged steps
+		res     []byte    // result of the opcode execution function
+		debug   = evm.Config.Tracer != nil
 	)
 	if debug {
 		defer func() { // this deferred method handles exit-with-error
@@ -191,10 +189,6 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
 		}
-		if err = contract.chargeVerkleCodeChunkGas(evm, pc, isEIP4762); err != nil {
-			return nil, err
-		}
-
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
@@ -225,8 +219,6 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 		// Do tracing before potential memory expansion
 		if debug {
 			if evm.Config.Tracer.HasGasHook() {
-				// TODO(rjl493456442): it's broken with EIP4762, please fix it
-				// when it lands.
 				evm.Config.Tracer.EmitGasChange(
 					gasCopy.AsTracing(),
 					contract.Gas.AsTracing(),
@@ -311,22 +303,4 @@ func (contract *Contract) meterDynamicGas(operation *operation, evm *EVM, stack 
 		}
 	}
 	return memorySize, dynamicCost, nil
-}
-
-// chargeVerkleCodeChunkGas charges EIP-4762 (verkle) witness gas for the code chunk the
-// pc sits in. It is a no-op outside verkle and for deployment or system calls.
-// isEIP4762 is passed in so the caller can hoist evm.chainRules.IsEIP4762 out of
-// the loop. The traced loop calls it, the generated loop splices its body.
-func (contract *Contract) chargeVerkleCodeChunkGas(evm *EVM, pc uint64, isEIP4762 bool) error {
-	// if the PC ends up in a new "chunk" of verkleized code, charge the
-	// associated costs.
-	if isEIP4762 && !contract.IsDeployment && !contract.IsSystemCall {
-		contractAddr := contract.Address()
-		consumed, wanted := evm.TxContext.AccessEvents.CodeChunksRangeGas(contractAddr, pc, 1, uint64(len(contract.Code)), false, contract.Gas.ExecutionGas)
-		contract.chargeExecution(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
-		if consumed < wanted {
-			return ErrOutOfGas
-		}
-	}
-	return nil
 }

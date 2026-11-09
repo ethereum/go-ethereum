@@ -411,7 +411,7 @@ func (bc *BlockChain) StateRecoverable(root common.Hash) bool {
 // hash either from ephemeral in-memory cache, or from persistent storage.
 func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) []byte {
 	// TODO(rjl493456442) The associated account address is also required
-	// in Verkle scheme. Fix it once snap-sync is supported for Verkle.
+	// in binary tree scheme. Fix it once snap-sync is supported for it.
 	return bc.codedb.Reader().CodeWithPrefix(common.Address{}, hash)
 }
 
@@ -427,29 +427,17 @@ func (bc *BlockChain) StateAt(root common.Hash, number *big.Int, time uint64) (*
 	if bc.chainConfig.IsPBT(number, time) {
 		return state.New(root, state.NewPBTDatabase(bc.triedb, bc.codedb))
 	}
-	if bc.chainConfig.IsUBT(number, time) {
-		return state.New(root, state.NewUBTDatabase(bc.triedb, bc.codedb))
-	}
 	return state.New(root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
 }
 
 // StateAtForkBoundary returns a new mutable state based on the parent state
-// and the given header, handling the transition across the UBT fork.
+// and the given header. The state tree type never changes across blocks (the
+// PBT is genesis-only), so the parent's tree type is used.
 func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.Header) (*state.StateDB, error) {
 	if bc.chainConfig.IsPBT(parent.Number, parent.Time) {
 		return state.New(parent.Root, state.NewPBTDatabase(bc.triedb, bc.codedb))
 	}
-	// The parent is already in the UBT fork.
-	if bc.chainConfig.IsUBT(parent.Number, parent.Time) {
-		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
-	}
-	// The current block is the first block in the UBT fork
-	// (i.e., the parent is the last MPT block).
-	if bc.chainConfig.IsUBT(header.Number, header.Time) {
-		// TODO(gballet): register chain context if needed
-		return state.New(parent.Root, state.NewUBTDatabase(bc.triedb, bc.codedb))
-	}
-	// Both the parent and current block are in the MPT fork.
+	// Otherwise the state is stored in the merkle patricia trie.
 	return state.New(parent.Root, state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps))
 }
 
@@ -459,9 +447,6 @@ func (bc *BlockChain) StateAtForkBoundary(parent *types.Header, header *types.He
 func (bc *BlockChain) HistoricState(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error) {
 	if bc.chainConfig.IsPBT(number, time) {
 		return nil, errors.New("historical state over pbt is not yet supported")
-	}
-	if bc.chainConfig.IsUBT(number, time) {
-		return nil, errors.New("historical state over ubt is not yet supported")
 	}
 	return state.New(root, state.NewHistoricDatabase(bc.triedb, bc.codedb))
 }

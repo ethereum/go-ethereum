@@ -189,10 +189,9 @@ type BlockChainConfig struct {
 	TrieNoAsyncFlush     bool          // Whether the asynchronous buffer flushing is disallowed
 	TrieJournalDirectory string        // Directory path to the journal used for persisting trie data across node restarts
 
-	Preimages         bool   // Whether to store preimage of trie key to the disk
-	StateScheme       string // Scheme used to store ethereum states and merkle tree nodes on top
-	ArchiveMode       bool   // Whether to enable the archive mode
-	BinTrieGroupDepth int    // Number of levels per serialized group in binary trie (1-8)
+	Preimages   bool   // Whether to store preimage of trie key to the disk
+	StateScheme string // Scheme used to store ethereum states and merkle tree nodes on top
+	ArchiveMode bool   // Whether to enable the archive mode
 
 	// Number of blocks from the chain head for which state histories are retained.
 	// If set to 0, all state histories across the entire chain will be retained;
@@ -276,12 +275,10 @@ func (cfg BlockChainConfig) WithNoAsyncFlush(on bool) *BlockChainConfig {
 }
 
 // triedbConfig derives the configures for trie database.
-func (cfg *BlockChainConfig) triedbConfig(isUBT, isPBT bool) *triedb.Config {
+func (cfg *BlockChainConfig) triedbConfig(isPBT bool) *triedb.Config {
 	config := &triedb.Config{
-		Preimages:         cfg.Preimages,
-		IsUBT:             isUBT,
-		IsPBT:             isPBT,
-		BinTrieGroupDepth: cfg.BinTrieGroupDepth,
+		Preimages: cfg.Preimages,
+		IsPBT:     isPBT,
 	}
 	if cfg.StateScheme == rawdb.HashScheme {
 		config.HashDB = &hashdb.Config{
@@ -402,15 +399,11 @@ func NewBlockChain(db ethdb.Database, genesis *Genesis, engine consensus.Engine,
 	}
 
 	// Open trie database with provided config
-	enableVerkle, err := EnableUBTAtGenesis(db, genesis)
-	if err != nil {
-		return nil, err
-	}
 	enablePBT, err := pbtAtGenesis(db, genesis)
 	if err != nil {
 		return nil, err
 	}
-	triedb := triedb.NewDatabase(db, cfg.triedbConfig(enableVerkle, enablePBT))
+	triedb := triedb.NewDatabase(db, cfg.triedbConfig(enablePBT))
 
 	// Write the supplied genesis to the database if it has not been initialized
 	// yet. The corresponding chain config will be returned, either from the
@@ -2253,8 +2246,6 @@ func (bc *BlockChain) setupExecutionState(parentRoot common.Hash, block *types.B
 	var sdb state.Database
 	if bc.chainConfig.IsPBT(block.Number(), block.Time()) {
 		sdb = state.NewPBTDatabase(bc.triedb, bc.codedb)
-	} else if bc.chainConfig.IsUBT(block.Number(), block.Time()) {
-		sdb = state.NewUBTDatabase(bc.triedb, bc.codedb)
 	} else {
 		sdb = state.NewMPTDatabase(bc.triedb, bc.codedb).WithSnapshot(bc.snaps)
 	}

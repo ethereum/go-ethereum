@@ -29,24 +29,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus/misc/eip1559"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/overlay"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/eth/tracers/native"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/tests"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
-	"github.com/ethereum/go-ethereum/triedb"
-	"github.com/ethereum/go-ethereum/triedb/database"
-	"github.com/holiman/uint256"
 	"github.com/urfave/cli/v2"
 )
 
@@ -85,11 +77,10 @@ var (
 )
 
 type input struct {
-	Alloc types.GenesisAlloc            `json:"alloc,omitempty"`
-	Env   *stEnv                        `json:"env,omitempty"`
-	BT    map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
-	Txs   []*txWithKey                  `json:"txs,omitempty"`
-	TxRlp string                        `json:"txsRlp,omitempty"`
+	Alloc types.GenesisAlloc `json:"alloc,omitempty"`
+	Env   *stEnv             `json:"env,omitempty"`
+	Txs   []*txWithKey       `json:"txs,omitempty"`
+	TxRlp string             `json:"txsRlp,omitempty"`
 }
 
 func Transition(ctx *cli.Context) error {
@@ -104,13 +95,12 @@ func Transition(ctx *cli.Context) error {
 		prestate  Prestate
 		txIt      txIterator // txs to apply
 		allocStr  = ctx.String(InputAllocFlag.Name)
-		btStr     = ctx.String(InputBTFlag.Name)
 		envStr    = ctx.String(InputEnvFlag.Name)
 		txStr     = ctx.String(InputTxsFlag.Name)
 		inputData = &input{}
 	)
 	// Figure out the prestate alloc
-	if allocStr == stdinSelector || btStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
+	if allocStr == stdinSelector || envStr == stdinSelector || txStr == stdinSelector {
 		decoder := json.NewDecoder(os.Stdin)
 		if err := decoder.Decode(inputData); err != nil {
 			return NewError(ErrorJson, fmt.Errorf("failed unmarshalling stdin: %v", err))
@@ -121,13 +111,6 @@ func Transition(ctx *cli.Context) error {
 	} else {
 		prestate.Pre = inputData.Alloc
 	}
-
-	if btStr != stdinSelector && btStr != "" {
-		if err := readFile(btStr, "BT", &inputData.BT); err != nil {
-			return err
-		}
-	}
-	prestate.TreeLeaves = inputData.BT
 
 	// Set the block environment
 	if envStr != stdinSelector {
@@ -225,14 +208,9 @@ func Transition(ctx *cli.Context) error {
 		}
 	}
 	// Dump the execution result.
-	var (
-		collector Alloc
-		btleaves  map[common.Hash]hexutil.Bytes
-	)
-	isBinary := chainConfig.IsUBT(big.NewInt(int64(prestate.Env.Number)), prestate.Env.Timestamp)
+	var collector Alloc
 	allocOutput := ctx.String(OutputAllocFlag.Name)
-	switch {
-	case !isBinary && allocOutput != "" && allocOutput != "stdout" && allocOutput != "stderr":
+	if allocOutput != "" && allocOutput != "stdout" && allocOutput != "stderr" {
 		// Stream directly to the output file to avoid materializing the
 		// whole post-state in memory. dispatchOutput is told to skip alloc
 		// by clearing the output name.
@@ -240,57 +218,11 @@ func Transition(ctx *cli.Context) error {
 			return err
 		}
 		allocOutput = ""
-	case !isBinary:
+	} else {
 		collector = make(Alloc)
 		s.DumpToCollector(collector, nil)
-	default:
-		udb, ok := s.Database().(*state.UBTDatabase)
-		if !ok {
-			return NewError(ErrorEVM, errors.New("expected UBTDatabase in binary trie mode"))
-		}
-		rec := udb.AllocRecorder()
-		if rec == nil {
-			return NewError(ErrorEVM, errors.New("UBT alloc recorder was not enabled"))
-		}
-		collector = Alloc(rec.Alloc())
-		if err := mergeUnmigratedBaseAlloc(udb, s.IntermediateRoot(params.Rules{}), collector); err != nil {
-			return NewError(ErrorEVM, fmt.Errorf("failed to merge base MPT alloc: %v", err))
-		}
 	}
-	return dispatchOutput(ctx, baseDir, result, collector, allocOutput, body, btleaves)
-}
-
-func mergeUnmigratedBaseAlloc(udb *state.UBTDatabase, currentRoot common.Hash, dst Alloc) error {
-	ts := overlay.LoadTransitionState(udb.TrieDB().Disk(), currentRoot, true)
-	if !ts.InTransition() {
-		return nil
-	}
-	if ts.BaseRoot == (common.Hash{}) || ts.BaseRoot == types.EmptyRootHash {
-		return nil
-	}
-	mptDB := state.NewMPTDatabase(udb.TrieDB(), nil)
-	sdb, err := state.New(ts.BaseRoot, mptDB)
-	if err != nil {
-		return fmt.Errorf("open base MPT at %x: %w", ts.BaseRoot, err)
-	}
-	if _, err := sdb.DumpToCollector(mergeAlloc(dst), nil); err != nil {
-		return fmt.Errorf("walk base MPT at %x: %w", ts.BaseRoot, err)
-	}
-	return nil
-}
-
-type mergeAlloc Alloc
-
-func (m mergeAlloc) OnRoot(common.Hash) {}
-
-func (m mergeAlloc) OnAccount(addr *common.Address, da state.DumpAccount) {
-	if addr == nil {
-		return
-	}
-	if _, exists := m[*addr]; exists {
-		return
-	}
-	m[*addr] = dumpAccountToTypesAccount(da)
+	return dispatchOutput(ctx, baseDir, result, collector, allocOutput, body)
 }
 
 // writeStreamedAlloc writes the post-state alloc to path one account at a
@@ -493,7 +425,7 @@ func saveFile(baseDir, filename string, data interface{}) error {
 // dispatchOutput writes the output data to either stderr or stdout, or to the specified
 // files. An empty allocOutput skips the alloc dispatch, which is used when the
 // alloc has already been streamed to disk by the caller.
-func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, allocOutput string, body hexutil.Bytes, bt map[common.Hash]hexutil.Bytes) error {
+func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, alloc Alloc, allocOutput string, body hexutil.Bytes) error {
 	stdOutObject := make(map[string]interface{})
 	stdErrObject := make(map[string]interface{})
 	dispatch := func(baseDir, fName, name string, obj interface{}) error {
@@ -520,13 +452,6 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 	if err := dispatch(baseDir, ctx.String(OutputBodyFlag.Name), "body", body); err != nil {
 		return err
 	}
-	// Only write bt output if we actually have binary trie leaves
-	if bt != nil {
-		if err := dispatch(baseDir, ctx.String(OutputBTFlag.Name), "vkt", bt); err != nil {
-			return err
-		}
-	}
-
 	if len(stdOutObject) > 0 {
 		b, err := json.MarshalIndent(stdOutObject, "", "  ")
 		if err != nil {
@@ -543,170 +468,5 @@ func dispatchOutput(ctx *cli.Context, baseDir string, result *ExecutionResult, a
 		os.Stderr.Write(b)
 		os.Stderr.WriteString("\n")
 	}
-	return nil
-}
-
-// BinKey computes the tree key given an address and an optional slot number.
-func BinKey(ctx *cli.Context) error {
-	if ctx.Args().Len() == 0 || ctx.Args().Len() > 2 {
-		return errors.New("invalid number of arguments: expecting an address and an optional slot number")
-	}
-
-	addr, err := hexutil.Decode(ctx.Args().Get(0))
-	if err != nil {
-		return fmt.Errorf("error decoding address: %w", err)
-	}
-
-	if ctx.Args().Len() == 2 {
-		slot, err := hexutil.Decode(ctx.Args().Get(1))
-		if err != nil {
-			return fmt.Errorf("error decoding slot: %w", err)
-		}
-		fmt.Printf("%#x\n", bintrie.GetBinaryTreeKeyStorageSlot(common.BytesToAddress(addr), slot))
-	} else {
-		fmt.Printf("%#x\n", bintrie.GetBinaryTreeKeyBasicData(common.BytesToAddress(addr)))
-	}
-	return nil
-}
-
-// BinKeys computes a set of tree keys given a genesis alloc.
-func BinKeys(ctx *cli.Context) error {
-	var allocStr = ctx.String(InputAllocFlag.Name)
-	var alloc core.GenesisAlloc
-	// Figure out the prestate alloc
-	if allocStr == stdinSelector {
-		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(&alloc); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
-		}
-	}
-	if allocStr != stdinSelector {
-		if err := readFile(allocStr, "alloc", &alloc); err != nil {
-			return err
-		}
-	}
-	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.UBTDefaults)
-	defer db.Close()
-
-	bt, err := genBinTrieFromAlloc(alloc, db, triedb.UBTDefaults.BinTrieGroupDepth)
-	if err != nil {
-		return fmt.Errorf("error generating bt: %w", err)
-	}
-
-	collector := make(map[common.Hash]hexutil.Bytes)
-	it, err := bt.NodeIterator(nil)
-	if err != nil {
-		panic(err)
-	}
-	for it.Next(true) {
-		if it.Leaf() {
-			collector[common.BytesToHash(it.LeafKey())] = it.LeafBlob()
-		}
-	}
-
-	output, err := json.MarshalIndent(collector, "", "")
-	if err != nil {
-		return fmt.Errorf("error outputting tree: %w", err)
-	}
-
-	fmt.Println(string(output))
-
-	return nil
-}
-
-// BinTrieRoot computes the root of a Binary Trie from a genesis alloc.
-func BinTrieRoot(ctx *cli.Context) error {
-	var allocStr = ctx.String(InputAllocFlag.Name)
-	var alloc core.GenesisAlloc
-	if allocStr == stdinSelector {
-		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(&alloc); err != nil {
-			return NewError(ErrorJson, fmt.Errorf("failed unmarshaling stdin: %v", err))
-		}
-	}
-	if allocStr != stdinSelector {
-		if err := readFile(allocStr, "alloc", &alloc); err != nil {
-			return err
-		}
-	}
-	db := triedb.NewDatabase(rawdb.NewMemoryDatabase(), triedb.UBTDefaults)
-	defer db.Close()
-
-	bt, err := genBinTrieFromAlloc(alloc, db, triedb.UBTDefaults.BinTrieGroupDepth)
-	if err != nil {
-		return fmt.Errorf("error generating bt: %w", err)
-	}
-	fmt.Println(bt.Hash().Hex())
-
-	return nil
-}
-
-// TODO(@CPerezz): Should this go to `bintrie` module?
-func genBinTrieFromAlloc(alloc core.GenesisAlloc, db database.NodeDatabase, groupDepth int) (*bintrie.BinaryTrie, error) {
-	bt, err := bintrie.NewBinaryTrie(types.EmptyBinaryHash, db, groupDepth)
-	if err != nil {
-		return nil, err
-	}
-	for addr, acc := range alloc {
-		for slot, value := range acc.Storage {
-			err := bt.UpdateStorage(addr, slot.Bytes(), value.Big().Bytes())
-			if err != nil {
-				return nil, fmt.Errorf("error inserting storage: %w", err)
-			}
-		}
-		account := &types.StateAccount{
-			Balance:  uint256.MustFromBig(acc.Balance),
-			Nonce:    acc.Nonce,
-			CodeHash: crypto.Keccak256Hash(acc.Code).Bytes(),
-			Root:     common.Hash{},
-		}
-		err := bt.UpdateAccount(addr, account, len(acc.Code))
-		if err != nil {
-			return nil, fmt.Errorf("error inserting account: %w", err)
-		}
-		err = bt.UpdateContractCode(addr, common.BytesToHash(account.CodeHash), acc.Code)
-		if err != nil {
-			return nil, fmt.Errorf("error inserting code: %w", err)
-		}
-	}
-	return bt, nil
-}
-
-// BinaryCodeChunkKey computes the tree key of a code-chunk for a given address.
-func BinaryCodeChunkKey(ctx *cli.Context) error {
-	if ctx.Args().Len() == 0 || ctx.Args().Len() > 2 {
-		return errors.New("invalid number of arguments: expecting an address and an code-chunk number")
-	}
-
-	addr, err := hexutil.Decode(ctx.Args().Get(0))
-	if err != nil {
-		return fmt.Errorf("error decoding address: %w", err)
-	}
-	chunkNumberBytes, err := hexutil.Decode(ctx.Args().Get(1))
-	if err != nil {
-		return fmt.Errorf("error decoding chunk number: %w", err)
-	}
-	var chunkNumber uint256.Int
-	chunkNumber.SetBytes(chunkNumberBytes)
-
-	fmt.Printf("%#x\n", bintrie.GetBinaryTreeKeyCodeChunk(common.BytesToAddress(addr), &chunkNumber))
-
-	return nil
-}
-
-// BinaryCodeChunkCode returns the code chunkification for a given code.
-func BinaryCodeChunkCode(ctx *cli.Context) error {
-	if ctx.Args().Len() == 0 || ctx.Args().Len() > 1 {
-		return errors.New("invalid number of arguments: expecting a bytecode")
-	}
-
-	bytecode, err := hexutil.Decode(ctx.Args().Get(0))
-	if err != nil {
-		return fmt.Errorf("error decoding address: %w", err)
-	}
-
-	chunkedCode := bintrie.ChunkifyCode(bytecode)
-	fmt.Printf("%#x\n", chunkedCode)
-
 	return nil
 }

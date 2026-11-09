@@ -144,7 +144,6 @@ type testerConfig struct {
 	layers       int    // Number of state transitions to generate for
 	enableIndex  bool   // Enable state history indexing or not
 	journalDir   string // Directory path for persisting journal files
-	isUBT        bool   // Enables Verkle trie mode if true
 
 	writeBuffer *int // Optional, the size of memory allocated for write buffer
 	trieCache   *int // Optional, the size of memory allocated for trie cache
@@ -194,7 +193,7 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 			NoAsyncFlush:        true,
 			JournalDirectory:    config.journalDir,
 			NoHistoryIndexDelay: true,
-		}, config.isUBT)
+		})
 
 		obj = &tester{
 			db:           db,
@@ -1000,7 +999,7 @@ func TestReactivationCrash(t *testing.T) {
 		t.Error("Index entries of the purged state histories survived the crash")
 	}
 	// The history repair at startup must accept the persisted state id.
-	states, _, err := repairHistory(disk, false, false, rawdb.ReadPersistentStateID(disk), false)
+	states, _, err := repairHistory(disk, false, rawdb.ReadPersistentStateID(disk), false)
 	if err != nil {
 		t.Fatalf("Database can't be opened after the crash: %v", err)
 	}
@@ -1056,7 +1055,7 @@ func testJournal(t *testing.T, journalDir string) {
 		t.Errorf("Failed to journal, err: %v", err)
 	}
 	tester.db.Close()
-	tester.db = New(tester.db.diskdb, tester.db.config, false)
+	tester.db = New(tester.db.diskdb, tester.db.config)
 
 	// Verify states including disk layer and all diff on top.
 	for i := 0; i < len(tester.roots); i++ {
@@ -1108,7 +1107,7 @@ func testCorruptedJournal(t *testing.T, journalDir string, modifyFn func(databas
 	modifyFn(tester.db.diskdb)
 
 	// Verify states, all not-yet-written states should be discarded
-	tester.db = New(tester.db.diskdb, tester.db.config, false)
+	tester.db = New(tester.db.diskdb, tester.db.config)
 	for i := 0; i < len(tester.roots); i++ {
 		if tester.roots[i] == root {
 			if err := tester.verifyState(root); err != nil {
@@ -1145,7 +1144,7 @@ func TestTailTruncateHistory(t *testing.T) {
 	defer tester.release()
 
 	tester.db.Close()
-	tester.db = New(tester.db.diskdb, &Config{StateHistory: 10}, false)
+	tester.db = New(tester.db.diskdb, &Config{StateHistory: 10})
 
 	head, err := tester.db.stateFreezer.Ancients()
 	if err != nil {
@@ -1235,7 +1234,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 	rawdb.WriteTrieJournal(env.db.diskdb, blob)
 
 	// Reload the database, the extra state histories should be removed
-	env.db = New(env.db.diskdb, env.db.config, false)
+	env.db = New(env.db.diskdb, env.db.config)
 
 	for i := range roots {
 		_, err := readStateHistory(env.db.stateFreezer, uint64(i+1))
