@@ -333,6 +333,14 @@ func makeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 	// in the Amsterdam fork.
 	receipt.GasUsed = result.UsedGas
 
+	// The effective gas price is not part of the consensus encoding of a receipt,
+	// so it is normally derived again when stored receipts are read back. The
+	// receipt built here can however be served to the RPC layer before the block
+	// is ever committed, e.g. by eth_getBlockReceipts("pending"), so assign the
+	// price the transaction was executed with, which is the value the derivation
+	// would produce.
+	receipt.EffectiveGasPrice = evm.TxContext.GasPrice.ToBig()
+
 	if tx.Type() == types.BlobTxType {
 		receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
 		receipt.BlobGasPrice = evm.Context.BlobBaseFee
