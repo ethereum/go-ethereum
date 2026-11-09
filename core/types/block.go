@@ -246,47 +246,57 @@ func NewBlock(header *Header, body *Body, receipts []*Receipt, hasher ListHasher
 		uncles      = body.Uncles
 		withdrawals = body.Withdrawals
 	)
+	b.header.DeriveBodyFields(body, receipts, hasher)
 
-	if len(txs) == 0 {
-		b.header.TxHash = EmptyTxsHash
-	} else {
-		b.header.TxHash = DeriveSha(Transactions(txs), hasher)
+	if len(txs) != 0 {
 		b.transactions = make(Transactions, len(txs))
 		copy(b.transactions, txs)
 	}
-
-	if len(receipts) == 0 {
-		b.header.ReceiptHash = EmptyReceiptsHash
-	} else {
-		b.header.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
-		// Receipts must go through MakeReceipt to calculate the receipt's bloom
-		// already. Merge the receipt's bloom together instead of recalculating
-		// everything.
-		b.header.Bloom = MergeBloom(receipts)
-	}
-
-	if len(uncles) == 0 {
-		b.header.UncleHash = EmptyUncleHash
-	} else {
-		b.header.UncleHash = CalcUncleHash(uncles)
+	if len(uncles) != 0 {
 		b.uncles = make([]*Header, len(uncles))
 		for i := range uncles {
 			b.uncles[i] = CopyHeader(uncles[i])
 		}
 	}
-
-	if withdrawals == nil {
-		b.header.WithdrawalsHash = nil
-	} else if len(withdrawals) == 0 {
-		b.header.WithdrawalsHash = &EmptyWithdrawalsHash
-		b.withdrawals = Withdrawals{}
-	} else {
-		hash := DeriveSha(Withdrawals(withdrawals), hasher)
-		b.header.WithdrawalsHash = &hash
+	if withdrawals != nil {
 		b.withdrawals = slices.Clone(withdrawals)
 	}
-
 	return b
+}
+
+// DeriveBodyFields fills the header's body-dependent roots and receipt bloom.
+func (h *Header) DeriveBodyFields(body *Body, receipts []*Receipt, hasher ListHasher) {
+	if body == nil {
+		body = &Body{}
+	}
+	// Calculate the root of transactions
+	if len(body.Transactions) == 0 {
+		h.TxHash = EmptyTxsHash
+	} else {
+		h.TxHash = DeriveSha(Transactions(body.Transactions), hasher)
+	}
+	// Calculate the root of receipts
+	if len(receipts) == 0 {
+		h.ReceiptHash = EmptyReceiptsHash
+	} else {
+		h.ReceiptHash = DeriveSha(Receipts(receipts), hasher)
+		// Receipts must go through MakeReceipt to calculate the receipt's bloom
+		// already. Merge the receipt's bloom together instead of recalculating
+		// everything.
+		h.Bloom = MergeBloom(receipts)
+	}
+	// Calculate the root of uncles
+	h.UncleHash = CalcUncleHash(body.Uncles)
+
+	// Calculate the root of withdrawals
+	if body.Withdrawals == nil {
+		h.WithdrawalsHash = nil
+	} else if len(body.Withdrawals) == 0 {
+		h.WithdrawalsHash = &EmptyWithdrawalsHash
+	} else {
+		hash := DeriveSha(Withdrawals(body.Withdrawals), hasher)
+		h.WithdrawalsHash = &hash
+	}
 }
 
 // CopyHeader creates a deep copy of a block header.

@@ -545,28 +545,28 @@ func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
 func AssembleBlock(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, blockAccessList *bal.ConstructionBlockAccessList) *types.Block {
 	rules := chain.Config().Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
 
-	// The block's other digests don't depend on the state root: assemble the
-	// block on a goroutine while the root is computed. The goroutine sets the
-	// access list's hash on the header, so the header is written here only
-	// once it is done.
-	blockCh := make(chan *types.Block, 1)
+	// Compute the state root on a separate goroutine while deriving the body's
+	// header fields here. Construct the block only once the full header is ready.
+	rootCh := make(chan common.Hash, 1)
 	go func() {
-		if !rules.IsAmsterdam {
-			blockCh <- types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
-			return
-		}
-		// Assign the BlockAccessListHash if Amsterdam has been enabled
-		bal := blockAccessList.ToEncodingObj()
-		balHash := bal.Hash()
-		header.BlockAccessListHash = &balHash
-		blockCh <- types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessListUnsafe(bal)
+		rootCh <- state.IntermediateRoot(rules)
 	}()
-	// Assign the post-transition state root
-	root := state.IntermediateRoot(rules)
-	block := <-blockCh
 
-	header.Root = root
-	blockHeader := block.Header()
-	blockHeader.Root = root
-	return block.WithSeal(blockHeader)
+	header.DeriveBodyFields(body, receipts, trie.NewStackTrie(nil))
+	var accessList *bal.BlockAccessList
+	if rules.IsAmsterdam {
+		accessList = blockAccessList.ToEncodingObj()
+		hash := accessList.Hash()
+		header.BlockAccessListHash = &hash
+	}
+	header.Root = <-rootCh
+
+	block := types.NewBlockWithHeader(header)
+	if body != nil {
+		block = block.WithBody(*body)
+	}
+	if accessList != nil {
+		block = block.WithAccessListUnsafe(accessList)
+	}
+	return block
 }
