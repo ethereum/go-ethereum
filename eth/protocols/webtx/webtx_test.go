@@ -62,7 +62,11 @@ func TestBrowserTxSubprotocol(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() { runErr <- proto.Run(nil, srv) }()
 
-	if err := p2p.Send(app, txSubmitMsg, []*types.Transaction{tx}); err != nil {
+	var packet TxSubmit
+	if err := packet.Append(tx); err != nil {
+		t.Fatal(err)
+	}
+	if err := p2p.Send(app, txSubmitMsg, packet); err != nil {
 		t.Fatal(err)
 	}
 	msg, err := app.ReadMsg()
@@ -106,7 +110,11 @@ func TestBrowserTxSubprotocolInvalid(t *testing.T) {
 	runErr := make(chan error, 1)
 	go func() { runErr <- proto.Run(nil, srv) }()
 
-	if err := p2p.Send(app, txSubmitMsg, []*types.Transaction{tx}); err != nil {
+	var packet TxSubmit
+	if err := packet.Append(tx); err != nil {
+		t.Fatal(err)
+	}
+	if err := p2p.Send(app, txSubmitMsg, packet); err != nil {
 		t.Fatal(err)
 	}
 	msg, err := app.ReadMsg()
