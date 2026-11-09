@@ -25,7 +25,7 @@ Returns the number of connected peers.
 
 ## net_version {#net-version}
 
-Returns the devp2p network ID (e.g. 1 for mainnet, 5 for goerli).
+Returns the devp2p network ID (e.g. 1 for mainnet, 11155111 for sepolia).
 
 | Client  | Method invocation           |
 | :------ | --------------------------- |

@@ -142,11 +142,6 @@ const redirects = [
     permanent: true
   },
   {
-    source: '/docs/rpc/ns-clique',
-    destination: '/docs/interacting-with-geth/rpc/ns-clique',
-    permanent: true
-  },
-  {
     source: '/docs/rpc/ns-debug',
     destination: '/docs/interacting-with-geth/rpc/ns-debug',
     permanent: true
@@ -154,11 +149,6 @@ const redirects = [
   {
     source: '/docs/rpc/ns-eth',
     destination: '/docs/interacting-with-geth/rpc/ns-eth',
-    permanent: true
-  },
-  {
-    source: '/docs/rpc/ns-les',
-    destination: '/docs/interacting-with-geth/rpc/ns-les',
     permanent: true
   },
   {

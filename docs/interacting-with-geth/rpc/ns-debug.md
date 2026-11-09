@@ -16,23 +16,6 @@ If `incompletes` is false, then accounts for which the key preimage (i.e: the `a
 | Console | `debug.accountRange(blockNrOrHash, start, maxResults, nocode, nostorage, incompletes)`                           |
 | RPC     | `{"method": "debug_accountRange", "params": [blockNrOrHash, start, maxResults, nocode, nostorage, incompletes]}` |
 
-### debug_backtraceAt
-
-Sets the logging backtrace location. When a backtrace location is set and a log message is emitted at that location, the stack of the goroutine executing the log statement will be printed to stderr.
-
-The location is specified as `<filename>:<line>`.
-
-| Client  | Method invocation                                     |
-| :------ | ----------------------------------------------------- |
-| Console | `debug.backtraceAt(string)`                           |
-| RPC     | `{"method": "debug_backtraceAt", "params": [string]}` |
-
-**Example:**
-
-```js
-> debug.backtraceAt("server.go:443")
-```
-
 ### debug_blockProfile
 
 Turns on block profiling for the given duration and writes profile data to disk. It uses a profile rate of 1 for most accurate information. If a different rate is desired, set the rate and write the profile manually using `debug_writeBlockProfile`.
@@ -148,15 +131,6 @@ Forces garbage collection
 | Console | `debug.freeOSMemory()`                           |
 | RPC     | `{"method": "debug_freeOSMemory", "params": []}` |
 
-### debug_freezeClient
-
-Forces a temporary client freeze, normally when the server is overloaded. Available as part of LES light server.
-
-| Client  | Method invocation                                    |
-| :------ | ---------------------------------------------------- |
-| Console | `debug.freezeClient(node string)`                    |
-| RPC     | `{"method": "debug_freezeClient", "params": [node]}` |
-
 ### debug_gcStats
 
 Returns garbage collection statistics.
@@ -191,13 +165,13 @@ Returns a list of the last 'bad blocks' that the client has seen on the network 
 
 ### debug_getRawBlock
 
-Retrieves and returns the RLP encoded block by number.
+Retrieves and returns the RLP encoded block by number or hash.
 
-| Client  | Method invocation                                            |
-| :------ | ------------------------------------------------------------ |
-| Go      | `debug.getRawBlock(blockNrOrHash) (string, error)`           |
-| Console | `debug.getBlockRlp(blockNrOrHash)`                           |
-| RPC     | `{"method": "debug_getRawBlock", "params": [blockNrOrHash]}` |
+| Client  | Method invocation                                                               |
+| :------ | ------------------------------------------------------------------------------- |
+| Go      | `debug.GetRawBlock(blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error)` |
+| Console | `debug.getRawBlock(blockNrOrHash)`                                              |
+| RPC     | `{"method": "debug_getRawBlock", "params": [blockNrOrHash]}`                    |
 
 References: [RLP](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp/)
 
