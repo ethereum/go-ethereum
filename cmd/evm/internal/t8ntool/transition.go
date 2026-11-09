@@ -148,9 +148,6 @@ func Transition(ctx *cli.Context) error {
 		chainConfig = cConf
 		vmConfig.ExtraEips = extraEips
 	}
-	if chainConfig.PBTTime != nil {
-		return NewError(ErrorConfig, errors.New("the binary tree is not supported"))
-	}
 
 	// Set the chain id
 	chainConfig.ChainID = big.NewInt(ctx.Int64(ChainIDFlag.Name))
