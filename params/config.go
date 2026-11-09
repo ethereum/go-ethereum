@@ -308,7 +308,8 @@ type ChainConfig struct {
 
 	// EIP170Block and EIP170Time schedule EIP-170 (contract code size limit)
 	// by block number or timestamp. They are mutually exclusive; EIP170Time
-	// takes precedence. On Ethereum this coincides with EIP158Block.
+	// takes precedence. On Ethereum this coincides with EIP158Block. If neither
+	// is set, EIP-170 activates with EIP158Block (legacy configs).
 	EIP170Block *big.Int `json:"eip170Block,omitempty"`
 	EIP170Time  *uint64  `json:"eip170Time,omitempty"`
 
@@ -633,14 +634,21 @@ func (c *ChainConfig) IsEIP158(num *big.Int) bool {
 // IsEIP170 returns whether EIP-170 is active at the given block and time,
 // with EIP170Time taking precedence over EIP170Block.
 func (c *ChainConfig) IsEIP170(num *big.Int, time uint64) bool {
-	switch {
-	case c.EIP170Time != nil:
-		return isTimestampForked(c.EIP170Time, time)
-	case c.EIP170Block != nil:
-		return isBlockForked(c.EIP170Block, num)
-	default:
-		return c.IsEIP158(num)
+	block, timestamp := c.eip170Schedule()
+	if timestamp != nil {
+		return isTimestampForked(timestamp, time)
 	}
+	return isBlockForked(block, num)
+}
+
+// eip170Schedule returns the effective EIP-170 activation. Chain configs that
+// predate eip170Block/eip170Time, such as those persisted in the database by
+// older versions, activate EIP-170 together with EIP-158.
+func (c *ChainConfig) eip170Schedule() (*big.Int, *uint64) {
+	if c.EIP170Block == nil && c.EIP170Time == nil {
+		return c.EIP158Block, nil
+	}
+	return c.EIP170Block, c.EIP170Time
 }
 
 // IsByzantium returns whether num is either equal to the Byzantium fork block or greater.
@@ -809,6 +817,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "daoForkBlock", block: c.DAOForkBlock, optional: true},
 		{name: "eip150Block", block: c.EIP150Block},
 		{name: "eip155Block", block: c.EIP155Block},
+		{name: "eip158Block", block: c.EIP158Block},
 		{name: "eip170Block", block: c.EIP170Block, timestamp: c.EIP170Time, optional: true},
 		{name: "byzantiumBlock", block: c.ByzantiumBlock},
 		{name: "constantinopleBlock", block: c.ConstantinopleBlock},
@@ -975,11 +984,13 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	if isForkBlockIncompatible(c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock, headNumber) {
 		return newBlockCompatError("Merge netsplit fork block", c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock)
 	}
-	if isForkBlockIncompatible(c.EIP170Block, newcfg.EIP170Block, headNumber) {
-		return newBlockCompatError("EIP-170 fork block", c.EIP170Block, newcfg.EIP170Block)
+	storedEIP170Block, storedEIP170Time := c.eip170Schedule()
+	newEIP170Block, newEIP170Time := newcfg.eip170Schedule()
+	if isForkBlockIncompatible(storedEIP170Block, newEIP170Block, headNumber) {
+		return newBlockCompatError("EIP-170 fork block", storedEIP170Block, newEIP170Block)
 	}
-	if isForkTimestampIncompatible(c.EIP170Time, newcfg.EIP170Time, headTimestamp) {
-		return newTimestampCompatError("EIP-170 fork timestamp", c.EIP170Time, newcfg.EIP170Time)
+	if isForkTimestampIncompatible(storedEIP170Time, newEIP170Time, headTimestamp) {
+		return newTimestampCompatError("EIP-170 fork timestamp", storedEIP170Time, newEIP170Time)
 	}
 	if isForkTimestampIncompatible(c.ShanghaiTime, newcfg.ShanghaiTime, headTimestamp) {
 		return newTimestampCompatError("Shanghai fork timestamp", c.ShanghaiTime, newcfg.ShanghaiTime)
