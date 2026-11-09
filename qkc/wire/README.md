@@ -68,6 +68,13 @@ schemas. Represent it as `[UInt256Length]byte` and fill the array using
 `uint256.Int.MarshalSSZAppend(dst[:0])`. The resulting 32 bytes are
 little-endian. Do not apply this numeric byte order rule to hashes.
 
+### Network IDs
+
+`HelloCommand.NetworkID` is a `uint64` P2P network identifier, independent of
+the uint256 chain ID. HELLO encodes it as eight little-endian bytes and has a
+98-byte fixed section. This format is incompatible with peers using the old
+four-byte NetworkID; all peers must use the same HELLO format.
+
 ### Chain IDs
 
 Shard identity is the positive `params.ChainConfig.ChainID`, used by signatures,
