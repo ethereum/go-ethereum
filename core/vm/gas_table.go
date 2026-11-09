@@ -676,7 +676,7 @@ func gasSelfdestruct8037And8038(evm *EVM, contract *Contract, stack *Stack, mem 
 }
 
 // gasSStore8037And8038 implements the SSTORE gas charging under EIP-8037 and
-// EIP-8038.
+// EIP-8038. State-gas refills are returned for the interpreter to apply.
 func gasSStore8037And8038(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	if evm.readOnly {
 		return GasCosts{}, ErrWriteProtection
@@ -730,11 +730,12 @@ func gasSStore8037And8038(evm *EVM, contract *Contract, stack *Stack, mem *Memor
 			evm.StateDB.AddRefund(params.StorageClearRefundAmsterdam)
 		}
 	}
+	var stateRefill uint64
 	if original == value { // reset to original value (2.2.2)
 		if original == (common.Hash{}) { // reset to original inexistent slot (2.2.2.1)
-			contract.Gas.RefundState(stateSet)
+			stateRefill = stateSet
 		}
 		evm.StateDB.AddRefund(params.StorageWriteAmsterdam)
 	}
-	return GasCosts{ExecutionGas: access}, nil // dirty update (2.2)
+	return GasCosts{ExecutionGas: access, StateGasRefill: stateRefill}, nil // dirty update (2.2)
 }

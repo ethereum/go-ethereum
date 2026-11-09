@@ -24,20 +24,17 @@ import (
 )
 
 // GasCosts denotes a vector of gas costs in the multidimensional metering
-// paradigm. It represents the cost charged by an individual operation.
+// paradigm. It represents the charges and state-gas refill of an individual
+// operation.
 type GasCosts struct {
-	ExecutionGas uint64
-	StateGas     uint64
-}
-
-// Sum returns the total gas (execution + state).
-func (g GasCosts) Sum() uint64 {
-	return g.ExecutionGas + g.StateGas
+	ExecutionGas   uint64
+	StateGas       uint64
+	StateGasRefill uint64
 }
 
 // String returns a visual representation of the gas vector.
 func (g GasCosts) String() string {
-	return fmt.Sprintf("<%v,%v>", g.ExecutionGas, g.StateGas)
+	return fmt.Sprintf("<%v,%v,refill=%v>", g.ExecutionGas, g.StateGas, g.StateGasRefill)
 }
 
 // GasBudget is the unified gas-state structure used throughout the EVM.
