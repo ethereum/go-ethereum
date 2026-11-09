@@ -31,16 +31,16 @@ import (
 
 // XshardConnManager manages the local slave's cross-shard connections to other slaves,
 // indexed by each remote slave's chain ID. Connections remain indexed until
-// the manager closes. Master sends ConnectToSlavesRequest to one slave at a
-// time and waits for its response, so a successful outbound PING sees the
-// inbound connection registered before the next slave is asked to dial.
-// Duplicate connections are rejected if this ordering is violated.
+// the manager closes. MasterConn may dial multiple slaves concurrently, so a
+// successful outbound PING is not guaranteed to see the inbound connection
+// registered before another slave is asked to dial. Duplicate connections
+// are rejected if concurrent dials race to establish the same connection.
 type XshardConnManager struct {
 	localChainID *big.Int
 	// Only connections to slaves with configured chain IDs enter the routing index.
 	configuredChainIDs map[string]struct{}
-	maxPayloadSize     uint32        // 0 uses the maximum frame payload length.
-	handler            XshardHandler // Serves cross-shard requests from other slaves.
+	maxPayloadSize     uint32               // 0 uses the maximum frame payload length.
+	handler            XshardRequestHandler // Serves cross-shard requests from other slaves.
 	log                log.Logger
 
 	// mu guards the connection indexes and closed state together.
@@ -61,7 +61,7 @@ type XshardConnManager struct {
 // uses the protocol's maximum payload size. handler serves cross-shard requests
 // from other slaves and must not be nil. shutdownSlave must stop the local
 // slave when an established cross-shard connection closes unexpectedly.
-func NewXshardConnManager(localChainID *big.Int, configuredChainIDs []*big.Int, maxPayloadSize uint32, handler XshardHandler, shutdownSlave func(), logger log.Logger) (*XshardConnManager, error) {
+func NewXshardConnManager(localChainID *big.Int, configuredChainIDs []*big.Int, maxPayloadSize uint32, handler XshardRequestHandler, shutdownSlave func(), logger log.Logger) (*XshardConnManager, error) {
 	if handler == nil {
 		return nil, errors.New("xshard handler must not be nil")
 	}

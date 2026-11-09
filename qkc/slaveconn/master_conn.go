@@ -24,25 +24,32 @@ import (
 	"io"
 	"math/big"
 	"net"
+	"sync"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/qkc/cluster"
 	"github.com/ethereum/go-ethereum/qkc/conn"
-	"github.com/ethereum/go-ethereum/qkc/types"
+	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
 	"github.com/ethereum/go-ethereum/qkc/wire"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/holiman/uint256"
 )
 
-// MasterHandler is implemented by the slave's composition layer. Calls may run
-// concurrently. Business failures belong in response error codes; non-nil
-// errors indicate handler failures and close the connection.
-type MasterHandler interface {
-	CreateShards(rootTip *types.RootBlock) error
+// MasterRequestHandler serves requests received from the master. Calls may run
+// concurrently. Return *wire.RemoteError for business rejections; other errors
+// indicate handler failures and close the connection.
+type MasterRequestHandler interface {
+	CreateShards(rootTip *qkctypes.RootBlock) error
+	AddRootBlock(root *qkctypes.RootBlock) error
+	GetRootChainStakes(address common.Address, minorBlockHash common.Hash) (*cluster.RootChainStakesResult, error)
+	GetUnconfirmedHeaders() ([]*types.Header, error)
+}
 
-	// ConnectToSlaves connects the advertised slaves through the node's connection manager.
-	ConnectToSlaves(req *wire.ConnectToSlavesRequest) (*wire.ConnectToSlavesResponse, error)
-
-	AddRootBlock(req *wire.AddRootBlockRequest) (*wire.AddRootBlockResponse, error)
-	GetRootChainStakes(req *wire.GetRootChainStakesRequest) (*wire.GetRootChainStakesResponse, error)
-	GetUnconfirmedHeaders(req *wire.GetUnconfirmedHeadersRequest) (*wire.GetUnconfirmedHeadersResponse, error)
+// SlaveDialer establishes outbound connections to advertised slaves.
+type SlaveDialer interface {
+	DialToSlave(ctx context.Context, info wire.SlaveInfo) error
 }
 
 // MasterConnConfig configures the slave's connection to its master.
@@ -50,18 +57,24 @@ type MasterConnConfig struct {
 	Conn           net.Conn
 	LocalChainID   *big.Int
 	MaxPayloadSize uint32 // Zero uses the protocol maximum.
-	Handler        MasterHandler
+	Handler        MasterRequestHandler
+	SlaveDialer    SlaveDialer
+	ShutdownSlave  func()
 	Logger         log.Logger
 }
 
 // MasterConn handles master requests and sends shard block notifications.
-// Closing the master connection must be observed by the owning slave service,
-// which is responsible for shutting down the cluster.
+// Closing the master connection invokes the owning slave's shutdown callback.
 type MasterConn struct {
 	*conn.BaseConn
 
-	handler      MasterHandler
 	localChainID *big.Int
+
+	handler     MasterRequestHandler
+	slaveDialer SlaveDialer
+
+	shutdownSlave func()
+	shutdownOnce  sync.Once
 }
 
 // NewMasterConn wraps an accepted master connection; the caller starts it with Start.
@@ -71,6 +84,12 @@ func NewMasterConn(cfg MasterConnConfig) (*MasterConn, error) {
 	}
 	if cfg.Handler == nil {
 		return nil, errors.New("master handler must not be nil")
+	}
+	if cfg.SlaveDialer == nil {
+		return nil, errors.New("slave dialer must not be nil")
+	}
+	if cfg.ShutdownSlave == nil {
+		return nil, errors.New("master connection shutdown callback must not be nil")
 	}
 	if cfg.LocalChainID == nil || cfg.LocalChainID.Sign() <= 0 || cfg.LocalChainID.BitLen() > 256 {
 		return nil, fmt.Errorf("invalid slave chain ID: %v", cfg.LocalChainID)
@@ -82,7 +101,12 @@ func NewMasterConn(cfg MasterConnConfig) (*MasterConn, error) {
 		return nil, fmt.Errorf("max payload size %d exceeds protocol limit %d", maxPayloadSize, wire.MaxFramePayloadLen)
 	}
 
-	mc := &MasterConn{handler: cfg.Handler, localChainID: new(big.Int).Set(cfg.LocalChainID)}
+	mc := &MasterConn{
+		handler:       cfg.Handler,
+		slaveDialer:   cfg.SlaveDialer,
+		shutdownSlave: cfg.ShutdownSlave,
+		localChainID:  new(big.Int).Set(cfg.LocalChainID),
+	}
 
 	// The forwarder runs on the reader goroutine and must not block it.
 	forwarder := mc.routeFrame
@@ -117,13 +141,38 @@ func NewMasterConn(cfg MasterConnConfig) (*MasterConn, error) {
 			byte(wire.ClusterOpGetUnconfirmedHeadersRequest): mc.handleGetUnconfirmedHeaders,
 		}, Logger: cfg.Logger,
 	})
+	go mc.watchConnection()
 	return mc, nil
 }
 
-// SendAddMinorBlockHeader reports a shard block to the master. A nonzero
-// business error code is returned as *wire.RemoteError.
-func (mc *MasterConn) SendAddMinorBlockHeader(ctx context.Context, req *wire.AddMinorBlockHeaderRequest) error {
-	resp, err := mc.SendRPC(ctx, byte(wire.ClusterOpAddMinorBlockHeaderRequest), req)
+// watchConnection shuts down the owning slave when its master connection closes.
+func (mc *MasterConn) watchConnection() {
+	<-mc.WaitUntilClosed()
+	mc.shutdownOnce.Do(func() {
+		mc.Logger().Error("master connection closed; shutting down slave")
+		mc.shutdownSlave()
+	})
+}
+
+// SendAddMinorBlockHeader reports a shard header and its coinbase reward to
+// the master. A nonzero business error code is returned as *wire.RemoteError.
+func (mc *MasterConn) SendAddMinorBlockHeader(ctx context.Context, header *types.Header, coinbaseAmount *uint256.Int) error {
+	if header == nil {
+		return errors.New("minor block header must not be nil")
+	}
+	headerData, err := rlp.EncodeToBytes(header)
+	if err != nil {
+		return fmt.Errorf("encode minor block header: %w", err)
+	}
+	request := &wire.AddMinorBlockHeaderRequest{MinorBlockHeader: headerData}
+	if coinbaseAmount != nil {
+		encodedAmount, err := coinbaseAmount.MarshalSSZ()
+		if err != nil {
+			return fmt.Errorf("encode coinbase amount: %w", err)
+		}
+		copy(request.CoinbaseAmount[:], encodedAmount)
+	}
+	resp, err := mc.SendRPC(ctx, byte(wire.ClusterOpAddMinorBlockHeaderRequest), request)
 	if err != nil {
 		return err
 	}
@@ -157,7 +206,7 @@ func (mc *MasterConn) routeFrame(frame *wire.ClusterFrame) bool {
 func (mc *MasterConn) handlePing(req wire.SSZMessage) (wire.SSZMessage, error) {
 	ping := req.(*wire.PingRequest)
 	if ping.HasRootTip {
-		root := new(types.RootBlock)
+		root := new(qkctypes.RootBlock)
 		if err := root.UnmarshalSSZ(ping.RootTip); err != nil {
 			return nil, fmt.Errorf("decode ping root tip: %w", err)
 		}
@@ -174,21 +223,80 @@ func (mc *MasterConn) handlePing(req wire.SSZMessage) (wire.SSZMessage, error) {
 
 // handleConnectToSlaves connects to the slaves advertised by the master.
 func (mc *MasterConn) handleConnectToSlaves(req wire.SSZMessage) (wire.SSZMessage, error) {
-	return mc.handler.ConnectToSlaves(req.(*wire.ConnectToSlavesRequest))
+	request := req.(*wire.ConnectToSlavesRequest)
+	result := &wire.ConnectToSlavesResponse{ResultList: make([][]byte, len(request.SlaveInfoList))}
+	var wg sync.WaitGroup
+	for i, info := range request.SlaveInfoList {
+		wg.Add(1)
+		go func(i int, info wire.SlaveInfo) {
+			defer wg.Done()
+			if err := mc.slaveDialer.DialToSlave(context.Background(), info); err != nil {
+				result.ResultList[i] = []byte(err.Error())
+			}
+		}(i, info)
+	}
+	wg.Wait()
+	return result, nil
 }
 
 // ── business RPC handlers ──────────────────────────────────────────────────
 // Business RPCs operate on runtime-owned state (mining, accounts,
-// transactions, queries) and delegate to MasterHandler.
+// transactions, queries) and delegate to MasterRequestHandler.
 
 func (mc *MasterConn) handleAddRootBlock(req wire.SSZMessage) (wire.SSZMessage, error) {
-	return mc.handler.AddRootBlock(req.(*wire.AddRootBlockRequest))
+	request := req.(*wire.AddRootBlockRequest)
+	root := new(qkctypes.RootBlock)
+	if err := root.UnmarshalSSZ(request.RootBlock); err != nil {
+		return nil, fmt.Errorf("decode root block: %w", err)
+	}
+	err := mc.handler.AddRootBlock(root)
+	code, err := wire.ErrorCode(err)
+	if err != nil {
+		return nil, err
+	}
+	return &wire.AddRootBlockResponse{ErrorCode: code}, nil
 }
 
 func (mc *MasterConn) handleGetRootChainStakes(req wire.SSZMessage) (wire.SSZMessage, error) {
-	return mc.handler.GetRootChainStakes(req.(*wire.GetRootChainStakesRequest))
+	request := req.(*wire.GetRootChainStakesRequest)
+	result, err := mc.handler.GetRootChainStakes(request.Address, request.MinorBlockHash)
+	code, err := wire.ErrorCode(err)
+	if err != nil {
+		return nil, err
+	}
+	response := &wire.GetRootChainStakesResponse{ErrorCode: code}
+	if code != 0 {
+		return response, nil
+	}
+	if result == nil || result.Stakes == nil {
+		return nil, errors.New("root chain stakes handler returned no result")
+	}
+	response.Signer = result.Signer
+	encoded, err := result.Stakes.MarshalSSZ()
+	if err != nil {
+		return nil, fmt.Errorf("encode root chain stakes: %w", err)
+	}
+	copy(response.Stakes[:], encoded)
+	return response, nil
 }
 
 func (mc *MasterConn) handleGetUnconfirmedHeaders(req wire.SSZMessage) (wire.SSZMessage, error) {
-	return mc.handler.GetUnconfirmedHeaders(req.(*wire.GetUnconfirmedHeadersRequest))
+	headers, err := mc.handler.GetUnconfirmedHeaders()
+	code, err := wire.ErrorCode(err)
+	if err != nil {
+		return nil, err
+	}
+	response := &wire.GetUnconfirmedHeadersResponse{ErrorCode: code}
+	if code != 0 {
+		return response, nil
+	}
+	response.HeaderList = make([]wire.Data, 0, len(headers))
+	for _, header := range headers {
+		encoded, err := rlp.EncodeToBytes(header)
+		if err != nil {
+			return nil, fmt.Errorf("encode unconfirmed header: %w", err)
+		}
+		response.HeaderList = append(response.HeaderList, encoded)
+	}
+	return response, nil
 }

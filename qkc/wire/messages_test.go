@@ -169,7 +169,7 @@ func TestChainHeaderMessagesSSZ(t *testing.T) {
 
 func TestGetUnconfirmedHeadersSSZ(t *testing.T) {
 	header := &types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(1)}
-	msg := &GetUnconfirmedHeadersResponse{HeadersInfoList: []UnconfirmedHeadersInfo{{Branch: 10002, HeaderList: []Data{mustRLP(t, header)}}}}
+	msg := &GetUnconfirmedHeadersResponse{HeaderList: []Data{mustRLP(t, header)}}
 	encoded, err := msg.MarshalSSZ()
 	if err != nil {
 		t.Fatal(err)
@@ -178,7 +178,7 @@ func TestGetUnconfirmedHeadersSSZ(t *testing.T) {
 	if err := decoded.UnmarshalSSZ(encoded); err != nil {
 		t.Fatal(err)
 	}
-	if len(decoded.HeadersInfoList) != 1 || decoded.HeadersInfoList[0].Branch != 10002 || len(decoded.HeadersInfoList[0].HeaderList) != 1 {
+	if len(decoded.HeaderList) != 1 {
 		t.Fatal("unconfirmed header response changed in SSZ round trip")
 	}
 }

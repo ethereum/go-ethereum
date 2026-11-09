@@ -23,8 +23,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/qkc/cluster"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
-	"github.com/holiman/uint256"
 )
 
 // ClusterClient is implemented by the component that owns the connections to
@@ -51,14 +51,5 @@ type ClusterClient interface {
 	// minorBlockHash. The result is the decoded business response after a
 	// completed RPC. err reports a transport or RPC failure, or a nonzero remote
 	// ErrorCode as *wire.RemoteError.
-	GetRootChainStakes(ctx context.Context, chainID *big.Int, address common.Address, minorBlockHash common.Hash) (*RootChainStakesResult, error)
-}
-
-// RootChainStakesResult is the business representation of a chain's staking
-// response, separate from wire.GetRootChainStakesResponse. Stakes is decoded
-// from the wire uint256 representation. A nonzero remote ErrorCode is returned
-// as an error instead of being stored here.
-type RootChainStakesResult struct {
-	Stakes *uint256.Int
-	Signer common.Address
+	GetRootChainStakes(ctx context.Context, chainID *big.Int, address common.Address, minorBlockHash common.Hash) (*cluster.RootChainStakesResult, error)
 }

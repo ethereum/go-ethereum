@@ -35,3 +35,16 @@ type RemoteError struct {
 func (e *RemoteError) Error() string {
 	return fmt.Sprintf("remote error code 0x%x", e.Code)
 }
+
+// ErrorCode converts a business rejection to its wire ErrorCode. Other errors
+// are returned unchanged for the connection layer to treat as handler failures.
+func ErrorCode(err error) (uint32, error) {
+	if err == nil {
+		return 0, nil
+	}
+	var remoteErr *RemoteError
+	if errors.As(err, &remoteErr) {
+		return remoteErr.Code, nil
+	}
+	return 0, err
+}
