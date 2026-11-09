@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // The browser tx-submission subprotocol lets anonymous browser peers submit
@@ -37,7 +38,8 @@ const (
 	protocolVersion = 1
 	protocolLength  = 2
 	txTimeout       = 10 * time.Second
-	maxSubmitSize   = 1024 * 1024 // 1MB
+	maxSubmitSize   = 256 * 1024 // max size of legacypool tx (128KB)
+	maxSubmitCount  = 16         // legacypool guarantees this many pending txs per account (when the pool is full)
 )
 
 // Message codes.
@@ -58,6 +60,11 @@ const (
 	txResultPoolError                // rejected due to local pool state, may succeed if submitted elsewhere
 	txResultInvalidTx                // any other error
 )
+
+// TxSubmit is the network packet for submitting transactions.
+type TxSubmit struct {
+	rlp.RawList[*types.Transaction]
+}
 
 // TxResult reports the outcome of one submitted transaction.
 type TxResult struct {
@@ -183,8 +190,15 @@ func readTxSubmitMessage(rw p2p.MsgReadWriter) ([]*types.Transaction, error) {
 	if msg.Size > maxSubmitSize {
 		return nil, p2p.DiscProtocolError
 	}
-	var txs []*types.Transaction
-	if err := msg.Decode(&txs); err != nil {
+	var packet TxSubmit
+	if err := msg.Decode(&packet); err != nil {
+		return nil, p2p.DiscProtocolError
+	}
+	if packet.Len() > maxSubmitCount {
+		return nil, p2p.DiscProtocolError
+	}
+	txs, err := packet.Items()
+	if err != nil {
 		return nil, p2p.DiscProtocolError
 	}
 	return txs, nil
