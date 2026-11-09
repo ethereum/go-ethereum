@@ -46,8 +46,7 @@ type PartitionedTrie struct {
 	root    node
 	reader  *trie.Reader
 	tracer  *trie.PrevalueTracer
-	inserts map[string]struct{} // record paths created since load
-	deletes map[string]struct{} // record paths removed since load
+	deletes map[string]struct{} // paths left without a node since load
 }
 
 // New opens the tree with the given root.
@@ -63,7 +62,6 @@ func New(root common.Hash, db database.NodeDatabase) (*PartitionedTrie, error) {
 		root:    emptyNode{},
 		reader:  reader,
 		tracer:  trie.NewPrevalueTracer(),
-		inserts: make(map[string]struct{}),
 		deletes: make(map[string]struct{}),
 	}
 	if root != types.EmptyBinaryHash {
@@ -93,21 +91,11 @@ func (t *PartitionedTrie) resolve(h hashedNode, walk bitstr) (node, error) {
 }
 
 func (t *PartitionedTrie) onInsert(walk bitstr) {
-	p := string(pathOf(walk))
-	if _, ok := t.deletes[p]; ok {
-		delete(t.deletes, p)
-	} else {
-		t.inserts[p] = struct{}{}
-	}
+	delete(t.deletes, string(pathOf(walk)))
 }
 
 func (t *PartitionedTrie) onDelete(walk bitstr) {
-	p := string(pathOf(walk))
-	if _, ok := t.inserts[p]; ok {
-		delete(t.inserts, p)
-	} else {
-		t.deletes[p] = struct{}{}
-	}
+	t.deletes[string(pathOf(walk))] = struct{}{}
 }
 
 // getStem returns the group at `stem`, or nil if absent.
@@ -613,7 +601,6 @@ func (t *PartitionedTrie) Copy() *PartitionedTrie {
 		root:    t.root.copy(),
 		reader:  t.reader,
 		tracer:  t.tracer.Copy(),
-		inserts: maps.Clone(t.inserts),
 		deletes: maps.Clone(t.deletes),
 	}
 }
