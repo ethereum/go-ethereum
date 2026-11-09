@@ -55,10 +55,11 @@ const (
 type mutation struct {
 	typ     mutationType
 	applied bool
+	wipe    bool // set when an account is deleted then re-created
 }
 
 func (m *mutation) copy() *mutation {
-	return &mutation{typ: m.typ, applied: m.applied}
+	return &mutation{typ: m.typ, applied: m.applied, wipe: m.wipe}
 }
 
 func (m *mutation) isDelete() bool {
@@ -963,6 +964,17 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 		workers errgroup.Group
 	)
 	if s.db.Type().Is(TypeUBT) || s.db.Type().Is(TypePBT) {
+		// Remove recreated accounts from the binary tree first
+		if s.db.Type().Is(TypePBT) {
+			for addr, op := range s.mutations {
+				if op.wipe && !op.applied && !op.isDelete() {
+					if err := s.trie.DeleteAccount(addr); err != nil {
+						s.setError(fmt.Errorf("deleteAccount (%x) error: %v", addr, err))
+					}
+					op.wipe = false
+				}
+			}
+		}
 		// Bypass per-account updateTrie() for binary trie. In binary trie mode
 		// there is only one unified trie (OpenStorageTrie returns self), so the
 		// per-account trie setup in updateTrie() (getPrefetchedTrie, getTrie,
@@ -1095,6 +1107,7 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 			continue
 		}
 		op.applied = true
+		op.wipe = false
 
 		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
@@ -1587,11 +1600,17 @@ func (s *StateDB) markDelete(addr common.Address) {
 }
 
 func (s *StateDB) markUpdate(addr common.Address) {
-	if _, ok := s.mutations[addr]; !ok {
-		s.mutations[addr] = &mutation{}
+	op, ok := s.mutations[addr]
+	if !ok {
+		op = &mutation{}
+		s.mutations[addr] = op
 	}
-	s.mutations[addr].applied = false
-	s.mutations[addr].typ = update
+	// A deletion not yet applied to the tries is overwritten
+	if op.isDelete() && !op.applied {
+		op.wipe = true
+	}
+	op.applied = false
+	op.typ = update
 }
 
 // Witness retrieves the current state witness being collected.
