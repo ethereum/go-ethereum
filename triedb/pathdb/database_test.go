@@ -20,9 +20,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -1403,7 +1405,7 @@ func testJournalLive(t *testing.T, journalDir string, asyncFlush bool) {
 		copyAncient = t.TempDir()
 		copyJournal string
 	)
-	if err := os.CopyFS(copyAncient, os.DirFS(ancient)); err != nil {
+	if err := os.CopyFS(copyAncient, withoutLockFiles{os.DirFS(ancient)}); err != nil {
 		t.Fatalf("Failed to copy the ancient store, err: %v", err)
 	}
 	if journalDir != "" {
@@ -1563,6 +1565,16 @@ func keyOf(write func(ethdb.KeyValueWriter)) []byte {
 	return common.CopyBytes(it.Key())
 }
 
+// withoutLockFiles leaves the freezers' FLOCK files out of a copy. Windows
+// doesn't let another handle read a held one, and the copy's freezers create
+// their own.
+type withoutLockFiles struct{ fs.FS }
+
+func (f withoutLockFiles) ReadDir(name string) ([]fs.DirEntry, error) {
+	entries, err := fs.ReadDir(f.FS, name)
+	return slices.DeleteFunc(entries, func(e fs.DirEntry) bool { return e.Name() == "FLOCK" }), err
+}
+
 // openCrashCopy opens a copy of a database as a snapshot taken now holds it:
 // the key-value store as of its last sync, with the journal, and the ancient
 // store.
@@ -1570,7 +1582,7 @@ func openCrashCopy(t *testing.T, kvdb *syncTracker, ancient string, config *Conf
 	t.Helper()
 
 	copyAncient := t.TempDir()
-	if err := os.CopyFS(copyAncient, os.DirFS(ancient)); err != nil {
+	if err := os.CopyFS(copyAncient, withoutLockFiles{os.DirFS(ancient)}); err != nil {
 		t.Fatalf("Failed to copy the ancient store, err: %v", err)
 	}
 	disk, err := rawdb.Open(kvdb.crash(), rawdb.OpenOptions{Ancient: copyAncient})
