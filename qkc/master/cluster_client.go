@@ -48,8 +48,8 @@ type ClusterClient interface {
 	GetUnconfirmedHeaderList(ctx context.Context) (map[string][]*types.Header, error)
 
 	// GetRootChainStakes asks chainID for the stakes recorded for address at
-	// minorBlockHash. The result is the decoded business response after a
+	// shardBlockHash. The result is the decoded business response after a
 	// completed RPC. err reports a transport or RPC failure, or a nonzero remote
 	// ErrorCode as *comm.RemoteError.
-	GetRootChainStakes(ctx context.Context, chainID *big.Int, address common.Address, minorBlockHash common.Hash) (*comm.RootChainStakesResult, error)
+	GetRootChainStakes(ctx context.Context, chainID *big.Int, address common.Address, shardBlockHash common.Hash) (*comm.RootChainStakesResult, error)
 }

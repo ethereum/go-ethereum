@@ -337,7 +337,7 @@ func TestOpSerializerFor_WireRegistry(t *testing.T) {
 		wire.ClusterOpPing:                         pingSer,
 		wire.ClusterOpConnectToSlavesRequest:       OpSerializerFor[wire.ConnectToSlavesRequest, wire.ConnectToSlavesResponse](byte(wire.ClusterOpConnectToSlavesResponse)),
 		wire.ClusterOpAddRootBlockRequest:          OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse)),
-		wire.ClusterOpAddMinorBlockHeaderRequest:   OpSerializerFor[wire.AddMinorBlockHeaderRequest, wire.AddMinorBlockHeaderResponse](byte(wire.ClusterOpAddMinorBlockHeaderResponse)),
+		wire.ClusterOpAddShardBlockHeaderRequest:   OpSerializerFor[wire.AddShardBlockHeaderRequest, wire.AddShardBlockHeaderResponse](byte(wire.ClusterOpAddShardBlockHeaderResponse)),
 		wire.ClusterOpAddXshardTxListRequest:       OpSerializerFor[wire.AddXshardTxListRequest, wire.AddXshardTxListResponse](byte(wire.ClusterOpAddXshardTxListResponse)),
 		wire.ClusterOpGetRootChainStakesRequest:    OpSerializerFor[wire.GetRootChainStakesRequest, wire.GetRootChainStakesResponse](byte(wire.ClusterOpGetRootChainStakesResponse)),
 		wire.ClusterOpGetUnconfirmedHeadersRequest: OpSerializerFor[wire.GetUnconfirmedHeadersRequest, wire.GetUnconfirmedHeadersResponse](byte(wire.ClusterOpGetUnconfirmedHeadersResponse)),

@@ -81,9 +81,9 @@ func masterTestPair(t *testing.T, h *masterTestHandler, headerCode uint32, chain
 			byte(wire.ClusterOpAddRootBlockRequest):          conn.OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse)),
 			byte(wire.ClusterOpGetRootChainStakesRequest):    conn.OpSerializerFor[wire.GetRootChainStakesRequest, wire.GetRootChainStakesResponse](byte(wire.ClusterOpGetRootChainStakesResponse)),
 			byte(wire.ClusterOpGetUnconfirmedHeadersRequest): conn.OpSerializerFor[wire.GetUnconfirmedHeadersRequest, wire.GetUnconfirmedHeadersResponse](byte(wire.ClusterOpGetUnconfirmedHeadersResponse)),
-			byte(wire.ClusterOpAddMinorBlockHeaderRequest):   conn.OpSerializerFor[wire.AddMinorBlockHeaderRequest, wire.AddMinorBlockHeaderResponse](byte(wire.ClusterOpAddMinorBlockHeaderResponse)),
-		}, Handlers: map[byte]conn.TypedHandler{byte(wire.ClusterOpAddMinorBlockHeaderRequest): func(wire.SSZMessage) (wire.SSZMessage, error) {
-			return &wire.AddMinorBlockHeaderResponse{ErrorCode: headerCode}, nil
+			byte(wire.ClusterOpAddShardBlockHeaderRequest):   conn.OpSerializerFor[wire.AddShardBlockHeaderRequest, wire.AddShardBlockHeaderResponse](byte(wire.ClusterOpAddShardBlockHeaderResponse)),
+		}, Handlers: map[byte]conn.TypedHandler{byte(wire.ClusterOpAddShardBlockHeaderRequest): func(wire.SSZMessage) (wire.SSZMessage, error) {
+			return &wire.AddShardBlockHeaderResponse{ErrorCode: headerCode}, nil
 		}}})
 	mc.Start()
 	remote.Start()
@@ -192,7 +192,7 @@ func TestMasterConnRPC(t *testing.T) {
 	if err := rlp.DecodeBytes(headers[0], &decodedHeader); err != nil || decodedHeader.Number.Cmp(big.NewInt(1)) != 0 {
 		t.Fatalf("decode unconfirmed header: %v, %v", &decodedHeader, err)
 	}
-	err = mc.SendAddMinorBlockHeader(ctx, &coretypes.Header{Difficulty: big.NewInt(1), Number: big.NewInt(1)}, uint256.NewInt(0))
+	err = mc.SendAddShardBlockHeader(ctx, &coretypes.Header{Difficulty: big.NewInt(1), Number: big.NewInt(1)}, uint256.NewInt(0))
 	var remoteErr *comm.RemoteError
 	if !errors.As(err, &remoteErr) || remoteErr.Code != 9 {
 		t.Fatalf("expected remote error 9, got %v", err)

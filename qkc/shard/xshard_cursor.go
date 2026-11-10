@@ -100,7 +100,7 @@ type xShardCursor struct {
 	maxRoot *qkctypes.RootBlock // last root block of the walk
 
 	root         *qkctypes.RootBlock // root block walked, nil at the end
-	minorIndex   uint64              // source block walked in the root block, from 1
+	shardIndex   uint64              // source block walked in the root block, from 1
 	depositIndex uint64              // deposit walked in the source block
 	deposits     []*types.DepositTx  // deposits of the source block walked
 }
@@ -112,7 +112,7 @@ func newXShardCursor(config *params.ChainConfig, chain XShardChain, pos types.XS
 		config:       config,
 		chain:        chain,
 		maxRoot:      chain.RootBlock(maxRoot),
-		minorIndex:   pos.MinorBlockIndex,
+		shardIndex:   pos.ShardBlockIndex,
 		depositIndex: pos.XShardDepositIndex,
 	}
 	if c.maxRoot == nil {
@@ -120,7 +120,7 @@ func newXShardCursor(config *params.ChainConfig, chain XShardChain, pos types.XS
 	}
 	// EOF is exactly one root past the tip, with no source or deposit index.
 	if pos.RootBlockHeight > c.maxRoot.NumberU64() {
-		if pos.RootBlockHeight != c.maxRoot.NumberU64()+1 || c.minorIndex != 0 || c.depositIndex != 0 {
+		if pos.RootBlockHeight != c.maxRoot.NumberU64()+1 || c.shardIndex != 0 || c.depositIndex != 0 {
 			return nil, fmt.Errorf("%w: invalid EOF cursor %+v after root #%d", ErrInconsistentClusterState, pos, c.maxRoot.NumberU64())
 		}
 		return c, nil
@@ -131,11 +131,11 @@ func newXShardCursor(config *params.ChainConfig, chain XShardChain, pos types.XS
 		return nil, fmt.Errorf("%w: missing root block #%d below %x", ErrInconsistentClusterState, pos.RootBlockHeight, maxRoot)
 	}
 	// The imported parent's cursor must fit the root block it points to.
-	if c.minorIndex > uint64(len(c.root.ShardBlockHeaders())) {
+	if c.shardIndex > uint64(len(c.root.ShardBlockHeaders())) {
 		return nil, fmt.Errorf("%w: invalid cross-shard cursor %+v: root block #%d has %d source blocks", ErrInconsistentClusterState, pos, c.root.NumberU64(), len(c.root.ShardBlockHeaders()))
 	}
-	if c.minorIndex > 0 {
-		header := c.root.ShardBlockHeaders()[c.minorIndex-1]
+	if c.shardIndex > 0 {
+		header := c.root.ShardBlockHeaders()[c.shardIndex-1]
 		// The parent already consumed deposits from this source block.
 		if c.deposits = chain.XShardDeposits(header.Hash()); c.deposits == nil {
 			return nil, fmt.Errorf("%w: missing deposits of block %x", ErrInconsistentClusterState, header.Hash())
@@ -147,9 +147,9 @@ func newXShardCursor(config *params.ChainConfig, chain XShardChain, pos types.XS
 // Cursor returns the position of the cursor, implementing core.XShardDeposits.
 func (c *xShardCursor) Cursor() types.XShardCursor {
 	if c.root == nil {
-		return types.XShardCursor{RootBlockHeight: c.maxRoot.NumberU64() + 1, MinorBlockIndex: c.minorIndex, XShardDepositIndex: c.depositIndex}
+		return types.XShardCursor{RootBlockHeight: c.maxRoot.NumberU64() + 1, ShardBlockIndex: c.shardIndex, XShardDepositIndex: c.depositIndex}
 	}
-	return types.XShardCursor{RootBlockHeight: c.root.NumberU64(), MinorBlockIndex: c.minorIndex, XShardDepositIndex: c.depositIndex}
+	return types.XShardCursor{RootBlockHeight: c.root.NumberU64(), ShardBlockIndex: c.shardIndex, XShardDepositIndex: c.depositIndex}
 }
 
 // Next moves the cursor onto the next deposit and returns it, or returns nil at
@@ -165,12 +165,12 @@ func (c *xShardCursor) Next() (*types.DepositTx, error) {
 		}
 		// Move on to the next source block of the root block, skipping the
 		// blocks of the shard itself.
-		if headers := c.root.ShardBlockHeaders(); c.minorIndex < uint64(len(headers)) {
-			c.minorIndex++
+		if headers := c.root.ShardBlockHeaders(); c.shardIndex < uint64(len(headers)) {
+			c.shardIndex++
 			c.depositIndex = 0
 			c.deposits = nil
 
-			header := headers[c.minorIndex-1]
+			header := headers[c.shardIndex-1]
 			extra, err := header.QKCExtra()
 			if err != nil {
 				return nil, fmt.Errorf("source block %x: %w", header.Hash(), err)
@@ -186,7 +186,7 @@ func (c *xShardCursor) Next() (*types.DepositTx, error) {
 		// Move on to the next root block, starting with its coinbase.
 		nextHeight := c.root.NumberU64() + 1
 		if nextHeight > c.maxRoot.NumberU64() {
-			c.root, c.minorIndex, c.depositIndex, c.deposits = nil, 0, 0, nil
+			c.root, c.shardIndex, c.depositIndex, c.deposits = nil, 0, 0, nil
 			return nil, nil
 		}
 		root := c.chain.RootBlockByNumber(c.maxRoot.Hash(), nextHeight)
@@ -194,14 +194,14 @@ func (c *xShardCursor) Next() (*types.DepositTx, error) {
 			// A gap before maxRoot is missing data, not the end of the walk.
 			return nil, fmt.Errorf("%w: missing root block #%d below %x", ErrInconsistentClusterState, nextHeight, c.maxRoot.Hash())
 		}
-		c.root, c.minorIndex, c.depositIndex, c.deposits = root, 0, 1, nil
+		c.root, c.shardIndex, c.depositIndex, c.deposits = root, 0, 1, nil
 	}
 }
 
 // current returns the deposit at the position of the cursor, or nil if there
 // is none.
 func (c *xShardCursor) current() *types.DepositTx {
-	if c.minorIndex == 0 {
+	if c.shardIndex == 0 {
 		if c.depositIndex == 1 && c.config.IsRootCoinbaseChain() {
 			return rootCoinbaseDeposit(c.root)
 		}

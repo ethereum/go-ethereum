@@ -52,8 +52,8 @@ const (
 	ClusterOpGetUnconfirmedHeadersResponse ClusterOp = 12 + ClusterOpBase // 0x8c
 
 	// Slave-to-Master block notification.
-	ClusterOpAddMinorBlockHeaderRequest  ClusterOp = 17 + ClusterOpBase // 0x91
-	ClusterOpAddMinorBlockHeaderResponse ClusterOp = 18 + ClusterOpBase // 0x92
+	ClusterOpAddShardBlockHeaderRequest  ClusterOp = 17 + ClusterOpBase // 0x91
+	ClusterOpAddShardBlockHeaderResponse ClusterOp = 18 + ClusterOpBase // 0x92
 
 	// Slave-to-slave deposits.
 	ClusterOpAddXshardTxListRequest  ClusterOp = 19 + ClusterOpBase // 0x93

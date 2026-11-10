@@ -46,8 +46,8 @@ func TestNewClusterMessageRegistry(t *testing.T) {
 		{ClusterOpAddRootBlockResponse, &AddRootBlockResponse{}},
 		{ClusterOpGetUnconfirmedHeadersRequest, &GetUnconfirmedHeadersRequest{}},
 		{ClusterOpGetUnconfirmedHeadersResponse, &GetUnconfirmedHeadersResponse{}},
-		{ClusterOpAddMinorBlockHeaderRequest, &AddMinorBlockHeaderRequest{}},
-		{ClusterOpAddMinorBlockHeaderResponse, &AddMinorBlockHeaderResponse{}},
+		{ClusterOpAddShardBlockHeaderRequest, &AddShardBlockHeaderRequest{}},
+		{ClusterOpAddShardBlockHeaderResponse, &AddShardBlockHeaderResponse{}},
 		{ClusterOpAddXshardTxListRequest, &AddXshardTxListRequest{}},
 		{ClusterOpAddXshardTxListResponse, &AddXshardTxListResponse{}},
 		{ClusterOpGetRootChainStakesRequest, &GetRootChainStakesRequest{}},
@@ -127,8 +127,8 @@ func TestChainHeaderMessagesSSZ(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	msg := &AddMinorBlockHeaderRequest{
-		MinorBlockHeader: Data(headerData),
+	msg := &AddShardBlockHeaderRequest{
+		ShardBlockHeader: Data(headerData),
 	}
 	if _, err := uint256.NewInt(0x0102).MarshalSSZAppend(msg.CoinbaseAmount[:0]); err != nil {
 		t.Fatal(err)
@@ -145,18 +145,18 @@ func TestChainHeaderMessagesSSZ(t *testing.T) {
 	if want := append([]byte{0x02, 0x01}, make([]byte, 30)...); !bytes.Equal(encoded[4:36], want) {
 		t.Fatalf("reward is not little-endian uint256: %x", encoded[4:36])
 	}
-	var decoded AddMinorBlockHeaderRequest
+	var decoded AddShardBlockHeaderRequest
 	if err := decoded.UnmarshalSSZ(encoded); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(decoded.MinorBlockHeader, headerData) {
+	if !bytes.Equal(decoded.ShardBlockHeader, headerData) {
 		t.Fatal("SSZ changed the encoded header")
 	}
 	if decoded.CoinbaseAmount != msg.CoinbaseAmount {
 		t.Fatal("SSZ changed the reward")
 	}
 	var decodedHeader types.Header
-	if err := rlp.DecodeBytes(decoded.MinorBlockHeader, &decodedHeader); err != nil {
+	if err := rlp.DecodeBytes(decoded.ShardBlockHeader, &decodedHeader); err != nil {
 		t.Fatal(err)
 	}
 	if decodedHeader.Hash() != header.Hash() {
@@ -212,7 +212,7 @@ func TestCrossChainDepositsSSZ(t *testing.T) {
 	}
 	msg := &AddXshardTxListRequest{
 		ChainID:        [UInt256Length]byte{2},
-		MinorBlockHash: deposit.SourceBlockHash,
+		ShardBlockHash: deposit.SourceBlockHash,
 		DepositTxList:  []Data{Data(depositData)},
 	}
 	encoded, err := msg.MarshalSSZ()
@@ -236,14 +236,14 @@ func TestCrossChainDepositsSSZ(t *testing.T) {
 	if !reflect.DeepEqual(&decodedDeposit, deposit) {
 		t.Fatalf("deposit changed in round trip: got %#v, want %#v", &decodedDeposit, deposit)
 	}
-	if decodedDeposit.SourceBlockHash != decoded.MinorBlockHash {
+	if decodedDeposit.SourceBlockHash != decoded.ShardBlockHash {
 		t.Fatal("deposit source does not match the enclosing list")
 	}
 	if _, err := msg.HashTreeRoot(); err != nil {
 		t.Fatalf("deposit hash tree root: %v", err)
 	}
 
-	empty := &AddXshardTxListRequest{ChainID: [UInt256Length]byte{2}, MinorBlockHash: msg.MinorBlockHash}
+	empty := &AddXshardTxListRequest{ChainID: [UInt256Length]byte{2}, ShardBlockHash: msg.ShardBlockHash}
 	var decodedEmpty AddXshardTxListRequest
 	encoded, err = empty.MarshalSSZ()
 	if err != nil {
@@ -263,7 +263,7 @@ func TestMasterMessagesSSZ(t *testing.T) {
 
 	request := &GetRootChainStakesRequest{
 		Address:        common.HexToAddress("0x1234"),
-		MinorBlockHash: common.HexToHash("0x5678"),
+		ShardBlockHash: common.HexToHash("0x5678"),
 	}
 	roundTripSSZ(t, request)
 
@@ -498,8 +498,8 @@ func TestGeneratedCodecsRejectMalformedPayloads(t *testing.T) {
 		{"AddRootBlockRequest", 0, func() SSZMessage { return new(AddRootBlockRequest) }},
 		{"AddRootBlockResponse", -1, func() SSZMessage { return new(AddRootBlockResponse) }},
 		{"HelloCommand", 62, func() SSZMessage { return new(HelloCommand) }},
-		{"AddMinorBlockHeaderRequest", 0, func() SSZMessage { return new(AddMinorBlockHeaderRequest) }},
-		{"AddMinorBlockHeaderResponse", -1, func() SSZMessage { return new(AddMinorBlockHeaderResponse) }},
+		{"AddShardBlockHeaderRequest", 0, func() SSZMessage { return new(AddShardBlockHeaderRequest) }},
+		{"AddShardBlockHeaderResponse", -1, func() SSZMessage { return new(AddShardBlockHeaderResponse) }},
 		{"AddXshardTxListRequest", 64, func() SSZMessage { return new(AddXshardTxListRequest) }},
 		{"AddXshardTxListResponse", -1, func() SSZMessage { return new(AddXshardTxListResponse) }},
 		{"GetRootChainStakesRequest", -1, func() SSZMessage { return new(GetRootChainStakesRequest) }},

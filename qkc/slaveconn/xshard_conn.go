@@ -43,7 +43,7 @@ import (
 // A *comm.RemoteError reports a business rejection. Other errors signal a
 // handler failure and close the connection via BaseConn.
 type XshardRequestHandler interface {
-	AddXshardTxList(minorBlockHash common.Hash, deposits []*types.DepositTx) error
+	AddXshardTxList(shardBlockHash common.Hash, deposits []*types.DepositTx) error
 }
 
 // XshardConn is a slave-to-slave TCP connection for cross-shard RPCs.
@@ -117,7 +117,7 @@ func (x *XshardConn) RemoteChainID() *big.Int {
 // SendAddXshardTxList sends deposits from one source block to the remote slave.
 // A nonzero ErrorCode is returned as *comm.RemoteError; transport and context
 // errors are returned unchanged.
-func (x *XshardConn) SendAddXshardTxList(ctx context.Context, minorBlockHash common.Hash, deposits []*types.DepositTx) error {
+func (x *XshardConn) SendAddXshardTxList(ctx context.Context, shardBlockHash common.Hash, deposits []*types.DepositTx) error {
 	if x.remoteChainID == nil {
 		return errors.New("remote chain ID is unknown")
 	}
@@ -125,7 +125,7 @@ func (x *XshardConn) SendAddXshardTxList(ctx context.Context, minorBlockHash com
 	if err != nil {
 		return fmt.Errorf("encode destination chain ID: %w", err)
 	}
-	request := &wire.AddXshardTxListRequest{ChainID: chainID, MinorBlockHash: minorBlockHash}
+	request := &wire.AddXshardTxListRequest{ChainID: chainID, ShardBlockHash: shardBlockHash}
 	request.DepositTxList = make([]wire.Data, len(deposits))
 	for i, deposit := range deposits {
 		if deposit == nil {
@@ -209,7 +209,7 @@ func (x *XshardConn) handleAddXshardTxList(req wire.SSZMessage) (wire.SSZMessage
 			return nil, fmt.Errorf("decode deposit transaction %d: %w", i, err)
 		}
 	}
-	err = x.handler.AddXshardTxList(request.MinorBlockHash, deposits)
+	err = x.handler.AddXshardTxList(request.ShardBlockHash, deposits)
 	code, err := wire.ErrorCode(err)
 	if err != nil {
 		return nil, err

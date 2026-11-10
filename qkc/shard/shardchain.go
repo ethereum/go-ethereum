@@ -346,7 +346,7 @@ func (c *ShardChain) InsertShardBlock(block *types.Block) error {
 //	B and B' both reference R1.
 func (c *ShardChain) validateRootReference(header, parent *types.Header) (*qkctypes.RootBlockHeader, error) {
 	// The block's referenced root must be known ("cannot find root block for
-	// the minor block"). A non-genesis parent's reference was checked on import.
+	// the shard block"). A non-genesis parent's reference was checked on import.
 	prevRoot, err := c.prevRootBlock(header)
 	if err != nil {
 		return nil, err
@@ -423,8 +423,8 @@ func (c *ShardChain) shouldUpdateHead(header *types.Header, prevRoot, rootTip *q
 	if header.ParentHash == current.Hash() {
 		return true, nil
 	}
-	// Rule 3, as __is_minor_block_linked_to_root_tip: "Determine whether a
-	// minor block is a descendant of a minor block confirmed by root tip".
+	// Rule 3, as __is_shard_block_linked_to_root_tip: "Determine whether a
+	// shard block is a descendant of a shard block confirmed by root tip".
 	// Every initialized root has a confirmed baseline. pyquarkchain first
 	// checks that the block is higher than C, which is implied here: the block
 	// is new, so it is not C, and it only extends C if it is higher.
@@ -510,7 +510,7 @@ func (c *ShardChain) InsertRootBlock(root *qkctypes.RootBlock) (bool, error) {
 // It mirrors the shard-specific checks of ShardState.add_root_block in
 // pyquarkchain. The master must validate the root
 // block and its body before forwarding it to shards. Each shard validates its
-// minor blocks and distributes outgoing cross-shard deposits. This method checks
+// shard blocks and distributes outgoing cross-shard deposits. This method checks
 // availability and consistency of local shard data.
 // Failures of these cluster guarantees wrap ErrClusterStateInconsistency;
 // missing already-validated local data wraps ErrShardStateInconsistency.
@@ -522,8 +522,8 @@ func (c *ShardChain) InsertRootBlock(root *qkctypes.RootBlock) (bool, error) {
 //
 // Rule 2: the master must validate the commitment to the carried shard headers
 // and their complete ordering/continuity. Locally, blocks for this shard must
-// already be present ("cannot find minor block in local shard"), and their count
-// must respect MaxBlocksPerRootBlock ("too many minor blocks in the root block").
+// already be present ("cannot find shard block in local shard"), and their count
+// must respect MaxBlocksPerRootBlock ("too many shard blocks in the root block").
 // The cluster must ensure confirmed local blocks are available before importing
 // this root block. The source shards must also have delivered all required
 // cross-shard deposits. Missing confirmed local blocks or missing/unexpected
@@ -684,7 +684,7 @@ func (c *ShardChain) validateXShardDeposits(block *types.Header, extra *types.QK
 // mappings, C is the current head or one of its ancestors. Starting at the
 // current head, walk back to the nearest shard block whose referenced root is
 // the new root tip or one of its ancestors. C is the earliest block the walk
-// can reach. This follows "we need to scan back until finding a minor block
+// can reach. This follows "we need to scan back until finding a shard block
 // pointing to the same root chain r_block is on".
 //
 //	                     +----- R2'

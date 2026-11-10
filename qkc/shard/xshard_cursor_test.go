@@ -81,11 +81,11 @@ func testDeposit(source *types.Header, index uint64) *types.DepositTx {
 }
 
 // cursorAt returns a shard block header with the given cursor.
-func cursorAt(height, minor, deposit uint64) *types.Header {
+func cursorAt(height, shard, deposit uint64) *types.Header {
 	return &types.Header{
 		Number:     new(big.Int),
 		Difficulty: new(big.Int),
-		Extra:      (&types.QKCExtra{Cursor: types.XShardCursor{RootBlockHeight: height, MinorBlockIndex: minor, XShardDepositIndex: deposit}}).Encode(),
+		Extra:      (&types.QKCExtra{Cursor: types.XShardCursor{RootBlockHeight: height, ShardBlockIndex: shard, XShardDepositIndex: deposit}}).Encode(),
 	}
 }
 
@@ -122,8 +122,8 @@ func testRootChain() (roots []*qkctypes.RootBlock, a, b, c, d *types.Header, toS
 }
 
 // pos returns a cross-shard cursor.
-func pos(height, minor, deposit uint64) types.XShardCursor {
-	return types.XShardCursor{RootBlockHeight: height, MinorBlockIndex: minor, XShardDepositIndex: deposit}
+func pos(height, shard, deposit uint64) types.XShardCursor {
+	return types.XShardCursor{RootBlockHeight: height, ShardBlockIndex: shard, XShardDepositIndex: deposit}
 }
 
 func TestConfiguredRootCoinbaseChain(t *testing.T) {
@@ -208,7 +208,7 @@ func TestXShardInboxDeposits(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			deposits, err := tt.inbox.Deposits(cursorAt(tt.start.RootBlockHeight, tt.start.MinorBlockIndex, tt.start.XShardDepositIndex), tt.prev.Hash())
+			deposits, err := tt.inbox.Deposits(cursorAt(tt.start.RootBlockHeight, tt.start.ShardBlockIndex, tt.start.XShardDepositIndex), tt.prev.Hash())
 			if err != nil {
 				t.Fatalf("failed to open the deposits: %v", err)
 			}
@@ -250,12 +250,12 @@ func TestXShardInboxErrors(t *testing.T) {
 		t.Error("walked from a parent without a cursor")
 	}
 	for _, cursor := range []types.XShardCursor{pos(5, 0, 0), pos(4, 1, 0), pos(4, 0, 1)} {
-		if _, err := shard1.Deposits(cursorAt(cursor.RootBlockHeight, cursor.MinorBlockIndex, cursor.XShardDepositIndex), roots[3].Hash()); !errors.Is(err, ErrInconsistentClusterState) {
+		if _, err := shard1.Deposits(cursorAt(cursor.RootBlockHeight, cursor.ShardBlockIndex, cursor.XShardDepositIndex), roots[3].Hash()); !errors.Is(err, ErrInconsistentClusterState) {
 			t.Errorf("invalid EOF cursor %+v: error %v, want %v", cursor, err, ErrInconsistentClusterState)
 		}
 	}
-	invalidMinorIndex := uint64(len(roots[1].ShardBlockHeaders())) + 1
-	if _, err := shard1.Deposits(cursorAt(1, invalidMinorIndex, 0), roots[3].Hash()); !errors.Is(err, ErrInconsistentClusterState) {
+	invalidShardIndex := uint64(len(roots[1].ShardBlockHeaders())) + 1
+	if _, err := shard1.Deposits(cursorAt(1, invalidShardIndex, 0), roots[3].Hash()); !errors.Is(err, ErrInconsistentClusterState) {
 		t.Errorf("cursor source index out of range: error %v, want %v", err, ErrInconsistentClusterState)
 	}
 	delete(toShard1.deposits, a.Hash())
