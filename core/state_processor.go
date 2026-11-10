@@ -543,23 +543,25 @@ func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
 // AssembleBlock finalizes the state and assembles the block with provided
 // body and receipts.
 func AssembleBlock(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, blockAccessList *bal.ConstructionBlockAccessList) *types.Block {
-	rules := chain.Config().Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
-
-	// Compute the state root on a separate goroutine while deriving the body's
-	// header fields here. Construct the block only once the full header is ready.
-	rootCh := make(chan common.Hash, 1)
+	var (
+		accessList *bal.BlockAccessList
+		done       = make(chan struct{})
+		rules      = chain.Config().Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
+	)
 	go func() {
-		rootCh <- state.IntermediateRoot(rules)
+		header.DeriveBodyFields(body, receipts, trie.NewStackTrie(nil))
+		if rules.IsAmsterdam {
+			accessList = blockAccessList.ToEncodingObj()
+			hash := accessList.Hash()
+			header.BlockAccessListHash = &hash
+		}
+		close(done)
 	}()
+	defer func() { <-done }()
 
-	header.DeriveBodyFields(body, receipts, trie.NewStackTrie(nil))
-	var accessList *bal.BlockAccessList
-	if rules.IsAmsterdam {
-		accessList = blockAccessList.ToEncodingObj()
-		hash := accessList.Hash()
-		header.BlockAccessListHash = &hash
-	}
-	header.Root = <-rootCh
+	root := state.IntermediateRoot(rules)
+	<-done
+	header.Root = root
 
 	block := types.NewBlockWithHeader(header)
 	if body != nil {

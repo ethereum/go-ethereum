@@ -525,8 +525,8 @@ func (b *Block) WithSeal(header *Header) *Block {
 func (b *Block) WithBody(body Body) *Block {
 	block := &Block{
 		header:       b.header,
-		transactions: slices.Clone(body.Transactions),
-		uncles:       make([]*Header, len(body.Uncles)),
+		transactions: append(Transactions(nil), body.Transactions...),
+		uncles:       append([]*Header(nil), body.Uncles...),
 		withdrawals:  slices.Clone(body.Withdrawals),
 		accessList:   b.accessList,
 	}
