@@ -21,7 +21,7 @@ EIP-8037 splits gas into an execution and a state dimension, so every hook that 
 
 ### New types
 
-- `CodeChangeReason` is a new type used to provide a reason for code changes. It includes various reasons such as contract creation, genesis initialization, EIP-7702 authorization, self-destruct, and revert operations ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).
+- `CodeChangeReason` is a new type used to provide a reason for code changes. It includes various reasons such as contract creation, genesis initialization, EIP-7702 authorization, self-destruct, and revert operations ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)), and the adoption of another account's code through the EIP-8298 `SETCODEFROM` instruction (`CodeChangeSetCodeFrom`).
 - `Gas` is the two-dimensional gas vector introduced by EIP-8037, pairing ordinary execution gas with the state-access dimension. The `State` field is always zero before the fork.
 - `GasChangeHookV2`, `EnterHookV2`, `ExitHookV2`, `OpcodeHookV2` and `FaultHookV2` are the hook signatures of the methods above.
 

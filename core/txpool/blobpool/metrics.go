@@ -96,6 +96,7 @@ var (
 	dropOverflownMeter   = metrics.NewRegisteredMeter("blobpool/drop/overflown", nil)   // Global disk cap exceeded, neutral-ish
 	dropUnderpricedMeter = metrics.NewRegisteredMeter("blobpool/drop/underpriced", nil) // Gas tip changed, neutral
 	dropReplacedMeter    = metrics.NewRegisteredMeter("blobpool/drop/replaced", nil)    // Transaction replaced, neutral
+	dropSenderCodeMeter  = metrics.NewRegisteredMeter("blobpool/drop/sendercode", nil)  // Sender holds code (EIP-3607), neutral
 
 	// The below metrics track various outcomes of transactions being added to
 	// the pool.

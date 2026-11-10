@@ -44,6 +44,9 @@ type StateDB interface {
 
 	// SetCode sets the new code for the address, and returns the previous code, if any.
 	SetCode(common.Address, []byte, tracing.CodeChangeReason) []byte
+	// SetCodeFrom sets the code of the first address to the code of the second,
+	// as SETCODEFROM does (EIP-8298), and returns the previous code, if any.
+	SetCodeFrom(addr, source common.Address) []byte
 	GetCodeSize(common.Address) int
 
 	AddRefund(uint64)

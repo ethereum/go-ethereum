@@ -354,11 +354,12 @@ func (j *journal) balanceChange(addr common.Address, previous *uint256.Int) {
 	})
 }
 
-func (j *journal) setCode(address common.Address, prevCode []byte) {
+func (j *journal) setCode(address common.Address, prevCode []byte, prevAdopted bool) {
 	j.stashCode(address, prevCode)
 	j.append(codeChange{
-		account:  address,
-		prevCode: prevCode,
+		account:     address,
+		prevCode:    prevCode,
+		prevAdopted: prevAdopted,
 	})
 }
 
@@ -432,8 +433,9 @@ type (
 		origvalue common.Hash
 	}
 	codeChange struct {
-		account  common.Address
-		prevCode []byte
+		account     common.Address
+		prevCode    []byte
+		prevAdopted bool // the previous code was adopted through SETCODEFROM
 	}
 
 	// Changes to other state values.
@@ -554,7 +556,9 @@ func (ch nonceChange) copy() journalEntry {
 }
 
 func (ch codeChange) revert(s *StateDB) {
-	s.getStateObject(ch.account).setCode(crypto.Keccak256Hash(ch.prevCode), ch.prevCode)
+	obj := s.getStateObject(ch.account)
+	obj.setCode(crypto.Keccak256Hash(ch.prevCode), ch.prevCode)
+	obj.codeAdopted = ch.prevAdopted
 }
 
 func (ch codeChange) mutation() (common.Address, journalMutationKind, bool) {
@@ -563,8 +567,9 @@ func (ch codeChange) mutation() (common.Address, journalMutationKind, bool) {
 
 func (ch codeChange) copy() journalEntry {
 	return codeChange{
-		account:  ch.account,
-		prevCode: ch.prevCode,
+		account:     ch.account,
+		prevCode:    ch.prevCode,
+		prevAdopted: ch.prevAdopted,
 	}
 }
 

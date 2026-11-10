@@ -68,6 +68,14 @@ func (obj *AccountAccess) EncodeRLP(_w io.Writer) error {
 		_tmp17 := w.List()
 		w.WriteUint64(uint64(_tmp16.BlockAccessIndex))
 		w.WriteBytes(_tmp16.NewCode)
+		_tmp18 := _tmp16.NewCodeHash != nil
+		if _tmp18 {
+			if _tmp16.NewCodeHash == nil {
+				w.Write([]byte{0x80})
+			} else {
+				w.WriteBytes(_tmp16.NewCodeHash[:])
+			}
+		}
 		w.ListEnd(_tmp17)
 	}
 	w.ListEnd(_tmp15)
@@ -252,6 +260,14 @@ func (obj *AccountAccess) DecodeRLP(dec *rlp.Stream) error {
 					return err
 				}
 				_tmp20.NewCode = _tmp22
+				// NewCodeHash:
+				if dec.MoreDataInList() {
+					var _tmp23 common.Hash
+					if err := dec.ReadBytes(_tmp23[:]); err != nil {
+						return err
+					}
+					_tmp20.NewCodeHash = &_tmp23
+				}
 				if err := dec.ListEnd(); err != nil {
 					return err
 				}
