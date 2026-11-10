@@ -1456,16 +1456,15 @@ func TestStorageDirtiness(t *testing.T) {
 	checkDirty(common.Hash{0x1}, common.Hash{0x1}, true)
 }
 
-// TestStateDBCopyUBT exercises StateDB.Copy on a UBT-backed state database.
-// Before the mustCopyTrie fix, this panicked with "unknown trie type
-// *bintrie.BinaryTrie" because the type switch in mustCopyTrie only covered
-// *trie.StateTrie and *transitiontrie.TransitionTrie.
-func TestStateDBCopyUBT(t *testing.T) {
+// TestStateDBCopyPBT exercises StateDB.Copy on a PBT-backed state database,
+// ensuring mustCopyTrie and stateObject.deepCopy handle the single shared
+// partitioned binary tree.
+func TestStateDBCopyPBT(t *testing.T) {
 	disk := rawdb.NewMemoryDatabase()
-	tdb := triedb.NewDatabase(disk, triedb.UBTDefaults)
+	tdb := triedb.NewDatabase(disk, &triedb.Config{PathDB: pathdb.Defaults, IsPBT: true})
 	sdb := NewDatabase(tdb, nil)
 
-	orig, err := New(types.EmptyRootHash, sdb)
+	orig, err := New(types.EmptyBinaryHash, sdb)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

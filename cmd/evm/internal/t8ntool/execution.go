@@ -51,9 +51,8 @@ import (
 )
 
 type Prestate struct {
-	Env        stEnv                         `json:"env"`
-	Pre        types.GenesisAlloc            `json:"pre"`
-	TreeLeaves map[common.Hash]hexutil.Bytes `json:"vkt,omitempty"`
+	Env stEnv              `json:"env"`
+	Pre types.GenesisAlloc `json:"pre"`
 	// AllocPath, when non-empty, causes Apply to stream the alloc from disk
 	// instead of reading Pre, so the full map never materializes in memory.
 	AllocPath string `json:"-"`
@@ -161,16 +160,15 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 	var (
 		statedb *state.StateDB
 
-		isEIP4762   = chainConfig.IsUBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 		isPBT       = chainConfig.IsPBT(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 		isAmsterdam = chainConfig.IsAmsterdam(big.NewInt(int64(pre.Env.Number)), pre.Env.Timestamp)
 		rules       = chainConfig.Rules(big.NewInt(int64(pre.Env.Number)), pre.Env.Random != nil, pre.Env.Timestamp)
 	)
 	var err error
 	if pre.AllocPath != "" {
-		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, isEIP4762, isPBT)
+		statedb, err = MakePreStateStreaming(rawdb.NewMemoryDatabase(), pre.AllocPath, isPBT)
 	} else {
-		statedb, err = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isEIP4762, isPBT)
+		statedb, err = MakePreState(rawdb.NewMemoryDatabase(), pre.Pre, isPBT)
 	}
 	if err != nil {
 		return nil, nil, nil, err
@@ -409,16 +407,11 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig, 
 }
 
 // newPrestateTrieDBConfig returns the triedb config used to construct the
-// prestate. UBT and PBT modes require the path-based backend; the legacy
-// hash-based backend cannot decode their nodes.
-func newPrestateTrieDBConfig(isBintrie, isPBT bool) *triedb.Config {
+// prestate. PBT mode requires the path-based backend; the legacy hash-based
+// backend cannot decode its nodes.
+func newPrestateTrieDBConfig(isPBT bool) *triedb.Config {
 	if isPBT {
 		return &triedb.Config{Preimages: true, IsPBT: true, PathDB: pathdb.Defaults}
-	}
-	if isBintrie {
-		cfg := *triedb.UBTDefaults
-		cfg.Preimages = true
-		return &cfg
 	}
 	return &triedb.Config{Preimages: true}
 }
@@ -433,15 +426,12 @@ func insertPreimages(tdb *triedb.Database, addr common.Address, slots iter.Seq[c
 	tdb.InsertPreimage(preimages)
 }
 
-func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie, isPBT bool) (*state.StateDB, error) {
-	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie, isPBT))
+func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isPBT bool) (*state.StateDB, error) {
+	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isPBT))
 	sdb := state.NewDatabase(tdb, nil)
-	if isBintrie {
-		sdb.(*state.UBTDatabase).EnableAllocRecording()
-	}
 
 	root := types.EmptyRootHash
-	if isBintrie || isPBT {
+	if isPBT {
 		root = types.EmptyBinaryHash
 	}
 	statedb, err := state.New(root, sdb)
@@ -464,11 +454,7 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie, isP
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to commit initial state: %v", err))
 	}
-	// If bintrie mode started, check if conversion happened
-	if isBintrie {
-		return statedb, nil
-	}
-	// For MPT mode, reopen the state with the committed root
+	// Reopen the state with the committed root
 	statedb, err = state.New(root, sdb)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to reopen state after commit: %v", err))
@@ -478,15 +464,12 @@ func MakePreState(db ethdb.Database, accounts types.GenesisAlloc, isBintrie, isP
 
 // MakePreStateStreaming is like MakePreState, but decodes the alloc from disk
 // one account at a time so the full map is never held in memory.
-func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie, isPBT bool) (*state.StateDB, error) {
-	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isBintrie, isPBT))
+func MakePreStateStreaming(db ethdb.Database, allocPath string, isPBT bool) (*state.StateDB, error) {
+	tdb := triedb.NewDatabase(db, newPrestateTrieDBConfig(isPBT))
 	sdb := state.NewDatabase(tdb, nil)
-	if isBintrie {
-		sdb.(*state.UBTDatabase).EnableAllocRecording()
-	}
 
 	root := types.EmptyRootHash
-	if isBintrie || isPBT {
+	if isPBT {
 		root = types.EmptyBinaryHash
 	}
 	statedb, err := state.New(root, sdb)
@@ -541,9 +524,6 @@ func MakePreStateStreaming(db ethdb.Database, allocPath string, isBintrie, isPBT
 	root, err = statedb.Commit(params.Rules{}, 0)
 	if err != nil {
 		return nil, NewError(ErrorEVM, fmt.Errorf("failed to commit initial state: %v", err))
-	}
-	if isBintrie {
-		return statedb, nil
 	}
 	statedb, err = state.New(root, sdb)
 	if err != nil {

@@ -126,8 +126,7 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList   *accessList
-	accessEvents *AccessEvents
+	accessList *accessList
 
 	// Per-transaction state access footprint for EIP-7928
 	stateAccessList *bal.ConstructionBlockAccessList
@@ -198,9 +197,6 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		journal:              newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
-	}
-	if db.Type().Is(TypeUBT) {
-		sdb.accessEvents = NewAccessEvents()
 	}
 	return sdb, nil
 }
@@ -731,9 +727,6 @@ func (s *StateDB) Copy() *StateDB {
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
 	}
-	if s.accessEvents != nil {
-		state.accessEvents = s.accessEvents.Copy()
-	}
 	// Deep copy cached state objects.
 	for addr, obj := range s.stateObjects {
 		state.stateObjects[addr] = obj.deepCopy(state)
@@ -963,16 +956,14 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 		start   = time.Now()
 		workers errgroup.Group
 	)
-	if s.db.Type().Is(TypeUBT) || s.db.Type().Is(TypePBT) {
+	if s.db.Type().Is(TypePBT) {
 		// Remove recreated accounts from the binary tree first
-		if s.db.Type().Is(TypePBT) {
-			for addr, op := range s.mutations {
-				if op.wipe && !op.applied && !op.isDelete() {
-					if err := s.trie.DeleteAccount(addr); err != nil {
-						s.setError(fmt.Errorf("deleteAccount (%x) error: %v", addr, err))
-					}
-					op.wipe = false
+		for addr, op := range s.mutations {
+			if op.wipe && !op.applied && !op.isDelete() {
+				if err := s.trie.DeleteAccount(addr); err != nil {
+					s.setError(fmt.Errorf("deleteAccount (%x) error: %v", addr, err))
 				}
+				op.wipe = false
 			}
 		}
 		// Bypass per-account updateTrie() for binary trie. In binary trie mode
@@ -1077,9 +1068,9 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
 	//
-	// Don't check prefetcher if verkle trie has been used. In the context of verkle,
-	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
-	// here could result in losing uncommitted changes from storage.
+	// Don't check prefetcher if the binary tree has been used. In that context,
+	// only a single trie is used for state hashing. Replacing a non-nil binary
+	// tree here could result in losing uncommitted changes from storage.
 	start = time.Now()
 	if s.prefetcher != nil && s.db.Type().Is(TypeMPT) {
 		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
@@ -1267,7 +1258,7 @@ func (s *StateDB) handleDestruction(rules params.Rules) (map[common.Hash]*Accoun
 			continue
 		}
 		// Short circuit if the origin storage was empty.
-		if prev.Root == types.EmptyRootHash || s.db.Type().Is(TypeUBT) {
+		if prev.Root == types.EmptyRootHash {
 			continue
 		}
 		if rules.IsCancun {
@@ -1522,9 +1513,6 @@ func (s *StateDB) CommitWithUpdate(rules params.Rules, block uint64) (common.Has
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	if rules.IsEIP2929 && rules.IsEIP4762 {
-		panic("eip2929 and eip4762 are both activated")
-	}
 	if rules.IsEIP2929 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
@@ -1616,8 +1604,4 @@ func (s *StateDB) markUpdate(addr common.Address) {
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
 	return s.witness
-}
-
-func (s *StateDB) AccessEvents() *AccessEvents {
-	return s.accessEvents
 }

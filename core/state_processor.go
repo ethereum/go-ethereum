@@ -19,7 +19,6 @@ package core
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/big"
 	"sync/atomic"
 	"time"
@@ -185,7 +184,7 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 		ProcessBeaconBlockRoot(*beaconRoot, evm, blockAccessList)
 	}
 	// EIP-2935
-	if config.IsPrague(number, time) || config.IsUBT(number, time) {
+	if config.IsPrague(number, time) {
 		ProcessParentBlockHash(parent.Hash(), evm, blockAccessList)
 	}
 	return blockAccessList
@@ -246,10 +245,6 @@ func ProcessWithdrawals(withdrawals types.Withdrawals, evm *vm.EVM, blockAccessI
 		amount := new(uint256.Int).SetUint64(w.Amount)
 		amount = amount.Mul(amount, uint256.NewInt(params.GWei))
 		evm.StateDB.AddBalance(w.Address, amount, tracing.BalanceIncreaseWithdrawal)
-
-		if rules.IsEIP4762 {
-			evm.StateDB.AccessEvents().AddAccount(w.Address, true, math.MaxUint64)
-		}
 	}
 	accessList := evm.StateDB.Finalise(rules)
 	if rules.IsAmsterdam {
@@ -293,11 +288,6 @@ func applyTransactionWithEVM(ctx context.Context, msg *Message, gp *GasPool, sta
 		bal = evm.StateDB.Finalise(evm.GetRules())
 	} else {
 		root = statedb.IntermediateRoot(evm.GetRules()).Bytes()
-	}
-	// Merge the tx-local access event into the "block-local" one, in order to collect
-	// all values, so that the witness can be built.
-	if statedb.Database().Type().Is(state.TypeUBT) {
-		statedb.AccessEvents().Merge(evm.AccessEvents)
 	}
 	receipt = makeReceipt(evm, result, statedb, blockNumber, blockHash, blockTime, tx, gp.CumulativeUsed(), root)
 	if withBloom {
@@ -405,9 +395,6 @@ func ProcessBeaconBlockRoot(beaconRoot common.Hash, evm *vm.EVM, blockAccessList
 
 	// Unchecked system call (EIP-4788), failures are ignored as spec
 	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
-	if evm.StateDB.AccessEvents() != nil {
-		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
-	}
 	accessList := evm.StateDB.Finalise(evm.GetRules())
 	if evm.GetRules().IsAmsterdam {
 		blockAccessList.Merge(accessList)
@@ -440,9 +427,6 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 
 	// Unchecked system call (EIP-2935), failures are ignored as spec
 	_, _, _ = evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
-	if evm.StateDB.AccessEvents() != nil {
-		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
-	}
 	accessList := evm.StateDB.Finalise(evm.GetRules())
 	if evm.GetRules().IsAmsterdam {
 		blockAccessList.Merge(accessList)
@@ -497,9 +481,6 @@ func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.E
 	evm.StateDB.SetTxContext(common.Hash{}, 0, blockAccessIndex)
 	evm.StateDB.AddAddressToAccessList(addr)
 	ret, _, err := evm.Call(msg.From, *msg.To, msg.Data, gasBudget, common.U2560)
-	if evm.StateDB.AccessEvents() != nil {
-		evm.StateDB.AccessEvents().Merge(evm.AccessEvents)
-	}
 	bal := evm.StateDB.Finalise(evm.GetRules())
 	if err != nil {
 		return fmt.Errorf("system call failed to execute: %v", err)

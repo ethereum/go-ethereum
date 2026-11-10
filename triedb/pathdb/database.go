@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/pbt"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
@@ -99,14 +98,6 @@ func merkleNodeHasher(blob []byte) (common.Hash, error) {
 	return crypto.Keccak256Hash(blob), nil
 }
 
-// binaryNodeHasher computes the hash of the given verkle node.
-func binaryNodeHasher(blob []byte) (common.Hash, error) {
-	if len(blob) == 0 {
-		return types.EmptyBinaryHash, nil
-	}
-	return bintrie.DeserializeAndHash(blob, 0)
-}
-
 // Database is a multiple-layered structure for maintaining in-memory states
 // along with its dirty trie nodes. It consists of one persistent base layer
 // backed by a key-value store, on top of which arbitrarily many in-memory diff
@@ -125,7 +116,6 @@ type Database struct {
 	// the shutdown to reject all following unexpected mutations.
 	readOnly bool       // Flag if database is opened in read only mode
 	waitSync bool       // Flag if database is deactivated due to initial state sync
-	isUBT    bool       // Flag if database is used for verkle tree
 	isPBT    bool       // Flag if database is used for partitioned binary tree
 	hasher   nodeHasher // Trie node hasher
 
@@ -146,17 +136,17 @@ type Database struct {
 // New attempts to load an already existing layer from a persistent key-value
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
-func New(diskdb ethdb.Database, config *Config, isUBT bool) *Database {
-	return newDatabase(diskdb, config, isUBT, false)
+func New(diskdb ethdb.Database, config *Config) *Database {
+	return newDatabase(diskdb, config, false)
 }
 
 // NewPBT is New for an EIP-8297 partitioned binary tree, kept in its own
 // namespace.
 func NewPBT(diskdb ethdb.Database, config *Config) *Database {
-	return newDatabase(diskdb, config, false, true)
+	return newDatabase(diskdb, config, true)
 }
 
-func newDatabase(diskdb ethdb.Database, config *Config, isUBT, isPBT bool) *Database {
+func newDatabase(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
 	if config == nil {
 		config = Defaults
 	}
@@ -164,22 +154,17 @@ func newDatabase(diskdb ethdb.Database, config *Config, isUBT, isPBT bool) *Data
 
 	db := &Database{
 		readOnly: config.ReadOnly,
-		isUBT:    isUBT,
 		isPBT:    isPBT,
 		config:   config,
 		diskdb:   diskdb,
 		hasher:   merkleNodeHasher,
 		writer:   newAsyncWriter(),
 	}
-	// Establish a dedicated database namespace tailored for verkle-specific
-	// data, ensuring the isolation of both verkle and merkle tree data. It's
-	// important to note that the introduction of a prefix won't lead to
-	// substantial storage overhead, as the underlying database will efficiently
-	// compress the shared key prefix.
-	if isUBT {
-		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.VerklePrefix))
-		db.hasher = binaryNodeHasher
-	}
+	// Establish a dedicated database namespace tailored for the partitioned
+	// binary tree data, ensuring the isolation of both binary and merkle tree
+	// data. It's important to note that the introduction of a prefix won't lead
+	// to substantial storage overhead, as the underlying database will
+	// efficiently compress the shared key prefix.
 	if isPBT {
 		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.PBTPrefix))
 		db.hasher = pbt.DeserializeAndHash
@@ -193,7 +178,7 @@ func newDatabase(diskdb ethdb.Database, config *Config, isUBT, isPBT bool) *Data
 	// binary tree keeps none: rolling back replays history through a
 	// merkle-patricia trie, which cannot revert it.
 	if !isPBT {
-		states, trienodes, err := repairHistory(db.diskdb, isUBT, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
+		states, trienodes, err := repairHistory(db.diskdb, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
 		if err != nil {
 			log.Crit("Failed to repair history", "err", err)
 		}
@@ -216,8 +201,8 @@ func newDatabase(diskdb ethdb.Database, config *Config, isUBT, isPBT bool) *Data
 	db.setHistoryIndexer()
 
 	fields := config.fields()
-	if db.isUBT {
-		fields = append(fields, "verkle", true)
+	if db.isPBT {
+		fields = append(fields, "pbt", true)
 	}
 	log.Info("Initialized path database", fields...)
 	return db
@@ -305,8 +290,8 @@ func (db *Database) setStateGenerator() error {
 	// Disable the background snapshot building in these circumstances:
 	// - the database is opened in read only mode
 	// - the snapshot build is explicitly disabled
-	// - the database is opened in verkle tree mode
-	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isUBT || db.isPBT
+	// - the database is opened in partitioned binary tree mode
+	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isPBT
 
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
@@ -484,7 +469,7 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Re-construct a new disk layer backed by persistent state and schedule
 	// the state snapshot generation if it's permitted.
-	db.tree.init(generateSnapshot(db, root, db.isUBT || db.config.SnapshotNoBuild))
+	db.tree.init(generateSnapshot(db, root, db.isPBT || db.config.SnapshotNoBuild))
 
 	// After snap sync, the state of the database may have changed completely.
 	// The indexers of the old state were stopped before the purge: start new
@@ -715,8 +700,6 @@ func (db *Database) journalPath() string {
 	var fname string
 	if db.isPBT {
 		fname = "pbt.journal"
-	} else if db.isUBT {
-		fname = fmt.Sprintf("verkle.journal")
 	} else {
 		fname = fmt.Sprintf("merkle.journal")
 	}

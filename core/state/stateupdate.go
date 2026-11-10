@@ -253,15 +253,6 @@ func (sc *StateUpdate) EncodeMPTState() (map[common.Hash][]byte, map[common.Addr
 	return sc.encodeState()
 }
 
-// EncodeUBTState encodes all state mutations alongside their original value
-// into the Unified-Binary-Trie representation.
-//
-// It transforms account and storage updates into their corresponding UBT-encoded
-// key-value mappings, using the same encoding rules as the Ethereum state trie.
-func (sc *StateUpdate) EncodeUBTState() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte) {
-	return sc.encodeState()
-}
-
 // encodeState encodes the state mutations alongside their original values, with
 // the four sets encoded concurrently.
 func (sc *StateUpdate) encodeState() (map[common.Hash][]byte, map[common.Address][]byte, map[common.Hash]map[common.Hash][]byte, map[common.Address]map[common.Hash][]byte) {

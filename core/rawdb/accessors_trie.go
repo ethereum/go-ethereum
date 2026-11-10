@@ -231,13 +231,13 @@ func ReadStateScheme(db ethdb.Database) string {
 	if id := ReadPersistentStateID(db); id != 0 {
 		return PathScheme
 	}
-	// Check if verkle state in path-based scheme is present.
-	vdb := NewTable(db, string(VerklePrefix))
+	// Check if partitioned binary tree state in path-based scheme is present.
+	vdb := NewTable(db, string(PBTPrefix))
 	if HasAccountTrieNode(vdb, nil) {
 		return PathScheme
 	}
-	// The root node of verkle might be deleted during the initial snap sync,
-	// check the persistent state id then.
+	// The root node of the partitioned binary tree might be deleted during
+	// the initial snap sync, check the persistent state id then.
 	if id := ReadPersistentStateID(vdb); id != 0 {
 		return PathScheme
 	}

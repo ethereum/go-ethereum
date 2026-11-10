@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/trie"
-	"github.com/ethereum/go-ethereum/trie/bintrie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb/database"
 	"github.com/holiman/uint256"
@@ -486,7 +485,7 @@ func (t *PartitionedTrie) UpdateContractCode(addr common.Address, codeHash commo
 	if err := t.stateWrite(headerStem(addr), subs, [][]byte{codeHash.Bytes(), nil}); err != nil {
 		return err
 	}
-	chunks := bintrie.ChunkifyCode(code)
+	chunks := chunkifyCode(code)
 	for group := 0; 32*stemSubtreeWidth*group < len(chunks); group++ {
 		var (
 			subs []byte
@@ -567,9 +566,6 @@ func (t *PartitionedTrie) NodeIterator(startKey []byte) (trie.NodeIterator, erro
 func (t *PartitionedTrie) Prove(key []byte, proofDb ethdb.KeyValueWriter) error {
 	return errUnsupported
 }
-
-// IsUBT reports false: this is not the EIP-7864 tree.
-func (t *PartitionedTrie) IsUBT() bool { return false }
 
 // IsPBT reports true.
 func (t *PartitionedTrie) IsPBT() bool { return true }

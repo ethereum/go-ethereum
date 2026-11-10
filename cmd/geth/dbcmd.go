@@ -288,7 +288,6 @@ func removeDB(ctx *cli.Context) error {
 	statePaths := []string{
 		rootDir,
 		filepath.Join(ancientDir, rawdb.MerkleStateFreezerName),
-		filepath.Join(ancientDir, rawdb.VerkleStateFreezerName),
 	}
 	confirmAndRemoveDB(statePaths, "state data", ctx, removeStateDataFlag.Name)
 
@@ -517,7 +516,7 @@ func inspectTrie(ctx *cli.Context) error {
 		config.DumpPath = stack.ResolvePath("trie-dump.bin")
 	}
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false, false)
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
 	defer triedb.Close()
 
 	if contractAddr := ctx.String(inspectTrieContractFlag.Name); contractAddr != "" {
@@ -683,7 +682,7 @@ func dbDumpTrie(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false, false)
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, true, false)
 	defer triedb.Close()
 
 	var (
@@ -1119,7 +1118,7 @@ func inspectHistory(ctx *cli.Context) error {
 	db := utils.MakeChainDatabase(ctx, stack, true)
 	defer db.Close()
 
-	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, false, false, false)
+	triedb := utils.MakeTrieDatabase(ctx, stack, db, false, false, false)
 	defer triedb.Close()
 
 	var (
