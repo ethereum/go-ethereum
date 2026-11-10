@@ -29,7 +29,7 @@ import (
 
 // Public-mempool policy limits from EIP-8141 (not consensus parameters).
 const (
-	MaxVerifyGas                            uint64 = 100_000
+	MaxVerifyGas                            uint64 = 300_000
 	MaxVerifyStateGas                       uint64 = 500_000
 	MaxPendingTxsUsingNonCanonicalPaymaster        = 1
 )
