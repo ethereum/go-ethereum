@@ -71,7 +71,7 @@ var stressSlotKey = common.HexToHash("0x42")
 var stressAddErrors = []error{
 	txpool.ErrAlreadyKnown, txpool.ErrAlreadyReserved, txpool.ErrInflightTxLimitReached,
 	txpool.ErrReplaceUnderpriced, txpool.ErrTxGasPriceTooLow, txpool.ErrUnderpriced,
-	ErrSenderPending, ErrHeadChanged, ErrClosed, ErrTraceViolation,
+	ErrSenderPending, ErrHeadChanged, ErrClosed, ErrTraceViolation, ErrPaymasterPendingLimit,
 	core.ErrInsufficientFunds, core.ErrNonceTooLow, core.ErrNonceTooHigh, core.ErrFrameTxInvalidExecution,
 	types.ErrFrameTxInvalidSignature, types.ErrFrameTxSignerMismatch,
 }

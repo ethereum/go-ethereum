@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/locals"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -432,7 +433,7 @@ func TestAggregateExposureAndPaymasterCap(t *testing.T) {
 		want    error
 	}{
 		{"aggregate balance", false, true, core.ErrInsufficientFunds},
-		{"coded paymaster", true, false, txpool.ErrInflightTxLimitReached},
+		{"coded paymaster", true, false, ErrPaymasterPendingLimit},
 		{"default sponsor", false, false, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -457,6 +458,17 @@ func TestAggregateExposureAndPaymasterCap(t *testing.T) {
 			}
 			assertFramePoolConsistent(t, pool)
 		})
+	}
+}
+
+func TestPaymasterCapRejectionNotTemporary(t *testing.T) {
+	pool, _, _ := setupFramePool(t, 10, func(s *state.StateDB) {
+		s.SetCode(poolAddress(t, 20), approveCode(program.New(), types.ApprovePayment), tracing.CodeChangeUnspecified)
+	})
+	addPoolTx(t, pool, signedPoolTx(t, 1, 20, 0, 20, 2, nil, nil), nil)
+	err := pool.Add([]*types.Transaction{signedPoolTx(t, 2, 20, 0, 20, 2, nil, nil)}, true)[0]
+	if err == nil || locals.IsTemporaryReject(err) {
+		t.Fatalf("paymaster cap rejection: got %v, want a non-temporary error", err)
 	}
 }
 
@@ -1149,7 +1161,7 @@ func TestAdmissionPoolPrechecksRecheckedAtCommit(t *testing.T) {
 		{"capacity", 0, nil, false, false, txpool.ErrUnderpriced},
 		{"coded paymaster", 20, func(s *state.StateDB) {
 			s.SetCode(poolAddress(t, 20), approveCode(program.New(), types.ApprovePayment), tracing.CodeChangeUnspecified)
-		}, false, false, txpool.ErrInflightTxLimitReached},
+		}, false, false, ErrPaymasterPendingLimit},
 		{"payer exposure", 20, func(s *state.StateDB) {
 			s.SetBalance(poolAddress(t, 20), txCost(exposed), tracing.BalanceChangeUnspecified)
 		}, false, false, core.ErrInsufficientFunds},
@@ -1217,7 +1229,7 @@ func TestAdmissionExecutionMarker(t *testing.T) {
 		}, 0, core.ErrInsufficientFunds, false},
 		{"coded paymaster", 20, func(s *state.StateDB) {
 			s.SetCode(poolAddress(t, 20), approveCode(program.New(), types.ApprovePayment), tracing.CodeChangeUnspecified)
-		}, 0, txpool.ErrInflightTxLimitReached, false},
+		}, 0, ErrPaymasterPendingLimit, false},
 		{"trace violation", 0, func(s *state.StateDB) {
 			s.SetCode(poolAddress(t, 2), approveCode(program.New().Op(vm.NUMBER, vm.POP), types.ApproveExecutionAndPayment), tracing.CodeChangeUnspecified)
 		}, 0, ErrTraceViolation, true},

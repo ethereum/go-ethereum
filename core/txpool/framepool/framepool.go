@@ -46,6 +46,10 @@ var (
 
 	// ErrClosed is returned when admission is attempted after Close.
 	ErrClosed = errors.New("framepool is closed")
+
+	// ErrPaymasterPendingLimit rejects a transaction whose non-canonical
+	// paymaster already sponsors the maximum number of pending transactions.
+	ErrPaymasterPendingLimit = errors.New("non-canonical paymaster pending transaction limit reached")
 )
 
 // BlockChain provides the chain configuration and fresh state at a header.
