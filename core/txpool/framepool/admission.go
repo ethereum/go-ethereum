@@ -53,7 +53,7 @@ func (p *FramePool) classify(tx *types.Transaction, head *types.Header) (Prefix,
 		return Prefix{}, err
 	}
 	sender := *tx.FrameSender() // Shared validation checked the type and sender.
-	return ClassifyPrefix(tx.Frames(), sender, tx.FrameSignatures())
+	return classifyPrefix(tx.Frames(), sender, tx.FrameSignatures(), p.config.MaxVerifyGas)
 }
 
 func (p *FramePool) verifySignatures(tx *types.Transaction) error {
