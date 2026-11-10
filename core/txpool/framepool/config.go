@@ -33,6 +33,8 @@ const (
 type Config struct {
 	GlobalSlots uint64 // Maximum number of 32 KiB transaction slots
 	PriceBump   uint64 // Minimum percentage increase of both replacement fees
+
+	MaxVerifyGas uint64 // Execution gas cap of the validation prefix, never below the EIP-8141 value
 }
 
 // DefaultConfig contains the default frame pool limits. GlobalSlots bounds the
@@ -40,9 +42,13 @@ type Config struct {
 // at the measured worst case of ~4 ms per 100k-gas prefix, 1024 transactions
 // take about 4 s on one core. Pending transactions occupy at most 32 MiB.
 // PriceBump is the conventional 10% from EIP-8141 and the legacy pool.
+// MaxVerifyGas may be raised to admit larger validation prefixes; lower values
+// are clamped up so the node always accepts what EIP-8141 requires.
 var DefaultConfig = Config{
 	GlobalSlots: 1024,
 	PriceBump:   10,
+
+	MaxVerifyGas: MaxVerifyGas,
 }
 
 func (config *Config) sanitize() Config {
@@ -54,6 +60,10 @@ func (config *Config) sanitize() Config {
 	if conf.PriceBump < 1 {
 		log.Warn("Sanitizing invalid framepool price bump", "provided", conf.PriceBump, "updated", DefaultConfig.PriceBump)
 		conf.PriceBump = DefaultConfig.PriceBump
+	}
+	if conf.MaxVerifyGas < MaxVerifyGas {
+		log.Warn("Sanitizing framepool verify gas below the EIP-8141 value", "provided", conf.MaxVerifyGas, "updated", MaxVerifyGas)
+		conf.MaxVerifyGas = MaxVerifyGas
 	}
 	return conf
 }

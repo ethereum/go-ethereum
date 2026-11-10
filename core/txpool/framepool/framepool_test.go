@@ -344,6 +344,30 @@ func TestValidateTxBasics(t *testing.T) {
 	addPoolTx(t, pool, valid, txpool.ErrInflightTxLimitReached)
 }
 
+func TestConfiguredMaxVerifyGas(t *testing.T) {
+	for _, tc := range []struct{ provided, want uint64 }{
+		{0, MaxVerifyGas},
+		{MaxVerifyGas - 1, MaxVerifyGas},
+		{MaxVerifyGas, MaxVerifyGas},
+		{2 * MaxVerifyGas, 2 * MaxVerifyGas},
+	} {
+		conf := DefaultConfig
+		conf.MaxVerifyGas = tc.provided
+		if got := conf.sanitize().MaxVerifyGas; got != tc.want {
+			t.Errorf("provided %d: got %d, want %d", tc.provided, got, tc.want)
+		}
+	}
+	pool, _, _ := setupFramePool(t, 10, nil)
+	tx := signedPoolTx(t, 1, 0, 0, 20, 2, nil, func(tx *types.FrameTx) { tx.Frames[0].GasLimits.Execution = MaxVerifyGas })
+	if err := pool.ValidateTxBasics(tx); !errors.Is(err, ErrPrefixGasLimit) {
+		t.Fatalf("default cap: got %v, want %v", err, ErrPrefixGasLimit)
+	}
+	pool.config.MaxVerifyGas = 2 * MaxVerifyGas
+	if err := pool.ValidateTxBasics(tx); err != nil {
+		t.Fatalf("raised cap: %v", err)
+	}
+}
+
 func TestForgedAdmissionAndReplacement(t *testing.T) {
 	pool, _, other := setupFramePool(t, 10, nil)
 	victim := signedPoolTx(t, 1, 0, 0, 20, 2, nil, nil)
