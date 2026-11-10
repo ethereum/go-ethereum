@@ -208,6 +208,9 @@ func (x *XshardConn) handleAddXshardTxList(req wire.SSZMessage) (wire.SSZMessage
 		if err := rlp.DecodeBytes(encoded, deposits[i]); err != nil {
 			return nil, fmt.Errorf("decode deposit transaction %d: %w", i, err)
 		}
+		if deposits[i].Version != types.DepositTxVersion {
+			return nil, fmt.Errorf("decode deposit transaction %d: unsupported deposit version %d", i, deposits[i].Version)
+		}
 	}
 	err = x.handler.AddXshardTxList(request.MinorBlockHash, deposits)
 	code, err := wire.ErrorCode(err)
