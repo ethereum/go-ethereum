@@ -550,16 +550,32 @@ func onSystemCallStart(tracer *tracing.Hooks, ctx *tracing.VMContext) {
 // AssembleBlock finalizes the state and assembles the block with provided
 // body and receipts.
 func AssembleBlock(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body, receipts []*types.Receipt, blockAccessList *bal.ConstructionBlockAccessList) *types.Block {
-	// Assign the post-transition state root
-	rules := chain.Config().Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
-	header.Root = state.IntermediateRoot(rules)
+	var (
+		accessList *bal.BlockAccessList
+		done       = make(chan struct{})
+		rules      = chain.Config().Rules(header.Number, header.Difficulty.Sign() == 0, header.Time)
+	)
+	go func() {
+		header.DeriveBodyFields(body, receipts, trie.NewStackTrie(nil))
+		if rules.IsAmsterdam {
+			accessList = blockAccessList.ToEncodingObj()
+			hash := accessList.Hash()
+			header.BlockAccessListHash = &hash
+		}
+		close(done)
+	}()
+	defer func() { <-done }()
 
-	if !rules.IsAmsterdam {
-		return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil))
+	root := state.IntermediateRoot(rules)
+	<-done
+	header.Root = root
+
+	block := types.NewBlockWithHeader(header)
+	if body != nil {
+		block = block.WithBody(*body)
 	}
-	// Assign the BlockAccessListHash if Amsterdam has been enabled
-	bal := blockAccessList.ToEncodingObj()
-	balHash := bal.Hash()
-	header.BlockAccessListHash = &balHash
-	return types.NewBlock(header, body, receipts, trie.NewStackTrie(nil)).WithAccessListUnsafe(bal)
+	if accessList != nil {
+		block = block.WithAccessListUnsafe(accessList)
+	}
+	return block
 }
