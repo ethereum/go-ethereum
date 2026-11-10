@@ -17,12 +17,14 @@
 package params
 
 import (
+	"encoding/json"
 	"math"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -195,4 +197,25 @@ func TestCheckConfigForkOrderBPO(t *testing.T) {
 			}
 		})
 	}
+}
+
+
+// TestRequestContractAddressesJSON verifies that request contract addresses
+// are decoded from and encoded to the chain configuration JSON.
+func TestRequestContractAddressesJSON(t *testing.T) {
+	withdrawal := common.HexToAddress("0x66355689a9f067eeb9dc9d899E4192676988279C")
+	consolidation := common.HexToAddress("0xF0e003F0dE2d583Ae28FA8cBF66aa096CdAce3ff")
+	input := `{"withdrawalRequestContractAddress":"0x66355689a9f067eeb9dc9d899E4192676988279C","consolidationRequestContractAddress":"0xF0e003F0dE2d583Ae28FA8cBF66aa096CdAce3ff"}`
+
+	var config ChainConfig
+	require.NoError(t, json.Unmarshal([]byte(input), &config))
+	require.Equal(t, withdrawal, *config.WithdrawalRequestContractAddress)
+	require.Equal(t, consolidation, *config.ConsolidationRequestContractAddress)
+
+	encoded, err := json.Marshal(&config)
+	require.NoError(t, err)
+	var decoded ChainConfig
+	require.NoError(t, json.Unmarshal(encoded, &decoded))
+	require.Equal(t, config.WithdrawalRequestContractAddress, decoded.WithdrawalRequestContractAddress)
+	require.Equal(t, config.ConsolidationRequestContractAddress, decoded.ConsolidationRequestContractAddress)
 }

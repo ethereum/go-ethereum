@@ -338,6 +338,11 @@ type ChainConfig struct {
 
 	DepositContractAddress common.Address `json:"depositContractAddress,omitempty"`
 
+	// Request contract addresses override the canonical EIP-7002 and EIP-7251
+	// predeploy addresses for networks that deploy the contracts elsewhere.
+	WithdrawalRequestContractAddress    *common.Address `json:"withdrawalRequestContractAddress,omitempty"`
+	ConsolidationRequestContractAddress *common.Address `json:"consolidationRequestContractAddress,omitempty"`
+
 	// EnableUBTAtGenesis is a flag that specifies whether the network uses
 	// the Verkle tree starting from the genesis block. If set to true, the
 	// genesis state will be committed using the Binary tree, eliminating the
@@ -388,6 +393,12 @@ func (c *ChainConfig) GoString() string {
 
 func (c *ChainConfig) String() string {
 	result := fmt.Sprintf("ChainConfig{ChainID: %v", c.ChainID)
+	if c.WithdrawalRequestContractAddress != nil {
+		result += fmt.Sprintf(", WithdrawalRequestContractAddress: %v", *c.WithdrawalRequestContractAddress)
+	}
+	if c.ConsolidationRequestContractAddress != nil {
+		result += fmt.Sprintf(", ConsolidationRequestContractAddress: %v", *c.ConsolidationRequestContractAddress)
+	}
 
 	// Add block-based forks
 	if c.HomesteadBlock != nil {
