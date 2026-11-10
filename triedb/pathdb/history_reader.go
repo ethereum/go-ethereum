@@ -483,6 +483,9 @@ func checkStateAvail(state stateIdent, exptyp historyType, freezer ethdb.Ancient
 	if stateID < tail {
 		return 0, fmt.Errorf("%w: historical state has been pruned, first: %d, state: %d", database.ErrStateUnavailable, tail+1, stateID)
 	}
+	if stateID > lastID {
+		return 0, fmt.Errorf("%w: historical state %d is beyond the disk layer %d", database.ErrStateUnavailable, stateID, lastID)
+	}
 	// To serve the request, all history entries from stateID+1 to lastID
 	// must be indexed. The histories are written in background, wait for the
 	// scheduled writes covering lastID if they are not indexed yet.

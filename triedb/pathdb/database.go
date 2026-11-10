@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -129,6 +130,7 @@ type Database struct {
 	trienodeFreezer ethdb.ResettableAncientStore // Freezer for storing trienode histories, nil possible in tests
 	trienodeIndexer *historyIndexer              // History indexer for historical trienode data
 	writer          *asyncWriter                 // Background writer off the commit path
+	rollback        atomic.Uint64                // Counter bumped as a rollback starts and ends (odd during a rollback)
 
 	lock sync.RWMutex // Lock to prevent mutations from happening at the same time
 }
@@ -540,6 +542,9 @@ func (db *Database) Recover(root common.Hash) error {
 	if !db.Recoverable(root) {
 		return errStateUnrecoverable
 	}
+	db.rollback.Add(1)
+	defer db.rollback.Add(1)
+
 	// Apply the state histories upon the disk layer in order
 	var (
 		start = time.Now()
