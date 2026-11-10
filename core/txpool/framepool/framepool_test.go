@@ -461,8 +461,6 @@ func TestAggregateExposureAndPaymasterCap(t *testing.T) {
 	}
 }
 
-// A paymaster cap rejection is final for local submissions, so the RPC reports
-// it instead of handing the transaction to the local tracker.
 func TestPaymasterCapRejectionNotTemporary(t *testing.T) {
 	pool, _, _ := setupFramePool(t, 10, func(s *state.StateDB) {
 		s.SetCode(poolAddress(t, 20), approveCode(program.New(), types.ApprovePayment), tracing.CodeChangeUnspecified)
