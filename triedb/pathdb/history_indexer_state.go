@@ -63,11 +63,11 @@ const (
 type initerState struct {
 	state     state
 	stateLock sync.Mutex
-	disk      ethdb.Database
+	disk      ethdb.Reader
 	term      chan struct{}
 }
 
-func newIniterState(disk ethdb.Database, noWait bool) *initerState {
+func newIniterState(disk ethdb.Reader, noWait bool) *initerState {
 	s := &initerState{
 		state: stateSyncing,
 		disk:  disk,

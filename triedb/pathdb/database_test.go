@@ -766,7 +766,7 @@ func TestDisable(t *testing.T) {
 	tester := newTester(t, &testerConfig{layers: 32})
 	defer tester.release()
 
-	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
+	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.statedb, nil))
 	if err := tester.db.Disable(); err != nil {
 		t.Fatalf("Failed to deactivate database: %v", err)
 	}
@@ -811,7 +811,7 @@ func TestAdoptSyncedState(t *testing.T) {
 	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
 		t.Fatalf("Failed to commit, err: %v", err)
 	}
-	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
+	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.statedb, nil))
 
 	// Mimic the snap-syncing state.
 	if err := tester.db.Disable(); err != nil {
@@ -826,10 +826,10 @@ func TestAdoptSyncedState(t *testing.T) {
 	}
 
 	// On-disk markers reflect a completed snapshot.
-	if got := rawdb.ReadSnapshotRoot(tester.db.diskdb); got != stored {
+	if got := rawdb.ReadSnapshotRoot(tester.db.statedb); got != stored {
 		t.Fatalf("SnapshotRoot mismatch: got %x want %x", got, stored)
 	}
-	if blob := rawdb.ReadSnapshotGenerator(tester.db.diskdb); len(blob) == 0 {
+	if blob := rawdb.ReadSnapshotGenerator(tester.db.statedb); len(blob) == 0 {
 		t.Fatal("Generator journal not written")
 	} else {
 		var entry journalGenerator
@@ -844,7 +844,7 @@ func TestAdoptSyncedState(t *testing.T) {
 			t.Fatalf("Generator marker should be empty, got %x", entry.Marker)
 		}
 	}
-	if rawdb.ReadSnapSyncStatusFlag(tester.db.diskdb) != rawdb.StateSyncFinished {
+	if rawdb.ReadSnapSyncStatusFlag(tester.db.statedb) != rawdb.StateSyncFinished {
 		t.Fatal("Sync-status flag should be StateSyncFinished")
 	}
 	if tester.db.waitSync {
@@ -962,7 +962,7 @@ func TestReactivationCrash(t *testing.T) {
 	if rawdb.ReadPersistentStateID(kvdb) == 0 {
 		t.Fatal("Persistent state id should be above zero")
 	}
-	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
+	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.statedb, nil))
 
 	// A state sync ends with the reactivation, and the machine crashes right
 	// after the freezer reset: only the key-value writes synced before it
@@ -999,7 +999,7 @@ func TestReactivationCrash(t *testing.T) {
 		t.Error("Index entries of the purged state histories survived the crash")
 	}
 	// The history repair at startup must accept the persisted state id.
-	states, _, err := repairHistory(disk, false, rawdb.ReadPersistentStateID(disk), false)
+	states, _, err := repairHistory(disk, false, rawdb.ReadPersistentStateID(disk), false, mptTrie{}.config())
 	if err != nil {
 		t.Fatalf("Database can't be opened after the crash: %v", err)
 	}
@@ -1102,9 +1102,9 @@ func testCorruptedJournal(t *testing.T, journalDir string, modifyFn func(databas
 		t.Errorf("Failed to journal, err: %v", err)
 	}
 	tester.db.Close()
-	root := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
+	root := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.statedb, nil))
 
-	modifyFn(tester.db.diskdb)
+	modifyFn(tester.db.statedb)
 
 	// Verify states, all not-yet-written states should be discarded
 	tester.db = New(tester.db.diskdb, tester.db.config)
@@ -1150,7 +1150,7 @@ func TestTailTruncateHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to obtain freezer head")
 	}
-	stored := rawdb.ReadPersistentStateID(tester.db.diskdb)
+	stored := rawdb.ReadPersistentStateID(tester.db.statedb)
 	if head != stored {
 		t.Fatalf("Failed to truncate excess history object above, stored: %d, head: %d", stored, head)
 	}
@@ -1196,20 +1196,20 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 	// Ensure the buffer in disk layer is not empty
 	var (
 		bRoot = env.db.tree.bottom().rootHash()
-		dRoot = crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(env.db.diskdb, nil))
+		dRoot = crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(env.db.statedb, nil))
 	)
 	for dRoot == bRoot {
 		env.extend(1)
 
 		bRoot = env.db.tree.bottom().rootHash()
-		dRoot = crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(env.db.diskdb, nil))
+		dRoot = crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(env.db.statedb, nil))
 	}
 	waitIndexing(env.db)
 
 	var (
 		dIndex int
 		roots  = env.roots
-		hr     = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer, nil)
+		hr     = newStateHistoryReader(env.db.statedb, env.db.stateFreezer, nil)
 	)
 	for i, root := range roots {
 		if root == dRoot {
@@ -1229,9 +1229,9 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 	env.db.Close()
 
 	// Mutate the journal in disk, it should be regarded as invalid
-	blob := rawdb.ReadTrieJournal(env.db.diskdb)
+	blob := rawdb.ReadTrieJournal(env.db.statedb)
 	blob[0] = 0xa
-	rawdb.WriteTrieJournal(env.db.diskdb, blob)
+	rawdb.WriteTrieJournal(env.db.statedb, blob)
 
 	// Reload the database, the extra state histories should be removed
 	env.db = New(env.db.diskdb, env.db.config)
@@ -1273,7 +1273,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 
 	// Ensure the truncated state histories become accessible
 	bRoot = env.db.tree.bottom().rootHash()
-	hr = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer, nil)
+	hr = newStateHistoryReader(env.db.statedb, env.db.stateFreezer, nil)
 	for i, root := range roots {
 		if root == bRoot {
 			break

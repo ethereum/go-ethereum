@@ -51,19 +51,19 @@ func (loc nodeLoc) string() string {
 	return fmt.Sprintf("loc: %s, depth: %d", loc.loc, loc.depth)
 }
 
-// reader implements the database.NodeReader interface, providing the functionalities to
+// nodeReader implements the database.NodeReader interface, providing the functionalities to
 // retrieve trie nodes by wrapping the internal state layer.
-type reader struct {
-	db          *Database
-	state       common.Hash
-	noHashCheck bool
-	layer       layer
+type nodeReader struct {
+	db         *Database
+	state      common.Hash
+	layer      trieNodeReader
+	verifyHash bool
 }
 
 // Node implements database.NodeReader interface, retrieving the node with specified
 // node info. Don't modify the returned byte slice since it's not deep-copied
 // and still be referenced by database.
-func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
+func (r *nodeReader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte, error) {
 	l, depth, err := r.db.tree.lookupNode(owner, path, r.state)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 		return nil, err
 	}
 	// Error out if the local one is inconsistent with the target.
-	if !r.noHashCheck && got != hash {
+	if r.verifyHash && got != hash {
 		// Location is always available even if the node
 		// is not found.
 		switch loc.loc {
@@ -101,6 +101,14 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 	return blob, nil
 }
 
+// stateReader implements the database.StateReader interface, providing access to
+// flat account and storage data by wrapping the internal state layer.
+type stateReader struct {
+	db    *Database
+	state common.Hash
+	layer flatStateReader
+}
+
 // AccountRLP directly retrieves the account associated with a particular hash.
 // An error will be returned if the read operation exits abnormally. Specifically,
 // if the layer is already stale.
@@ -108,7 +116,7 @@ func (r *reader) Node(owner common.Hash, path []byte, hash common.Hash) ([]byte,
 // Note:
 // - the returned account data is not a copy, please don't modify it
 // - no error will be returned if the requested account is not found in database
-func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
+func (r *stateReader) AccountRLP(hash common.Hash) ([]byte, error) {
 	l, err := r.db.tree.lookupAccount(hash, r.state)
 	if err != nil {
 		return nil, err
@@ -135,7 +143,7 @@ func (r *reader) AccountRLP(hash common.Hash) ([]byte, error) {
 // Note:
 // - the returned account object is safe to modify
 // - no error will be returned if the requested account is not found in database
-func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
+func (r *stateReader) Account(hash common.Hash) (*types.SlimAccount, error) {
 	blob, err := r.AccountRLP(hash)
 	if err != nil {
 		return nil, err
@@ -157,7 +165,7 @@ func (r *reader) Account(hash common.Hash) (*types.SlimAccount, error) {
 // Note:
 // - the returned storage data is not a copy, please don't modify it
 // - no error will be returned if the requested slot is not found in database
-func (r *reader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
+func (r *stateReader) Storage(accountHash, storageHash common.Hash) ([]byte, error) {
 	l, err := r.db.tree.lookupStorage(accountHash, storageHash, r.state)
 	if err != nil {
 		return nil, err
@@ -183,11 +191,11 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 	if layer == nil {
 		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
-	return &reader{
-		db:          db,
-		state:       root,
-		noHashCheck: db.isPBT,
-		layer:       layer,
+	return &nodeReader{
+		db:         db,
+		state:      root,
+		layer:      layer,
+		verifyHash: db.trie.config().verifyNodeHash,
 	}, nil
 }
 
@@ -198,7 +206,7 @@ func (db *Database) StateReader(root common.Hash) (database.StateReader, error) 
 	if layer == nil {
 		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
-	return &reader{
+	return &stateReader{
 		db:    db,
 		state: root,
 		layer: layer,
@@ -233,7 +241,7 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	if err := db.waitWrites(); err != nil {
 		return nil, err
 	}
-	id := rawdb.ReadStateID(db.diskdb, root)
+	id := rawdb.ReadStateID(db.statedb, root)
 	if id == nil {
 		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
@@ -249,7 +257,7 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	return &HistoricalStateReader{
 		id:     *id,
 		db:     db,
-		reader: newStateHistoryReader(db.diskdb, db.stateFreezer, db.waitWrites),
+		reader: newStateHistoryReader(db.statedb, db.stateFreezer, db.waitWrites),
 	}, nil
 }
 
@@ -362,7 +370,7 @@ func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader,
 	if err := db.waitWrites(); err != nil {
 		return nil, err
 	}
-	id := rawdb.ReadStateID(db.diskdb, root)
+	id := rawdb.ReadStateID(db.statedb, root)
 	if id == nil {
 		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
 	}
@@ -378,7 +386,7 @@ func (db *Database) HistoricNodeReader(root common.Hash) (*HistoricalNodeReader,
 	return &HistoricalNodeReader{
 		id:     *id,
 		db:     db,
-		reader: newTrienodeReader(db.diskdb, db.trienodeFreezer, db.waitWrites, int(db.config.FullValueCheckpoint)),
+		reader: newTrienodeReader(db.statedb, db.trienodeFreezer, db.waitWrites, int(db.config.FullValueCheckpoint)),
 	}, nil
 }
 

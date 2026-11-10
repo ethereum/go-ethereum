@@ -29,7 +29,7 @@ import (
 func TestHistoryIndexerShortenDeadlock(t *testing.T) {
 	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
 	db := rawdb.NewMemoryDatabase()
-	freezer, _ := rawdb.NewStateFreezer(t.TempDir(), false)
+	freezer, _ := rawdb.NewStateFreezer(t.TempDir(), rawdb.MerkleStateFreezerName, false)
 	defer freezer.Close()
 
 	histories := makeStateHistories(100)
@@ -38,7 +38,7 @@ func TestHistoryIndexerShortenDeadlock(t *testing.T) {
 		rawdb.WriteStateHistory(freezer, uint64(i+1), h.meta.encode(), accountIndex, storageIndex, accountData, storageData)
 	}
 	// As a workaround, assign a future block to keep the initer running indefinitely
-	indexer := newHistoryIndexer(db, freezer, 200, typeStateHistory, true)
+	indexer := newHistoryIndexer(db, db, freezer, 200, typeStateHistory, true)
 	defer indexer.close()
 
 	done := make(chan error, 1)
