@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/qkc/cluster"
+	"github.com/ethereum/go-ethereum/qkc/comm"
 	"github.com/ethereum/go-ethereum/qkc/conn"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
 	"github.com/ethereum/go-ethereum/qkc/wire"
@@ -38,12 +38,12 @@ import (
 )
 
 // MasterRequestHandler serves requests received from the master. Calls may run
-// concurrently. Return *cluster.RemoteError for business rejections; other errors
+// concurrently. Return *comm.RemoteError for business rejections; other errors
 // indicate handler failures and close the connection.
 type MasterRequestHandler interface {
 	CreateShards(rootTip *qkctypes.RootBlock) error
 	AddRootBlock(root *qkctypes.RootBlock) error
-	GetRootChainStakes(address common.Address, minorBlockHash common.Hash) (*cluster.RootChainStakesResult, error)
+	GetRootChainStakes(address common.Address, minorBlockHash common.Hash) (*comm.RootChainStakesResult, error)
 	GetUnconfirmedHeaders() ([]*types.Header, error)
 }
 
@@ -156,7 +156,7 @@ func (mc *MasterConn) watchConnection() {
 }
 
 // SendAddMinorBlockHeader reports a shard header and its coinbase reward to
-// the master. A nonzero business error code is returned as *cluster.RemoteError.
+// the master. A nonzero business error code is returned as *comm.RemoteError.
 func (mc *MasterConn) SendAddMinorBlockHeader(ctx context.Context, header *types.Header, coinbaseAmount *uint256.Int) error {
 	if header == nil {
 		return errors.New("minor block header must not be nil")
@@ -182,7 +182,7 @@ func (mc *MasterConn) SendAddMinorBlockHeader(ctx context.Context, header *types
 		return fmt.Errorf("unexpected add minor block header response %T", resp)
 	}
 	if result.ErrorCode != 0 {
-		return &cluster.RemoteError{Code: result.ErrorCode}
+		return &comm.RemoteError{Code: result.ErrorCode}
 	}
 	return nil
 }

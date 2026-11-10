@@ -19,7 +19,7 @@ package wire
 import (
 	"errors"
 
-	"github.com/ethereum/go-ethereum/qkc/cluster"
+	"github.com/ethereum/go-ethereum/qkc/comm"
 )
 
 // ErrInvalidClusterFrame identifies a frame rejected before any bytes are written.
@@ -31,7 +31,7 @@ func ErrorCode(err error) (uint32, error) {
 	if err == nil {
 		return 0, nil
 	}
-	var remoteErr *cluster.RemoteError
+	var remoteErr *comm.RemoteError
 	if errors.As(err, &remoteErr) {
 		return remoteErr.Code, nil
 	}

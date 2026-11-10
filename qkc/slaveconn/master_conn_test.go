@@ -28,7 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	coretypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/qkc/cluster"
+	"github.com/ethereum/go-ethereum/qkc/comm"
 	"github.com/ethereum/go-ethereum/qkc/conn"
 	"github.com/ethereum/go-ethereum/qkc/types"
 	"github.com/ethereum/go-ethereum/qkc/wire"
@@ -51,10 +51,10 @@ func (h *masterTestHandler) AddRootBlock(req *types.RootBlock) error {
 	if h.addErr != nil {
 		return h.addErr
 	}
-	return &cluster.RemoteError{Code: 7}
+	return &comm.RemoteError{Code: 7}
 }
-func (h *masterTestHandler) GetRootChainStakes(common.Address, common.Hash) (*cluster.RootChainStakesResult, error) {
-	return nil, &cluster.RemoteError{Code: 8}
+func (h *masterTestHandler) GetRootChainStakes(common.Address, common.Hash) (*comm.RootChainStakesResult, error) {
+	return nil, &comm.RemoteError{Code: 8}
 }
 func (h *masterTestHandler) GetUnconfirmedHeaders() ([]*coretypes.Header, error) {
 	return []*coretypes.Header{{Difficulty: big.NewInt(1), Number: big.NewInt(1)}}, nil
@@ -193,7 +193,7 @@ func TestMasterConnRPC(t *testing.T) {
 		t.Fatalf("decode unconfirmed header: %v, %v", &decodedHeader, err)
 	}
 	err = mc.SendAddMinorBlockHeader(ctx, &coretypes.Header{Difficulty: big.NewInt(1), Number: big.NewInt(1)}, uint256.NewInt(0))
-	var remoteErr *cluster.RemoteError
+	var remoteErr *comm.RemoteError
 	if !errors.As(err, &remoteErr) || remoteErr.Code != 9 {
 		t.Fatalf("expected remote error 9, got %v", err)
 	}
