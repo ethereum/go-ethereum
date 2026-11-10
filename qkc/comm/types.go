@@ -26,9 +26,18 @@
 package comm
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
 )
+
+// SlaveInfo identifies a configured slave endpoint without wire encoding.
+type SlaveInfo struct {
+	Host    string
+	Port    uint16
+	ChainID *big.Int
+}
 
 // RootChainStakesResult groups the staking amount and signer returned for a
 // chain and block query. It is the shared business result passed between the

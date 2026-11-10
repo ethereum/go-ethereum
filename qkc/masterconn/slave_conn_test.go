@@ -195,7 +195,7 @@ func TestSlaveConnRPC(t *testing.T) {
 	if got := <-h.roots; got.Hash() != root.Hash() {
 		t.Fatal("root block changed")
 	}
-	if err := sc.SendConnectToSlaves(ctx, []SlaveInfo{{Host: "127.0.0.1", Port: 1234, ChainID: wantID}}); err != nil {
+	if err := sc.SendConnectToSlaves(ctx, []comm.SlaveInfo{{Host: "127.0.0.1", Port: 1234, ChainID: wantID}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := <-targets; string(got.Host) != "127.0.0.1" || got.Port != 1234 || wire.ChainIDFromSSZ(got.ChainID).Cmp(wantID) != 0 {
@@ -243,6 +243,9 @@ func TestSlaveConnRejectsWrongIdentity(t *testing.T) {
 			if err := sc.SendPing(slaveTestContext(t), nil); err == nil || !strings.Contains(err.Error(), "chain ID mismatch") {
 				t.Fatalf("expected identity mismatch, got %v", err)
 			}
+			if !sc.IsClosed() {
+				t.Fatal("identity mismatch left connection open")
+			}
 		})
 	}
 }
@@ -265,7 +268,7 @@ func TestSlaveConnConnectResults(t *testing.T) {
 					return &wire.ConnectToSlavesResponse{ResultList: test.results}, nil
 				},
 			})
-			err := sc.SendConnectToSlaves(slaveTestContext(t), []SlaveInfo{{ChainID: big.NewInt(2)}, {ChainID: big.NewInt(3)}})
+			err := sc.SendConnectToSlaves(slaveTestContext(t), []comm.SlaveInfo{{Host: "127.0.0.1", Port: 1, ChainID: big.NewInt(2)}, {Host: "127.0.0.1", Port: 2, ChainID: big.NewInt(3)}})
 			if test.wantErr == "" {
 				if err != nil {
 					t.Fatal(err)
@@ -501,8 +504,13 @@ func TestSlaveConnRejectsInvalidBusinessInput(t *testing.T) {
 		t.Fatal("nil root block accepted")
 	}
 	for _, id := range []*big.Int{nil, new(big.Int), big.NewInt(-1), new(big.Int).Lsh(big.NewInt(1), 256)} {
-		if err := sc.SendConnectToSlaves(slaveTestContext(t), []SlaveInfo{{ChainID: id}}); err == nil {
+		if err := sc.SendConnectToSlaves(slaveTestContext(t), []comm.SlaveInfo{{Host: "127.0.0.1", Port: 1, ChainID: id}}); err == nil {
 			t.Fatalf("invalid chain ID accepted: %v", id)
+		}
+	}
+	for _, slave := range []comm.SlaveInfo{{Port: 1, ChainID: big.NewInt(2)}, {Host: "127.0.0.1", ChainID: big.NewInt(2)}} {
+		if err := sc.SendConnectToSlaves(slaveTestContext(t), []comm.SlaveInfo{slave}); err == nil {
+			t.Fatalf("invalid slave address accepted: %+v", slave)
 		}
 	}
 	if sc.IsClosed() {

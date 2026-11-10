@@ -24,16 +24,11 @@ import (
 // SlaveRequestHandler serves requests received from slaves. Calls may run
 // concurrently. Return *comm.RemoteError for business rejections; other errors
 // close the connection. sourceChainID is an independent copy of the configured
-// remote chain ID, which the owner must verify with SendPing before use.
+// remote chain ID. The owner completes PING identity verification, slave
+// interconnection, and cluster initialization before starting business activity;
+// this connection does not maintain a separate handshake gate for handlers.
 type SlaveRequestHandler interface {
 	AddShardBlockHeader(sourceChainID *big.Int, header *types.Header, coinbaseAmount *uint256.Int) error
-}
-
-// SlaveInfo describes a cluster endpoint without wire-specific representations.
-type SlaveInfo struct {
-	Host    string
-	Port    uint16
-	ChainID *big.Int
 }
 
 // SlaveConnConfig configures the master's connection to a slave.
@@ -42,7 +37,7 @@ type SlaveConnConfig struct {
 	RemoteChainID  *big.Int
 	MaxPayloadSize uint32
 	Handler        SlaveRequestHandler
-	ShutdownMaster func() // Required; called once per connection closure, including Close.
+	ShutdownMaster func() // Required; called asynchronously once per connection closure. Must be idempotent and concurrency-safe across connections.
 	Logger         log.Logger
 }
 
@@ -127,7 +122,7 @@ func (sc *SlaveConn) RemoteChainID() *big.Int {
 // The first PING checks identity without a root tip. After all slaves connect
 // to each other, a second PING carries the root tip to initialize their shards.
 // A nil rootTip sends an identity-only PING.
-// The owner must close the connection if this handshake fails.
+// An identity mismatch closes the connection.
 func (sc *SlaveConn) SendPing(ctx context.Context, rootTip *qkctypes.RootBlock) error {
 	req := &wire.PingRequest{}
 	if rootTip != nil {
@@ -147,6 +142,7 @@ func (sc *SlaveConn) SendPing(ctx context.Context, rootTip *qkctypes.RootBlock) 
 	}
 	id := wire.ChainIDFromSSZ(pong.ChainID)
 	if id.Cmp(sc.remoteChainID) != 0 {
+		sc.Close()
 		return fmt.Errorf("slave chain ID mismatch: expected %s, got %s", sc.remoteChainID, id)
 	}
 	return nil
@@ -156,9 +152,12 @@ func (sc *SlaveConn) SendPing(ctx context.Context, rootTip *qkctypes.RootBlock) 
 // pyquarkchain, success requires one empty result per requested slave. The owner
 // must call this on one slave at a time and await its response before sending
 // to the next slave; failure aborts cluster initialization without a retry.
-func (sc *SlaveConn) SendConnectToSlaves(ctx context.Context, slaves []SlaveInfo) error {
+func (sc *SlaveConn) SendConnectToSlaves(ctx context.Context, slaves []comm.SlaveInfo) error {
 	req := &wire.ConnectToSlavesRequest{SlaveInfoList: make([]wire.SlaveInfo, len(slaves))}
 	for i, slave := range slaves {
+		if slave.Host == "" || slave.Port == 0 {
+			return fmt.Errorf("invalid slave address at index %d: host %q, port %d", i, slave.Host, slave.Port)
+		}
 		if slave.ChainID == nil || slave.ChainID.Sign() <= 0 {
 			return fmt.Errorf("invalid slave chain ID at index %d: %v", i, slave.ChainID)
 		}
