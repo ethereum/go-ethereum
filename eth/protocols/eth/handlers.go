@@ -323,7 +323,7 @@ func serviceGetReceiptsQuery70(chain *core.BlockChain, query GetReceiptsRequest,
 		if body == nil {
 			break
 		}
-		q := receiptQueryParams{sizeLimit: uint64(maxPacketSize - bytes)}
+		q := receiptQueryParams{sizeLimit: uint64(maxPacketSize - receiptsEnvelopeReserve - bytes)}
 		if i == 0 {
 			q.firstIndex = firstBlockReceiptIndex
 		}

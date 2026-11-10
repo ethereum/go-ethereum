@@ -554,23 +554,33 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, las
 		}
 		return nil
 	}
+	var offset int
+	if len(buffer.list) > 0 {
+		offset = len(buffer.list) - 1
+	}
+	var logSize uint64
+	for i, receipts := range receiptLists {
+		var (
+			previousTxs int
+			previousLog uint64
+		)
+		if i == 0 && len(buffer.list) > 0 {
+			previousTxs = buffer.list[offset].items.Len()
+			previousLog = buffer.lastLogSize
+		}
+		var err error
+		logSize, err = p.validateBlockReceipts(receipts, previousTxs, previousLog, buffer.gasUsed[offset+i], buffer.timestamps[offset+i])
+		if err != nil {
+			delete(p.receiptBuffer, requestId)
+			return err
+		}
+	}
 	// Buffer the last block when the response is incomplete.
 	if lastBlockIncomplete {
 		// Prevent sending a single empty receipt.
 		if len(receiptLists) == 1 && receiptLists[0].items.Len() == 0 {
 			delete(p.receiptBuffer, requestId)
 			return errors.New("no receipt delivered in incomplete receipt response")
-		}
-		lastBlock := len(receiptLists) - 1
-		if len(buffer.list) > 0 {
-			lastBlock += len(buffer.list) - 1
-		}
-		gasUsed := buffer.gasUsed[lastBlock]
-		timestamp := buffer.timestamps[lastBlock]
-		logSize, err := p.validateLastBlockReceipt(receiptLists, requestId, gasUsed, timestamp)
-		if err != nil {
-			delete(p.receiptBuffer, requestId)
-			return err
 		}
 		// Update the buffered data and trim the packet to exclude the incomplete block.
 		if len(buffer.list) > 0 {
@@ -610,27 +620,9 @@ func (p *Peer) flushReceipts(requestId uint64) []*ReceiptList {
 	return buffer.list
 }
 
-// validateLastBlockReceipt validates receipts and return log size of last block receipt.
-// This function is called only when the `lastBlockincomplete == true`.
-//
-// Note that the last receipt response (which completes receiptLists of a pending block)
-// is not verified here. Those response doesn't need hueristics below since they can be
-// verified by its trie root.
-func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList, id uint64, gasUsed uint64, timestamp uint64) (uint64, error) {
-	lastReceipts := receiptLists[len(receiptLists)-1]
-
-	// If the receipt is in the middle of retrieval, use the buffered data.
-	// e.g. [[receipt1], [receipt1, receipt2], incomplete = true]
-	//      [[receipt3, receipt4], incomplete = true] <<--
-	//      [[receipt5], [receipt1], incomplete = false]
-	// This case happens only if len(receiptLists) == 1 && incomplete == true && buffered before.
-	var previousTxs int
-	var previousLog uint64
-	if buffer, ok := p.receiptBuffer[id]; ok && len(buffer.list) > 0 && len(receiptLists) == 1 {
-		previousTxs = buffer.list[len(buffer.list)-1].items.Len()
-		previousLog = buffer.lastLogSize
-	}
-
+// validateBlockReceipts validates the receipts of a single block, with its
+// previously buffered part, and returns the accumulated log size.
+func (p *Peer) validateBlockReceipts(receipts *ReceiptList, previousTxs int, previousLog uint64, gasUsed uint64, timestamp uint64) (uint64, error) {
 	// Verify that the total number of transactions delivered is under the limit.
 	var minTxGas uint64
 	if p.chainConfig != nil && p.chainConfig.AmsterdamTime != nil && *p.chainConfig.AmsterdamTime <= timestamp {
@@ -638,12 +630,12 @@ func (p *Peer) validateLastBlockReceipt(receiptLists []*ReceiptList, id uint64, 
 	} else {
 		minTxGas = params.TxGas
 	}
-	if uint64(previousTxs+lastReceipts.items.Len()) > gasUsed/minTxGas {
+	if uint64(previousTxs+receipts.items.Len()) > gasUsed/minTxGas {
 		// should be dropped, don't clear the buffer
 		return 0, fmt.Errorf("total number of tx exceeded limit")
 	}
 	// Count log size per receipt
-	log, err := lastReceipts.LogsSize()
+	log, err := receipts.LogsSize()
 	if err != nil {
 		return 0, err
 	}
