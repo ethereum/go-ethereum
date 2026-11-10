@@ -13,7 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/qkc/cluster"
+	"github.com/ethereum/go-ethereum/qkc/comm"
 	"github.com/ethereum/go-ethereum/qkc/conn"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
 	"github.com/ethereum/go-ethereum/qkc/wire"
@@ -22,11 +22,11 @@ import (
 )
 
 // SlaveRequestHandler serves requests received from slaves. Calls may run
-// concurrently. Return *wire.RemoteError for business rejections; other errors
+// concurrently. Return *comm.RemoteError for business rejections; other errors
 // close the connection. sourceChainID is an independent copy of the configured
 // remote chain ID, which the owner must verify with SendPing before use.
 type SlaveRequestHandler interface {
-	AddMinorBlockHeader(sourceChainID *big.Int, header *types.Header, coinbaseAmount *uint256.Int) error
+	AddShardBlockHeader(sourceChainID *big.Int, header *types.Header, coinbaseAmount *uint256.Int) error
 }
 
 // SlaveInfo describes a cluster endpoint without wire-specific representations.
@@ -97,10 +97,10 @@ func NewSlaveConn(cfg SlaveConnConfig) (*SlaveConn, error) {
 			byte(wire.ClusterOpAddRootBlockRequest):          conn.OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse)),
 			byte(wire.ClusterOpGetUnconfirmedHeadersRequest): conn.OpSerializerFor[wire.GetUnconfirmedHeadersRequest, wire.GetUnconfirmedHeadersResponse](byte(wire.ClusterOpGetUnconfirmedHeadersResponse)),
 			byte(wire.ClusterOpGetRootChainStakesRequest):    conn.OpSerializerFor[wire.GetRootChainStakesRequest, wire.GetRootChainStakesResponse](byte(wire.ClusterOpGetRootChainStakesResponse)),
-			byte(wire.ClusterOpAddMinorBlockHeaderRequest):   conn.OpSerializerFor[wire.AddMinorBlockHeaderRequest, wire.AddMinorBlockHeaderResponse](byte(wire.ClusterOpAddMinorBlockHeaderResponse)),
+			byte(wire.ClusterOpAddShardBlockHeaderRequest):   conn.OpSerializerFor[wire.AddShardBlockHeaderRequest, wire.AddShardBlockHeaderResponse](byte(wire.ClusterOpAddShardBlockHeaderResponse)),
 		},
 		Handlers: map[byte]conn.TypedHandler{
-			byte(wire.ClusterOpAddMinorBlockHeaderRequest): sc.handleAddMinorBlockHeader,
+			byte(wire.ClusterOpAddShardBlockHeaderRequest): sc.handleAddShardBlockHeader,
 		},
 		Forwarder: sc.routeFrame,
 		Logger:    cfg.Logger,
@@ -189,7 +189,7 @@ func (sc *SlaveConn) SendConnectToSlaves(ctx context.Context, slaves []SlaveInfo
 }
 
 // SendAddRootBlock encodes and sends a root block. A nonzero remote
-// ErrorCode is returned as *wire.RemoteError; transport and context errors are
+// ErrorCode is returned as *comm.RemoteError; transport and context errors are
 // returned unchanged.
 func (sc *SlaveConn) SendAddRootBlock(ctx context.Context, root *qkctypes.RootBlock) error {
 	if root == nil {
@@ -209,16 +209,16 @@ func (sc *SlaveConn) SendAddRootBlock(ctx context.Context, root *qkctypes.RootBl
 		return fmt.Errorf("unexpected add root block response %T", resp)
 	}
 	if result.ErrorCode != 0 {
-		return &wire.RemoteError{Code: result.ErrorCode}
+		return &comm.RemoteError{Code: result.ErrorCode}
 	}
 	return nil
 }
 
 // SendGetRootChainStakes returns the slave's staking response. A nonzero remote
-// ErrorCode is returned as *wire.RemoteError; transport and context errors are
+// ErrorCode is returned as *comm.RemoteError; transport and context errors are
 // returned unchanged. Business values are decoded before returning.
-func (sc *SlaveConn) SendGetRootChainStakes(ctx context.Context, address common.Address, minorBlockHash common.Hash) (*cluster.RootChainStakesResult, error) {
-	req := &wire.GetRootChainStakesRequest{Address: address, MinorBlockHash: minorBlockHash}
+func (sc *SlaveConn) SendGetRootChainStakes(ctx context.Context, address common.Address, shardBlockHash common.Hash) (*comm.RootChainStakesResult, error) {
+	req := &wire.GetRootChainStakesRequest{Address: address, ShardBlockHash: shardBlockHash}
 	resp, err := sc.SendRPC(ctx, byte(wire.ClusterOpGetRootChainStakesRequest), req)
 	if err != nil {
 		return nil, err
@@ -228,13 +228,13 @@ func (sc *SlaveConn) SendGetRootChainStakes(ctx context.Context, address common.
 		return nil, fmt.Errorf("unexpected get root chain stakes response %T", resp)
 	}
 	if result.ErrorCode != 0 {
-		return nil, &wire.RemoteError{Code: result.ErrorCode}
+		return nil, &comm.RemoteError{Code: result.ErrorCode}
 	}
 	stakes := new(uint256.Int)
 	if err := stakes.UnmarshalSSZ(result.Stakes[:]); err != nil {
 		return nil, fmt.Errorf("decode root chain stakes: %w", err)
 	}
-	return &cluster.RootChainStakesResult{Stakes: stakes, Signer: result.Signer}, nil
+	return &comm.RootChainStakesResult{Stakes: stakes, Signer: result.Signer}, nil
 }
 
 // SendGetUnconfirmedHeaders asks a slave for its unconfirmed shard headers.
@@ -248,7 +248,7 @@ func (sc *SlaveConn) SendGetUnconfirmedHeaders(ctx context.Context) ([]*types.He
 		return nil, fmt.Errorf("unexpected get unconfirmed headers response %T", resp)
 	}
 	if result.ErrorCode != 0 {
-		return nil, &wire.RemoteError{Code: result.ErrorCode}
+		return nil, &comm.RemoteError{Code: result.ErrorCode}
 	}
 	headers := make([]*types.Header, len(result.HeaderList))
 	for i, encoded := range result.HeaderList {
@@ -272,19 +272,19 @@ func (sc *SlaveConn) routeFrame(frame *wire.ClusterFrame) bool {
 
 // ── topology & shard activation handlers ───────────────────────────────────
 
-func (sc *SlaveConn) handleAddMinorBlockHeader(req wire.SSZMessage) (wire.SSZMessage, error) {
-	request := req.(*wire.AddMinorBlockHeaderRequest)
+func (sc *SlaveConn) handleAddShardBlockHeader(req wire.SSZMessage) (wire.SSZMessage, error) {
+	request := req.(*wire.AddShardBlockHeaderRequest)
 	header := new(types.Header)
-	if err := rlp.DecodeBytes(request.MinorBlockHeader, header); err != nil {
-		return nil, fmt.Errorf("decode minor block header: %w", err)
+	if err := rlp.DecodeBytes(request.ShardBlockHeader, header); err != nil {
+		return nil, fmt.Errorf("decode shard block header: %w", err)
 	}
 	amount := new(uint256.Int)
 	if err := amount.UnmarshalSSZ(request.CoinbaseAmount[:]); err != nil {
 		return nil, fmt.Errorf("decode coinbase amount: %w", err)
 	}
-	code, err := wire.ErrorCode(sc.handler.AddMinorBlockHeader(sc.RemoteChainID(), header, amount))
+	code, err := wire.ErrorCode(sc.handler.AddShardBlockHeader(sc.RemoteChainID(), header, amount))
 	if err != nil {
 		return nil, err
 	}
-	return &wire.AddMinorBlockHeaderResponse{ErrorCode: code}, nil
+	return &wire.AddShardBlockHeaderResponse{ErrorCode: code}, nil
 }

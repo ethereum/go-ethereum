@@ -13,7 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/qkc/cluster"
+	"github.com/ethereum/go-ethereum/qkc/comm"
 	"github.com/ethereum/go-ethereum/qkc/conn"
 	"github.com/ethereum/go-ethereum/qkc/slaveconn"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
@@ -23,14 +23,14 @@ import (
 )
 
 type slaveHandlerFunc struct {
-	addMinorBlockHeader func(*big.Int, *types.Header, *uint256.Int) error
+	addShardBlockHeader func(*big.Int, *types.Header, *uint256.Int) error
 }
 
-func (handler slaveHandlerFunc) AddMinorBlockHeader(source *big.Int, header *types.Header, amount *uint256.Int) error {
-	if handler.addMinorBlockHeader == nil {
+func (handler slaveHandlerFunc) AddShardBlockHeader(source *big.Int, header *types.Header, amount *uint256.Int) error {
+	if handler.addShardBlockHeader == nil {
 		return nil
 	}
-	return handler.addMinorBlockHeader(source, header, amount)
+	return handler.addShardBlockHeader(source, header, amount)
 }
 
 func noopShutdown() {}
@@ -43,13 +43,13 @@ func testHeader() *types.Header {
 	return &types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(1)}
 }
 
-func headerRequest(t *testing.T) *wire.AddMinorBlockHeaderRequest {
+func headerRequest(t *testing.T) *wire.AddShardBlockHeaderRequest {
 	t.Helper()
 	encoded, err := rlp.EncodeToBytes(testHeader())
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &wire.AddMinorBlockHeaderRequest{MinorBlockHeader: encoded, CoinbaseAmount: [32]byte{9}}
+	return &wire.AddShardBlockHeaderRequest{ShardBlockHeader: encoded, CoinbaseAmount: [32]byte{9}}
 }
 
 func newSlaveTestPair(t *testing.T, chainID *big.Int, handler SlaveRequestHandler, peerHandlers map[byte]conn.TypedHandler) (*SlaveConn, *conn.BaseConn) {
@@ -74,7 +74,7 @@ func newSlaveTestPair(t *testing.T, chainID *big.Int, handler SlaveRequestHandle
 			byte(wire.ClusterOpAddRootBlockRequest):          conn.OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse)),
 			byte(wire.ClusterOpGetRootChainStakesRequest):    conn.OpSerializerFor[wire.GetRootChainStakesRequest, wire.GetRootChainStakesResponse](byte(wire.ClusterOpGetRootChainStakesResponse)),
 			byte(wire.ClusterOpGetUnconfirmedHeadersRequest): conn.OpSerializerFor[wire.GetUnconfirmedHeadersRequest, wire.GetUnconfirmedHeadersResponse](byte(wire.ClusterOpGetUnconfirmedHeadersResponse)),
-			byte(wire.ClusterOpAddMinorBlockHeaderRequest):   conn.OpSerializerFor[wire.AddMinorBlockHeaderRequest, wire.AddMinorBlockHeaderResponse](byte(wire.ClusterOpAddMinorBlockHeaderResponse)),
+			byte(wire.ClusterOpAddShardBlockHeaderRequest):   conn.OpSerializerFor[wire.AddShardBlockHeaderRequest, wire.AddShardBlockHeaderResponse](byte(wire.ClusterOpAddShardBlockHeaderResponse)),
 		},
 		Handlers: peerHandlers,
 	})
@@ -131,11 +131,11 @@ type businessHandler struct {
 
 func (h *businessHandler) CreateShards(root *qkctypes.RootBlock) error { h.roots <- root; return nil }
 func (h *businessHandler) AddRootBlock(root *qkctypes.RootBlock) error { h.roots <- root; return nil }
-func (h *businessHandler) GetRootChainStakes(address common.Address, hash common.Hash) (*cluster.RootChainStakesResult, error) {
+func (h *businessHandler) GetRootChainStakes(address common.Address, hash common.Hash) (*comm.RootChainStakesResult, error) {
 	if address != h.address || hash != h.blockHash {
 		return nil, errors.New("unexpected stakes query")
 	}
-	return &cluster.RootChainStakesResult{Stakes: uint256.NewInt(0x10203), Signer: common.Address{7}}, nil
+	return &comm.RootChainStakesResult{Stakes: uint256.NewInt(0x10203), Signer: common.Address{7}}, nil
 }
 func (h *businessHandler) GetUnconfirmedHeaders() ([]*types.Header, error) {
 	return []*types.Header{testHeader()}, nil
@@ -154,13 +154,13 @@ func TestSlaveConnRPC(t *testing.T) {
 	h := &businessHandler{roots: make(chan *qkctypes.RootBlock, 2), address: common.Address{5}, blockHash: common.Hash{6}}
 	receivedHeader := make(chan *types.Header, 1)
 	sc, err := NewSlaveConn(SlaveConnConfig{Conn: local, RemoteChainID: chainID, ShutdownMaster: noopShutdown,
-		Handler: slaveHandlerFunc{addMinorBlockHeader: func(source *big.Int, header *types.Header, amount *uint256.Int) error {
+		Handler: slaveHandlerFunc{addShardBlockHeader: func(source *big.Int, header *types.Header, amount *uint256.Int) error {
 			if source.Cmp(wantID) != 0 || amount.Cmp(uint256.NewInt(0x10203)) != 0 {
 				t.Error("incorrect decoded header notification")
 			}
 			source.SetInt64(0)
 			receivedHeader <- header
-			return &wire.RemoteError{Code: 9}
+			return &comm.RemoteError{Code: 9}
 		}}})
 	if err != nil {
 		t.Fatal(err)
@@ -215,13 +215,13 @@ func TestSlaveConnRPC(t *testing.T) {
 	if len(headers) != 1 || headers[0].Hash() != testHeader().Hash() {
 		t.Fatal("incorrect unconfirmed headers")
 	}
-	err = mc.SendAddMinorBlockHeader(ctx, testHeader(), uint256.NewInt(0x10203))
-	var remoteErr *wire.RemoteError
+	err = mc.SendAddShardBlockHeader(ctx, testHeader(), uint256.NewInt(0x10203))
+	var remoteErr *comm.RemoteError
 	if !errors.As(err, &remoteErr) || remoteErr.Code != 9 {
 		t.Fatalf("expected rejection 9, got %v", err)
 	}
 	if got := <-receivedHeader; got.Hash() != testHeader().Hash() {
-		t.Fatal("minor header changed")
+		t.Fatal("shard header changed")
 	}
 	if sc.RemoteChainID().Cmp(wantID) != 0 {
 		t.Fatal("remote chain ID mutated")
@@ -306,13 +306,13 @@ func TestSlaveConnRemoteErrorsKeepConnection(t *testing.T) {
 			if operation == "root block" {
 				err = sc.SendAddRootBlock(ctx, testRoot(1))
 			} else {
-				var response *cluster.RootChainStakesResult
+				var response *comm.RootChainStakesResult
 				response, err = sc.SendGetRootChainStakes(ctx, common.Address{1}, common.Hash{})
 				if response != nil {
 					t.Fatal("business failure returned a success response")
 				}
 			}
-			var remoteErr *wire.RemoteError
+			var remoteErr *comm.RemoteError
 			if !errors.As(err, &remoteErr) || remoteErr.Code != code {
 				t.Fatalf("expected remote error code %d, got %v", code, err)
 			}
@@ -324,10 +324,10 @@ func TestSlaveConnRemoteErrorsKeepConnection(t *testing.T) {
 }
 
 func TestSlaveConnHandlerFailureClosesConnection(t *testing.T) {
-	sc, peer := newSlaveTestPair(t, big.NewInt(1), slaveHandlerFunc{addMinorBlockHeader: func(*big.Int, *types.Header, *uint256.Int) error {
+	sc, peer := newSlaveTestPair(t, big.NewInt(1), slaveHandlerFunc{addShardBlockHeader: func(*big.Int, *types.Header, *uint256.Int) error {
 		return errors.New("backend unavailable")
 	}}, nil)
-	_, err := peer.SendRPC(slaveTestContext(t), byte(wire.ClusterOpAddMinorBlockHeaderRequest), headerRequest(t))
+	_, err := peer.SendRPC(slaveTestContext(t), byte(wire.ClusterOpAddShardBlockHeaderRequest), headerRequest(t))
 	if !errors.Is(err, conn.ErrConnectionClosed) {
 		t.Fatalf("expected connection closed, got %v", err)
 	}
@@ -389,17 +389,17 @@ func TestSlaveConnContextErrorsKeepConnection(t *testing.T) {
 
 func TestSlaveConnPeerFramesDoNotReachLocalDispatch(t *testing.T) {
 	received := make(chan *types.Header, 2)
-	sc, peer := newSlaveTestPair(t, big.NewInt(1), slaveHandlerFunc{addMinorBlockHeader: func(_ *big.Int, header *types.Header, _ *uint256.Int) error {
+	sc, peer := newSlaveTestPair(t, big.NewInt(1), slaveHandlerFunc{addShardBlockHeader: func(_ *big.Int, header *types.Header, _ *uint256.Int) error {
 		received <- header
 		return nil
 	}}, nil)
-	forwarded := &wire.AddMinorBlockHeaderRequest{MinorBlockHeader: wire.Data{1}}
+	forwarded := &wire.AddShardBlockHeaderRequest{ShardBlockHeader: wire.Data{1}}
 	payload, err := forwarded.MarshalSSZ()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, frame := range []*wire.ClusterFrame{
-		{ClusterPeerID: 42, Opcode: byte(wire.ClusterOpAddMinorBlockHeaderRequest), RPCID: 0, Payload: payload},
+		{ClusterPeerID: 42, Opcode: byte(wire.ClusterOpAddShardBlockHeaderRequest), RPCID: 0, Payload: payload},
 		{ClusterPeerID: 42, Opcode: byte(wire.ClusterOpPong), RPCID: 999},
 		{ClusterPeerID: 42, Opcode: 0xff, RPCID: 999},
 	} {
@@ -408,7 +408,7 @@ func TestSlaveConnPeerFramesDoNotReachLocalDispatch(t *testing.T) {
 		}
 	}
 	local := headerRequest(t)
-	if _, err := peer.SendRPC(slaveTestContext(t), byte(wire.ClusterOpAddMinorBlockHeaderRequest), local); err != nil {
+	if _, err := peer.SendRPC(slaveTestContext(t), byte(wire.ClusterOpAddShardBlockHeaderRequest), local); err != nil {
 		t.Fatalf("local request after peer frames: %v", err)
 	}
 	if got := <-received; got.Hash() != testHeader().Hash() {
@@ -483,8 +483,8 @@ func TestSlaveConnUnconfirmedHeadersResponse(t *testing.T) {
 
 func TestSlaveConnMalformedHeaderClosesConnection(t *testing.T) {
 	called := make(chan struct{}, 1)
-	sc, peer := newSlaveTestPair(t, big.NewInt(1), slaveHandlerFunc{addMinorBlockHeader: func(*big.Int, *types.Header, *uint256.Int) error { called <- struct{}{}; return nil }}, nil)
-	_, err := peer.SendRPC(slaveTestContext(t), byte(wire.ClusterOpAddMinorBlockHeaderRequest), &wire.AddMinorBlockHeaderRequest{MinorBlockHeader: wire.Data{1}})
+	sc, peer := newSlaveTestPair(t, big.NewInt(1), slaveHandlerFunc{addShardBlockHeader: func(*big.Int, *types.Header, *uint256.Int) error { called <- struct{}{}; return nil }}, nil)
+	_, err := peer.SendRPC(slaveTestContext(t), byte(wire.ClusterOpAddShardBlockHeaderRequest), &wire.AddShardBlockHeaderRequest{ShardBlockHeader: wire.Data{1}})
 	if !errors.Is(err, conn.ErrConnectionClosed) || !sc.IsClosed() {
 		t.Fatalf("expected connection closure, got %v", err)
 	}
