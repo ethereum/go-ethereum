@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package cluster contains business result types shared by business
-// interfaces and communication layers across the system.
+// Package comm contains business types shared by business interfaces and
+// communication layers across the system.
 //
 // Interface methods should return a single result value directly, followed by
 // an error. When a method needs to return multiple result values, define a
@@ -23,7 +23,7 @@
 // are complex, define a parameter struct here as well. These structs keep
 // business data grouped consistently without exposing wire message
 // representations.
-package cluster
+package comm
 
 import (
 	"github.com/ethereum/go-ethereum/common"

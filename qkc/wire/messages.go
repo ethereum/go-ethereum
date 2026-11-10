@@ -107,14 +107,14 @@ type HelloCommand struct {
 	GenesisRootBlockHash common.Hash
 }
 
-// AddMinorBlockHeaderRequest reports an accepted minor block to Master.
-// MinorBlockHeader carries an RLP-encoded geth header.
-type AddMinorBlockHeaderRequest struct {
-	MinorBlockHeader Data                `ssz-max:"4294967295"`
+// AddShardBlockHeaderRequest reports an accepted shard block to Master.
+// ShardBlockHeader carries an RLP-encoded geth header.
+type AddShardBlockHeaderRequest struct {
+	ShardBlockHeader Data                `ssz-max:"4294967295"`
 	CoinbaseAmount   [UInt256Length]byte // Shard miner's total reward in QKC base units, including fees.
 }
 
-type AddMinorBlockHeaderResponse struct {
+type AddShardBlockHeaderResponse struct {
 	ErrorCode uint32
 }
 
@@ -123,7 +123,7 @@ type AddMinorBlockHeaderResponse struct {
 // without the 0x7e transaction prefix, in source log order.
 type AddXshardTxListRequest struct {
 	ChainID        [UInt256Length]byte // Destination ChainConfig.ChainID, little-endian.
-	MinorBlockHash common.Hash         // Source block hash.
+	ShardBlockHash common.Hash         // Source block hash.
 	DepositTxList  []Data              `ssz-max:"4294967295,4294967295" ssz-size:"?,?"`
 }
 
@@ -141,7 +141,7 @@ type AddRootBlockResponse struct {
 	ErrorCode uint32
 }
 
-// GetUnconfirmedHeadersRequest asks the master for unconfirmed shard headers.
+// GetUnconfirmedHeadersRequest asks a slave for its unconfirmed shard headers.
 type GetUnconfirmedHeadersRequest struct{}
 
 // GetUnconfirmedHeadersResponse returns unconfirmed headers for the chain
@@ -152,10 +152,10 @@ type GetUnconfirmedHeadersResponse struct {
 }
 
 // GetRootChainStakesRequest asks a chain for the stakes recorded for Address
-// at MinorBlockHash.
+// at ShardBlockHash.
 type GetRootChainStakesRequest struct {
 	Address        common.Address
-	MinorBlockHash common.Hash
+	ShardBlockHash common.Hash
 }
 
 // GetRootChainStakesResponse reports staking information. Stakes is a

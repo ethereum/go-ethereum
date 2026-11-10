@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/qkc/cluster"
+	"github.com/ethereum/go-ethereum/qkc/comm"
 	"github.com/ethereum/go-ethereum/qkc/conn"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
 	"github.com/ethereum/go-ethereum/qkc/wire"
@@ -38,12 +38,12 @@ import (
 )
 
 // MasterRequestHandler serves requests received from the master. Calls may run
-// concurrently. Return *wire.RemoteError for business rejections; other errors
+// concurrently. Return *comm.RemoteError for business rejections; other errors
 // indicate handler failures and close the connection.
 type MasterRequestHandler interface {
 	CreateShards(rootTip *qkctypes.RootBlock) error
 	AddRootBlock(root *qkctypes.RootBlock) error
-	GetRootChainStakes(address common.Address, minorBlockHash common.Hash) (*cluster.RootChainStakesResult, error)
+	GetRootChainStakes(address common.Address, shardBlockHash common.Hash) (*comm.RootChainStakesResult, error)
 	GetUnconfirmedHeaders() ([]*types.Header, error)
 }
 
@@ -64,7 +64,8 @@ type MasterConnConfig struct {
 }
 
 // MasterConn handles master requests and sends shard block notifications.
-// Closing the master connection invokes the owning slave's shutdown callback.
+// Any close, including the slave's own Close during shutdown, invokes
+// ShutdownSlave once on a separate goroutine, so it must be idempotent.
 type MasterConn struct {
 	*conn.BaseConn
 
@@ -122,7 +123,7 @@ func NewMasterConn(cfg MasterConnConfig) (*MasterConn, error) {
 			byte(wire.ClusterOpConnectToSlavesRequest): conn.OpSerializerFor[wire.ConnectToSlavesRequest, wire.ConnectToSlavesResponse](byte(wire.ClusterOpConnectToSlavesResponse)),
 
 			// Business layer: requests sent to the master.
-			byte(wire.ClusterOpAddMinorBlockHeaderRequest): conn.OpSerializerFor[wire.AddMinorBlockHeaderRequest, wire.AddMinorBlockHeaderResponse](byte(wire.ClusterOpAddMinorBlockHeaderResponse)),
+			byte(wire.ClusterOpAddShardBlockHeaderRequest): conn.OpSerializerFor[wire.AddShardBlockHeaderRequest, wire.AddShardBlockHeaderResponse](byte(wire.ClusterOpAddShardBlockHeaderResponse)),
 
 			// Business layer: requests received from the master.
 			byte(wire.ClusterOpAddRootBlockRequest):          conn.OpSerializerFor[wire.AddRootBlockRequest, wire.AddRootBlockResponse](byte(wire.ClusterOpAddRootBlockResponse)),
@@ -154,17 +155,17 @@ func (mc *MasterConn) watchConnection() {
 	})
 }
 
-// SendAddMinorBlockHeader reports a shard header and its coinbase reward to
-// the master. A nonzero business error code is returned as *wire.RemoteError.
-func (mc *MasterConn) SendAddMinorBlockHeader(ctx context.Context, header *types.Header, coinbaseAmount *uint256.Int) error {
+// SendAddShardBlockHeader reports a shard header and its coinbase reward to
+// the master. A nonzero business error code is returned as *comm.RemoteError.
+func (mc *MasterConn) SendAddShardBlockHeader(ctx context.Context, header *types.Header, coinbaseAmount *uint256.Int) error {
 	if header == nil {
-		return errors.New("minor block header must not be nil")
+		return errors.New("shard block header must not be nil")
 	}
 	headerData, err := rlp.EncodeToBytes(header)
 	if err != nil {
-		return fmt.Errorf("encode minor block header: %w", err)
+		return fmt.Errorf("encode shard block header: %w", err)
 	}
-	request := &wire.AddMinorBlockHeaderRequest{MinorBlockHeader: headerData}
+	request := &wire.AddShardBlockHeaderRequest{ShardBlockHeader: headerData}
 	if coinbaseAmount != nil {
 		encodedAmount, err := coinbaseAmount.MarshalSSZ()
 		if err != nil {
@@ -172,16 +173,16 @@ func (mc *MasterConn) SendAddMinorBlockHeader(ctx context.Context, header *types
 		}
 		copy(request.CoinbaseAmount[:], encodedAmount)
 	}
-	resp, err := mc.SendRPC(ctx, byte(wire.ClusterOpAddMinorBlockHeaderRequest), request)
+	resp, err := mc.SendRPC(ctx, byte(wire.ClusterOpAddShardBlockHeaderRequest), request)
 	if err != nil {
 		return err
 	}
-	result, ok := resp.(*wire.AddMinorBlockHeaderResponse)
+	result, ok := resp.(*wire.AddShardBlockHeaderResponse)
 	if !ok {
-		return fmt.Errorf("unexpected add minor block header response %T", resp)
+		return fmt.Errorf("unexpected add shard block header response %T", resp)
 	}
 	if result.ErrorCode != 0 {
-		return &wire.RemoteError{Code: result.ErrorCode}
+		return &comm.RemoteError{Code: result.ErrorCode}
 	}
 	return nil
 }
@@ -259,7 +260,7 @@ func (mc *MasterConn) handleAddRootBlock(req wire.SSZMessage) (wire.SSZMessage, 
 
 func (mc *MasterConn) handleGetRootChainStakes(req wire.SSZMessage) (wire.SSZMessage, error) {
 	request := req.(*wire.GetRootChainStakesRequest)
-	result, err := mc.handler.GetRootChainStakes(request.Address, request.MinorBlockHash)
+	result, err := mc.handler.GetRootChainStakes(request.Address, request.ShardBlockHash)
 	code, err := wire.ErrorCode(err)
 	if err != nil {
 		return nil, err

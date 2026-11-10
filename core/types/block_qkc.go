@@ -55,7 +55,7 @@ import (
 //	0       4     version
 //	4       32    chainId
 //	36      32    prevRootBlock
-//	68      24    cursor (rootBlockHeight, minorBlockIndex, xShardDepositIndex)
+//	68      24    cursor (rootBlockHeight, shardBlockIndex, xShardDepositIndex)
 //	92      8     xShardGasUsed
 //	100     8     xShardGasLimit
 //	108     8     nonce       <- start of the PoW seal
@@ -77,7 +77,7 @@ const (
 // block is where the next block resumes applying messages.
 type XShardCursor struct {
 	RootBlockHeight    uint64 // height of the root block that confirms the source block
-	MinorBlockIndex    uint64 // position of the source block in that root block
+	ShardBlockIndex    uint64 // position of the source block in that root block
 	XShardDepositIndex uint64 // position of the message in the source block
 }
 
@@ -109,7 +109,7 @@ func DecodeQKCExtra(extra []byte) (*QKCExtra, error) {
 		ChainID: new(big.Int).SetBytes(extra[4:36]),
 		Cursor: XShardCursor{
 			RootBlockHeight:    binary.BigEndian.Uint64(extra[68:76]),
-			MinorBlockIndex:    binary.BigEndian.Uint64(extra[76:84]),
+			ShardBlockIndex:    binary.BigEndian.Uint64(extra[76:84]),
 			XShardDepositIndex: binary.BigEndian.Uint64(extra[84:92]),
 		},
 		XShardGasUsed:  binary.BigEndian.Uint64(extra[92:100]),
@@ -136,7 +136,7 @@ func (e *QKCExtra) Encode() []byte {
 	extra = append(extra, chainID[:]...)
 	extra = append(extra, e.PrevRootBlock[:]...)
 	extra = binary.BigEndian.AppendUint64(extra, e.Cursor.RootBlockHeight)
-	extra = binary.BigEndian.AppendUint64(extra, e.Cursor.MinorBlockIndex)
+	extra = binary.BigEndian.AppendUint64(extra, e.Cursor.ShardBlockIndex)
 	extra = binary.BigEndian.AppendUint64(extra, e.Cursor.XShardDepositIndex)
 	extra = binary.BigEndian.AppendUint64(extra, e.XShardGasUsed)
 	extra = binary.BigEndian.AppendUint64(extra, e.XShardGasLimit)

@@ -268,7 +268,7 @@ func (s *Shard) AddShardBlock(ctx context.Context, block *types.Block) error {
 	if err := s.BroadcastXShardTxList(ctx, block.Hash()); err != nil {
 		return err
 	}
-	if err := s.clusterClient.SendMinorBlockHeaderToMaster(ctx, block.Header(), coinbaseAmount); err != nil {
+	if err := s.clusterClient.SendShardBlockHeaderToMaster(ctx, block.Header(), coinbaseAmount); err != nil {
 		return fmt.Errorf("report block %x to master: %w", block.Hash(), err)
 	}
 	if err := rawdb.WriteShardBlockCommit(s.chain.db, block.Hash()); err != nil {

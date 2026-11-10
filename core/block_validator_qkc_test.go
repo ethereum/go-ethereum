@@ -90,7 +90,7 @@ func testCursor(walked int, ended bool) types.XShardCursor {
 	if ended {
 		return types.XShardCursor{RootBlockHeight: 6}
 	}
-	return types.XShardCursor{RootBlockHeight: 5, MinorBlockIndex: 1, XShardDepositIndex: uint64(walked)}
+	return types.XShardCursor{RootBlockHeight: 5, ShardBlockIndex: 1, XShardDepositIndex: uint64(walked)}
 }
 
 // Move execution currently requires fixed gas. Synthetic receipts exercise the

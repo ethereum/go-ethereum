@@ -31,10 +31,11 @@ import (
 
 // XshardConnManager manages the local slave's cross-shard connections to other slaves,
 // indexed by each remote slave's chain ID. Connections remain indexed until
-// the manager closes. MasterConn may dial multiple slaves concurrently, so a
-// successful outbound PING is not guaranteed to see the inbound connection
-// registered before another slave is asked to dial. Duplicate connections
-// are rejected if concurrent dials race to establish the same connection.
+// the manager closes. Master sends ConnectToSlavesRequest to one slave at a
+// time and waits for its response, so a successful outbound PING sees the
+// inbound connection registered before the next slave is asked to dial.
+// Concurrent dials within one request target distinct slaves and do not
+// affect this. Duplicate connections are rejected if this ordering is violated.
 type XshardConnManager struct {
 	localChainID *big.Int
 	// Only connections to slaves with configured chain IDs enter the routing index.
