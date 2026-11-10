@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/qkc/comm"
 	"github.com/ethereum/go-ethereum/qkc/conn"
 	"github.com/ethereum/go-ethereum/qkc/wire"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/holiman/uint256"
 )
 
@@ -172,6 +173,30 @@ func TestXshardConnRemoteErrorKeepsConnection(t *testing.T) {
 	}
 	if err := peer.SendAddXshardTxList(ctx, common.Hash{}, nil); err != nil {
 		t.Fatalf("request after remote execution failure: %v", err)
+	}
+}
+
+func TestXshardConnRejectsUnsupportedDepositVersion(t *testing.T) {
+	called := false
+	chainID := big.NewInt(1)
+	x := &XshardConn{localChainID: chainID, handler: xshardHandlerFunc(func(common.Hash, []*types.DepositTx) error {
+		called = true
+		return nil
+	})}
+	encoded, err := rlp.EncodeToBytes(&types.DepositTx{Version: types.DepositTxVersion + 1, Value: uint256.NewInt(1), GasPrice: uint256.NewInt(1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sszChainID, err := wire.ChainIDToSSZ(chainID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := x.handleAddXshardTxList(&wire.AddXshardTxListRequest{ChainID: sszChainID, DepositTxList: []wire.Data{encoded}})
+	if err == nil || !strings.Contains(err.Error(), "unsupported deposit version 1") {
+		t.Fatalf("expected unsupported deposit version error, got %v", err)
+	}
+	if response != nil || called {
+		t.Fatalf("unsupported deposit was acknowledged or passed to handler: response %v, called %t", response, called)
 	}
 }
 
