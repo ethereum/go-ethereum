@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the quarkchain library. If not, see <http://www.gnu.org/licenses/>.
 
-// Package cluster contains business result types shared by business
-// interfaces and communication layers across the system.
+// Package cluster contains business types shared by business interfaces and
+// communication layers across the system.
 //
 // Interface methods should return a single result value directly, followed by
 // an error. When a method needs to return multiple result values, define a
