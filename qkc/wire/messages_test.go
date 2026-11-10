@@ -44,6 +44,8 @@ func TestNewClusterMessageRegistry(t *testing.T) {
 		{ClusterOpConnectToSlavesResponse, &ConnectToSlavesResponse{}},
 		{ClusterOpAddRootBlockRequest, &AddRootBlockRequest{}},
 		{ClusterOpAddRootBlockResponse, &AddRootBlockResponse{}},
+		{ClusterOpGetUnconfirmedHeadersRequest, &GetUnconfirmedHeadersRequest{}},
+		{ClusterOpGetUnconfirmedHeadersResponse, &GetUnconfirmedHeadersResponse{}},
 		{ClusterOpAddMinorBlockHeaderRequest, &AddMinorBlockHeaderRequest{}},
 		{ClusterOpAddMinorBlockHeaderResponse, &AddMinorBlockHeaderResponse{}},
 		{ClusterOpAddXshardTxListRequest, &AddXshardTxListRequest{}},
@@ -163,6 +165,31 @@ func TestChainHeaderMessagesSSZ(t *testing.T) {
 	if _, err := msg.HashTreeRoot(); err != nil {
 		t.Fatalf("header hash tree root: %v", err)
 	}
+}
+
+func TestGetUnconfirmedHeadersSSZ(t *testing.T) {
+	header := &types.Header{Number: big.NewInt(7), Difficulty: big.NewInt(1)}
+	msg := &GetUnconfirmedHeadersResponse{HeaderList: []Data{mustRLP(t, header)}}
+	encoded, err := msg.MarshalSSZ()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded GetUnconfirmedHeadersResponse
+	if err := decoded.UnmarshalSSZ(encoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.HeaderList) != 1 {
+		t.Fatal("unconfirmed header response changed in SSZ round trip")
+	}
+}
+
+func mustRLP(t *testing.T, value interface{}) Data {
+	t.Helper()
+	data, err := rlp.EncodeToBytes(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Data(data)
 }
 
 func TestCrossChainDepositsSSZ(t *testing.T) {

@@ -23,8 +23,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/qkc/comm"
 	qkctypes "github.com/ethereum/go-ethereum/qkc/types"
-	"github.com/holiman/uint256"
 )
 
 // ClusterClient is implemented by the component that owns the connections to
@@ -33,7 +33,7 @@ import (
 type ClusterClient interface {
 	// BroadcastRootBlock sends block to every ShardNode in the cluster and waits
 	// for all acknowledgements. A send failure, a nonzero remote ErrorCode
-	// (returned as *wire.RemoteError), or a ShardNode without a connection is
+	// (returned as *comm.RemoteError), or a ShardNode without a connection is
 	// returned as an error, so a disconnected chain never silently misses the
 	// root block. If only some hosts acknowledge the block, the caller must
 	// retain it as uncommitted and retry the complete broadcast.
@@ -43,22 +43,13 @@ type ClusterClient interface {
 	// grouped by decimal chainID strings, for constructing a root block. Each shard's headers are
 	// ordered by increasing height. Master filters out headers not yet reported to
 	// it, as in pyquarkchain. A transport or RPC failure, a nonzero remote ErrorCode
-	// (returned as *wire.RemoteError), or a missing connection is returned as an
+	// (returned as *comm.RemoteError), or a missing connection is returned as an
 	// error rather than silently omitting headers.
 	GetUnconfirmedHeaderList(ctx context.Context) (map[string][]*types.Header, error)
 
 	// GetRootChainStakes asks chainID for the stakes recorded for address at
 	// minorBlockHash. The result is the decoded business response after a
 	// completed RPC. err reports a transport or RPC failure, or a nonzero remote
-	// ErrorCode as *wire.RemoteError.
-	GetRootChainStakes(ctx context.Context, chainID *big.Int, address common.Address, minorBlockHash common.Hash) (*RootChainStakesResult, error)
-}
-
-// RootChainStakesResult is the business representation of a chain's staking
-// response, separate from wire.GetRootChainStakesResponse. Stakes is decoded
-// from the wire uint256 representation. A nonzero remote ErrorCode is returned
-// as an error instead of being stored here.
-type RootChainStakesResult struct {
-	Stakes *uint256.Int
-	Signer common.Address
+	// ErrorCode as *comm.RemoteError.
+	GetRootChainStakes(ctx context.Context, chainID *big.Int, address common.Address, minorBlockHash common.Hash) (*comm.RootChainStakesResult, error)
 }

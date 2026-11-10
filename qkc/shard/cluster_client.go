@@ -33,14 +33,14 @@ type ClusterClient interface {
 	// BroadcastXShardTxList delivers depositTxList from minorBlockHash to the
 	// hosts serving chainID. An empty transaction list still advances that
 	// chain's inbox cursor. A send failure, a nonzero remote ErrorCode
-	// (returned as *wire.RemoteError), or no connection for chainID is returned
+	// (returned as *comm.RemoteError), or no connection for chainID is returned
 	// as an error. If only some hosts acknowledge the request, the caller must
 	// not report the block header to Master and must retry delivery to chainID.
 	BroadcastXShardTxList(ctx context.Context, chainID *big.Int, minorBlockHash common.Hash, depositTxList []*types.DepositTx) error
 
 	// SendMinorBlockHeaderToMaster reports an accepted shard block to Master.
 	// It returns nil after a completed RPC whose remote ErrorCode is zero. A
-	// nonzero Master ErrorCode is returned as *wire.RemoteError; a transport or
+	// nonzero Master ErrorCode is returned as *comm.RemoteError; a transport or
 	// RPC failure is returned as is.
 	SendMinorBlockHeaderToMaster(ctx context.Context, blockHeader *types.Header, coinbaseAmount *uint256.Int) error
 }

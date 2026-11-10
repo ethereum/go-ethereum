@@ -27,27 +27,30 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/qkc/comm"
 	"github.com/ethereum/go-ethereum/qkc/conn"
 	"github.com/ethereum/go-ethereum/qkc/wire"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// XshardHandler serves cross-shard requests received from other slaves,
-// implemented by the business layer. Implementations must be safe for concurrent
-// calls and return a non-nil response when the error is nil.
+// XshardRequestHandler serves cross-shard requests received from other slaves,
+// implemented by the business layer. Implementations must be safe for
+// concurrent calls.
 //
-// Business failures must be encoded in the response ErrorCode with a nil error,
-// so they are sent to the peer without closing the connection. A non-nil error
-// signals a handler failure and closes the connection via BaseConn.
-type XshardHandler interface {
-	AddXshardTxList(req *wire.AddXshardTxListRequest) (*wire.AddXshardTxListResponse, error)
+// A *comm.RemoteError reports a business rejection. Other errors signal a
+// handler failure and close the connection via BaseConn.
+type XshardRequestHandler interface {
+	AddXshardTxList(minorBlockHash common.Hash, deposits []*types.DepositTx) error
 }
 
 // XshardConn is a slave-to-slave TCP connection for cross-shard RPCs.
 type XshardConn struct {
 	*conn.BaseConn
 
-	handler XshardHandler
+	handler XshardRequestHandler
 
 	// Each slave hosts one chain, whose ChainID identifies it in the cluster.
 	localChainID  *big.Int
@@ -66,7 +69,7 @@ type XshardConn struct {
 // newXshardConn creates a cross-shard connection to another slave. For outbound
 // connections remoteChainID is that slave's expected chain ID; for inbound
 // connections it is learned from the first PING.
-func newXshardConn(nc net.Conn, maxPayloadSize uint32, localChainID, remoteChainID *big.Int, outbound bool, handler XshardHandler, logger log.Logger) (*XshardConn, error) {
+func newXshardConn(nc net.Conn, maxPayloadSize uint32, localChainID, remoteChainID *big.Int, outbound bool, handler XshardRequestHandler, logger log.Logger) (*XshardConn, error) {
 	if handler == nil {
 		return nil, errors.New("xshard handler must not be nil")
 	}
@@ -111,11 +114,30 @@ func (x *XshardConn) RemoteChainID() *big.Int {
 	return new(big.Int).Set(x.remoteChainID)
 }
 
-// SendAddXshardTxList sends an AddXshardTxListRequest to the peer. A nonzero
-// ErrorCode is returned as *wire.RemoteError; transport and context errors are
-// returned unchanged.
-func (x *XshardConn) SendAddXshardTxList(ctx context.Context, req *wire.AddXshardTxListRequest) error {
-	resp, err := x.SendRPC(ctx, byte(wire.ClusterOpAddXshardTxListRequest), req)
+// SendAddXshardTxList sends deposits from one source block to the remote slave.
+// A nonzero ErrorCode is returned as *comm.RemoteError; transport and context
+// errors are returned unchanged.
+func (x *XshardConn) SendAddXshardTxList(ctx context.Context, minorBlockHash common.Hash, deposits []*types.DepositTx) error {
+	if x.remoteChainID == nil {
+		return errors.New("remote chain ID is unknown")
+	}
+	chainID, err := wire.ChainIDToSSZ(x.remoteChainID)
+	if err != nil {
+		return fmt.Errorf("encode destination chain ID: %w", err)
+	}
+	request := &wire.AddXshardTxListRequest{ChainID: chainID, MinorBlockHash: minorBlockHash}
+	request.DepositTxList = make([]wire.Data, len(deposits))
+	for i, deposit := range deposits {
+		if deposit == nil {
+			return fmt.Errorf("deposit transaction %d must not be nil", i)
+		}
+		encoded, err := rlp.EncodeToBytes(deposit)
+		if err != nil {
+			return fmt.Errorf("encode deposit transaction %d: %w", i, err)
+		}
+		request.DepositTxList[i] = encoded
+	}
+	resp, err := x.SendRPC(ctx, byte(wire.ClusterOpAddXshardTxListRequest), request)
 	if err != nil {
 		return err
 	}
@@ -125,7 +147,7 @@ func (x *XshardConn) SendAddXshardTxList(ctx context.Context, req *wire.AddXshar
 		return fmt.Errorf("unexpected response %T", resp)
 	}
 	if r.ErrorCode != 0 {
-		return &wire.RemoteError{Code: r.ErrorCode}
+		return &comm.RemoteError{Code: r.ErrorCode}
 	}
 
 	return nil
@@ -172,7 +194,30 @@ func (x *XshardConn) handlePing(req wire.SSZMessage) (wire.SSZMessage, error) {
 
 // handleAddXshardTxList delegates to the business handler.
 func (x *XshardConn) handleAddXshardTxList(req wire.SSZMessage) (wire.SSZMessage, error) {
-	return x.handler.AddXshardTxList(req.(*wire.AddXshardTxListRequest))
+	request := req.(*wire.AddXshardTxListRequest)
+	localChainID, err := wire.ChainIDToSSZ(x.localChainID)
+	if err != nil {
+		return nil, err
+	}
+	if request.ChainID != localChainID {
+		return nil, fmt.Errorf("xshard request targets chain %s, local chain is %s", wire.ChainIDFromSSZ(request.ChainID), x.localChainID)
+	}
+	deposits := make([]*types.DepositTx, len(request.DepositTxList))
+	for i, encoded := range request.DepositTxList {
+		deposits[i] = new(types.DepositTx)
+		if err := rlp.DecodeBytes(encoded, deposits[i]); err != nil {
+			return nil, fmt.Errorf("decode deposit transaction %d: %w", i, err)
+		}
+		if deposits[i].Version != types.DepositTxVersion {
+			return nil, fmt.Errorf("decode deposit transaction %d: unsupported deposit version %d", i, deposits[i].Version)
+		}
+	}
+	err = x.handler.AddXshardTxList(request.MinorBlockHash, deposits)
+	code, err := wire.ErrorCode(err)
+	if err != nil {
+		return nil, err
+	}
+	return &wire.AddXshardTxListResponse{ErrorCode: code}, nil
 }
 
 // waitUntilPingReceived blocks until the first PING, connection close, or

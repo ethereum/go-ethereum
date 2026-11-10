@@ -69,6 +69,10 @@ func NewClusterMessage(op ClusterOp) (SSZMessage, error) {
 		return &AddRootBlockRequest{}, nil
 	case ClusterOpAddRootBlockResponse:
 		return &AddRootBlockResponse{}, nil
+	case ClusterOpGetUnconfirmedHeadersRequest:
+		return &GetUnconfirmedHeadersRequest{}, nil
+	case ClusterOpGetUnconfirmedHeadersResponse:
+		return &GetUnconfirmedHeadersResponse{}, nil
 	case ClusterOpAddMinorBlockHeaderRequest:
 		return &AddMinorBlockHeaderRequest{}, nil
 	case ClusterOpAddMinorBlockHeaderResponse:

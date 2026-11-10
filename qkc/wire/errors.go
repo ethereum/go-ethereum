@@ -18,20 +18,22 @@ package wire
 
 import (
 	"errors"
-	"fmt"
+
+	"github.com/ethereum/go-ethereum/qkc/comm"
 )
 
 // ErrInvalidClusterFrame identifies a frame rejected before any bytes are written.
 var ErrInvalidClusterFrame = errors.New("invalid cluster frame")
 
-// RemoteError reports a nonzero business ErrorCode returned by a remote peer.
-// Callers receive it as an error so that a rejected request is never mistaken
-// for success by code that only checks err. Code keeps the peer's original
-// ErrorCode available for callers that need to distinguish results.
-type RemoteError struct {
-	Code uint32
-}
-
-func (e *RemoteError) Error() string {
-	return fmt.Sprintf("remote error code 0x%x", e.Code)
+// ErrorCode converts a business rejection to its wire ErrorCode. Other errors
+// are returned unchanged for the connection layer to treat as handler failures.
+func ErrorCode(err error) (uint32, error) {
+	if err == nil {
+		return 0, nil
+	}
+	var remoteErr *comm.RemoteError
+	if errors.As(err, &remoteErr) {
+		return remoteErr.Code, nil
+	}
+	return 0, err
 }

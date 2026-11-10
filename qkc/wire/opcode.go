@@ -47,6 +47,10 @@ const (
 	ClusterOpAddRootBlockRequest  ClusterOp = 5 + ClusterOpBase // 0x85
 	ClusterOpAddRootBlockResponse ClusterOp = 6 + ClusterOpBase // 0x86
 
+	// Master-to-slave unconfirmed header query.
+	ClusterOpGetUnconfirmedHeadersRequest  ClusterOp = 11 + ClusterOpBase // 0x8b
+	ClusterOpGetUnconfirmedHeadersResponse ClusterOp = 12 + ClusterOpBase // 0x8c
+
 	// Slave-to-Master block notification.
 	ClusterOpAddMinorBlockHeaderRequest  ClusterOp = 17 + ClusterOpBase // 0x91
 	ClusterOpAddMinorBlockHeaderResponse ClusterOp = 18 + ClusterOpBase // 0x92
