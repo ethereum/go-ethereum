@@ -54,7 +54,7 @@ func TestFetcherThrottlesExecutedRejections(t *testing.T) {
 	}{
 		{"coded paymaster", func(s *state.StateDB) {
 			s.SetCode(poolAddress(t, 20), approveCode(program.New(), types.ApprovePayment), tracing.CodeChangeUnspecified)
-		}, txpool.ErrInflightTxLimitReached},
+		}, ErrPaymasterPendingLimit},
 		{"payer exposure", func(s *state.StateDB) {
 			s.SetBalance(poolAddress(t, 20), txCost(winner), tracing.BalanceChangeUnspecified)
 		}, core.ErrInsufficientFunds},

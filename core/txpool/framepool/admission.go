@@ -223,7 +223,7 @@ func (p *FramePool) checkPayer(entry, old *frameTx, payer common.Address, balanc
 		return core.ErrInsufficientFunds
 	}
 	if coded && count >= MaxPendingTxsUsingNonCanonicalPaymaster {
-		return txpool.ErrInflightTxLimitReached
+		return ErrPaymasterPendingLimit
 	}
 	return nil
 }
