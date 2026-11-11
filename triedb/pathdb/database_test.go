@@ -23,7 +23,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"testing"
 
@@ -925,9 +924,9 @@ func (f *crashOnReset) Reset() error {
 
 // TestReactivationCrash checks that the database can be opened after a crash
 // right after its reactivation at the end of a state sync purged the state
-// histories: the persistent state id reset, the removal of the history index
-// and the deletion of the old state's journal must reach the disk before the
-// freezer is reset.
+// histories: the persistent state id reset and the removal of the history index
+// must reach the disk before the freezer is reset, and the next start must
+// discard the old state's journal.
 func TestReactivationCrash(t *testing.T) {
 	maxDiffLayers = 4
 	defer func() {
@@ -937,7 +936,7 @@ func TestReactivationCrash(t *testing.T) {
 	var (
 		kvdb    = newSyncTracker()
 		ancient = t.TempDir()
-		tester  = newTester(t, &testerConfig{layers: 12, journalDir: filepath.Join(t.TempDir(), "triedb"), kvdb: kvdb, ancient: ancient})
+		tester  = newTester(t, &testerConfig{layers: 12, kvdb: kvdb, ancient: ancient})
 
 		released bool
 		addr     = common.Hash{0xaa}
@@ -948,17 +947,23 @@ func TestReactivationCrash(t *testing.T) {
 			tester.release()
 		}
 	}()
-	// Persist everything: a state id above zero, state histories, an index over
-	// them and a journal, all on disk.
+	// Persist everything: a state id above zero, state histories, an index
+	// over them and a journal, which stays in the key-value store once loaded.
 	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
 		t.Fatalf("Failed to commit, err: %v", err)
 	}
+	config := *tester.db.config
+	if err := tester.db.Journal(tester.lastHash()); err != nil {
+		t.Fatalf("Failed to journal, err: %v", err)
+	}
+	tester.db.Close()
+	tester.db = New(tester.db.diskdb, &config)
+
 	storeIndexMetadata(kvdb, typeStateHistory, rawdb.ReadPersistentStateID(kvdb))
 	rawdb.WriteAccountHistoryIndex(kvdb, addr, []byte{1})
 	rawdb.WriteAccountHistoryIndexBlock(kvdb, addr, 0, []byte{1})
 	rawdb.WriteStorageHistoryIndex(kvdb, addr, slot, []byte{1})
 	rawdb.WriteStorageHistoryIndexBlock(kvdb, addr, slot, 0, []byte{1})
-	rawdb.WriteTrieJournal(kvdb, []byte{1})
 	if err := kvdb.SyncKeyValue(); err != nil {
 		t.Fatalf("Failed to sync, err: %v", err)
 	}
@@ -1001,17 +1006,36 @@ func TestReactivationCrash(t *testing.T) {
 		rawdb.ReadStorageHistoryIndex(disk, addr, slot) != nil || rawdb.ReadStorageHistoryIndexBlock(disk, addr, slot, 0) != nil {
 		t.Error("Index entries of the purged state histories survived the crash")
 	}
-	// Nor the old state's journal, loaded at the next start if the sync ended
-	// at its root.
-	if len(rawdb.ReadTrieJournal(disk)) != 0 {
-		t.Error("The journal of the old state survived the crash")
+	// The startup must discard the journal, whose state histories are gone,
+	// and accept the persisted state id.
+	if bottom, _ := openAfterCrash(t, disk, &config); bottom.stateID() != 0 {
+		t.Fatalf("Loaded the old state's journal, disk layer #%d", bottom.stateID())
 	}
-	// The history repair at startup must accept the persisted state id.
-	states, _, err := repairHistory(disk, false, rawdb.ReadPersistentStateID(disk), false)
-	if err != nil {
+}
+
+// openAfterCrash runs the startup's history opening, layer loading and history
+// repair on a database reopened after a crash, and returns the bottom and the
+// head of the loaded layers. New would exit on a failed repair.
+func openAfterCrash(t *testing.T, disk ethdb.Database, config *Config) (layer, layer) {
+	t.Helper()
+
+	db := &Database{diskdb: disk, config: config, hasher: merkleNodeHasher}
+	db.stateFreezer, db.trienodeFreezer = openHistory(disk, config.ReadOnly, config.TrienodeHistory >= 0)
+	t.Cleanup(func() {
+		db.stateFreezer.Close()
+		if db.trienodeFreezer != nil {
+			db.trienodeFreezer.Close()
+		}
+	})
+	head := db.loadLayers()
+	bottom := head
+	for bottom.parentLayer() != nil {
+		bottom = bottom.parentLayer()
+	}
+	if err := repairHistory(disk, db.stateFreezer, db.trienodeFreezer, bottom.stateID()); err != nil {
 		t.Fatalf("Database can't be opened after the crash: %v", err)
 	}
-	states.Close()
+	return bottom, head
 }
 
 func TestCommit(t *testing.T) {
@@ -1129,15 +1153,18 @@ func testCorruptedJournal(t *testing.T, journalDir string, modifyFn func(databas
 	}
 }
 
-// TestRecoverDeletesJournal checks that a rollback within the write buffer
-// doesn't leave the last shutdown's journal behind, referring to truncated
-// state histories after a crash.
-func TestRecoverDeletesJournal(t *testing.T) {
-	testRecoverDeletesJournal(t, "")
-	testRecoverDeletesJournal(t, filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000))))
+// TestJournalAfterRollback checks that a restart after a crash discards the
+// journal of the last shutdown once the histories it needs are gone or
+// replaced, and keeps it after a rollback above its disk layer.
+func TestJournalAfterRollback(t *testing.T) {
+	for _, journalDir := range []string{"", filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000)))} {
+		for _, mode := range []string{"below", "reorg", "above", "trienode"} {
+			testJournalAfterRollback(t, journalDir, mode)
+		}
+	}
 }
 
-func testRecoverDeletesJournal(t *testing.T, journalDir string) {
+func testJournalAfterRollback(t *testing.T, journalDir string, mode string) {
 	// Redefine the diff layer depth allowance for faster testing.
 	maxDiffLayers = 4
 	defer func() {
@@ -1145,9 +1172,10 @@ func testRecoverDeletesJournal(t *testing.T, journalDir string) {
 	}()
 
 	var (
-		kvdb    = newSyncTracker()
-		ancient = t.TempDir()
-		tester  = newTester(t, &testerConfig{layers: 12, journalDir: journalDir, kvdb: kvdb, ancient: ancient})
+		kvdb        = newSyncTracker()
+		ancient     = t.TempDir()
+		writeBuffer = 4 * 1024 * 1024 // no flush after the commit below
+		tester      = newTester(t, &testerConfig{layers: 12, journalDir: journalDir, writeBuffer: &writeBuffer, kvdb: kvdb, ancient: ancient})
 
 		released bool
 	)
@@ -1156,125 +1184,173 @@ func testRecoverDeletesJournal(t *testing.T, journalDir string) {
 			tester.release()
 		}
 	}()
-	extendToBuffer(t, tester)
-
-	config := *tester.db.config
-	disk := tester.db.diskdb
-	if err := tester.db.Journal(tester.lastHash()); err != nil {
-		t.Fatalf("Failed to journal, err: %v", err)
+	// Persist the state, merge two transitions into the write buffer above it
+	// and journal the layers, as at a clean shutdown; then start again.
+	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
+		t.Fatalf("Failed to commit, err: %v", err)
 	}
-	// Nodes from before the journal file keep an older journal in the key-value
-	// store, which is loaded when the file is missing.
-	if journalDir != "" {
-		blob, err := os.ReadFile(tester.db.journalPath())
-		if err != nil {
-			t.Fatalf("Failed to read the journal, err: %v", err)
-		}
-		rawdb.WriteTrieJournal(kvdb, blob)
+	tester.extend(maxDiffLayers + 2)
+
+	var (
+		config    = *tester.db.config
+		disk      = tester.db.diskdb
+		persisted = rawdb.ReadPersistentStateID(kvdb)
+		journaled = tester.db.tree.bottom()
+		head      = tester.lastHash()
+	)
+	if journaled.stateID() != persisted+2 {
+		t.Fatalf("Disk layer #%d on the persistent state #%d", journaled.stateID(), persisted)
+	}
+	if err := tester.db.Journal(head); err != nil {
+		t.Fatalf("Failed to journal, err: %v", err)
 	}
 	tester.db.Close()
 	tester.db = New(disk, &config)
 
-	persisted := rawdb.ReadPersistentStateID(kvdb)
-	if err := tester.db.Recover(tester.roots[tester.bottomIndex()-1]); err != nil {
-		t.Fatalf("Failed to recover, err: %v", err)
+	// Roll back within the write buffer: below the journal's disk layer, or
+	// only what reached the disk layer after the start.
+	target := persisted + 1
+	switch mode {
+	case "above":
+		tester.extend(2)
+		target = journaled.stateID() + 1
+	case "trienode":
+		// No rollback: the trienode history alone is cut below the journal's
+		// disk layer, as a crash between the two histories' syncs can leave it.
+		if _, err := tester.db.trienodeFreezer.TruncateHead(journaled.stateID() - 1); err != nil {
+			t.Fatalf("Failed to truncate the trienode history, err: %v", err)
+		}
+		if err := kvdb.SyncKeyValue(); err != nil {
+			t.Fatalf("Failed to sync, err: %v", err)
+		}
+	}
+	if mode != "trienode" {
+		if err := tester.db.Recover(tester.roots[target-1]); err != nil {
+			t.Fatalf("%s: failed to recover, err: %v", mode, err)
+		}
+	}
+	if mode == "reorg" {
+		// Another chain from the target, reaching the journal's disk layer
+		// within the write buffer.
+		n := int(target)
+		tester.roots, tester.nodes, tester.states = tester.roots[:n], tester.nodes[:n], tester.states[:n]
+		tester.accounts = copyAccounts(tester.snapAccounts[tester.roots[n-1]])
+		tester.storages = copyStorages(tester.snapStorages[tester.roots[n-1]])
+		tester.extend(maxDiffLayers + 1)
+		if err := tester.db.waitWrites(); err != nil {
+			t.Fatalf("Failed to write histories, err: %v", err)
+		}
+		if bottom := tester.db.tree.bottom(); bottom.stateID() != journaled.stateID() || bottom.rootHash() == journaled.rootHash() {
+			t.Fatalf("No other chain's disk layer #%d", journaled.stateID())
+		}
 	}
 	if rawdb.ReadPersistentStateID(kvdb) != persisted {
-		t.Fatal("The rollback changed the persistent state")
+		t.Fatalf("%s: the persistent state changed", mode)
 	}
 	crashed := kvdb.crash()
 	tester.release()
 	released = true
 
-	// Run startup's layer loading and history repair directly: New exits on a
-	// failed repair.
 	reopened, err := rawdb.Open(crashed, rawdb.OpenOptions{Ancient: ancient})
 	if err != nil {
 		t.Fatalf("Failed to reopen database: %v", err)
 	}
 	defer reopened.Close()
 
-	db := &Database{diskdb: reopened, config: &config, hasher: merkleNodeHasher}
-	head := db.loadLayers()
-	for head.parentLayer() != nil {
-		head = head.parentLayer()
+	// Taking the journal would fail the history repair, on which New exits:
+	// run its steps directly.
+	if mode == "below" || mode == "trienode" {
+		if bottom, head := openAfterCrash(t, reopened, &config); bottom.stateID() != persisted || head != bottom {
+			t.Fatalf("%s: loaded the journal, disk layer #%d on the persistent state #%d", mode, bottom.stateID(), persisted)
+		}
+		return
 	}
-	states, _, err := repairHistory(reopened, false, head.stateID(), false)
-	if err != nil {
-		t.Fatalf("Database can't be opened after the crash: %v", err)
+	db := New(reopened, &config)
+	defer db.Close()
+
+	bottom := db.tree.bottom()
+	if mode == "above" {
+		if bottom.stateID() != journaled.stateID() || bottom.rootHash() != journaled.rootHash() || db.tree.get(head) == nil {
+			t.Fatalf("%s: lost the journal's layers, disk layer #%d", mode, bottom.stateID())
+		}
+	} else if bottom.stateID() != persisted || db.tree.len() != 1 {
+		t.Fatalf("%s: loaded the journal, disk layer #%d on the persistent state #%d", mode, bottom.stateID(), persisted)
 	}
-	states.Close()
 }
 
-// TestRecoverJournalSyncFailure checks that a rollback fails without changing
-// anything when the journal directory can't be synced, also on a retry after
-// the file is gone.
-func TestRecoverJournalSyncFailure(t *testing.T) {
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-		t.Skip("Directory permissions aren't enforced")
-	}
+// TestJournalWithoutHistory checks that a journal is taken when there is no
+// history to check it against: an empty write buffer (as after a state sync),
+// no ancient store, or a trienode history just turned on.
+func TestJournalWithoutHistory(t *testing.T) {
 	// Redefine the diff layer depth allowance for faster testing.
 	maxDiffLayers = 4
 	defer func() {
 		maxDiffLayers = 128
 	}()
 
-	journalDir := filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000)))
-	tester := newTester(t, &testerConfig{layers: 12, journalDir: journalDir})
-	defer tester.release()
-	extendToBuffer(t, tester)
+	fresh := newTester(t, &testerConfig{layers: maxDiffLayers})
+	defer fresh.release()
 
-	config := *tester.db.config
-	disk := tester.db.diskdb
+	if bottom := fresh.db.tree.bottom(); bottom.stateID() != 0 {
+		t.Fatalf("Disk layer #%d, want #0", bottom.stateID())
+	}
+	if err := fresh.db.Journal(fresh.lastHash()); err != nil {
+		t.Fatalf("Failed to journal, err: %v", err)
+	}
+	fresh.db.Close()
+	fresh.db = New(fresh.db.diskdb, fresh.db.config)
+	if fresh.db.tree.len() != maxDiffLayers+1 {
+		t.Fatalf("Lost the journal's layers on the disk layer #0: %d left", fresh.db.tree.len())
+	}
+
+	var (
+		kvdb        = memorydb.New()
+		writeBuffer = 4 * 1024 * 1024 // no flush after the commit below
+		tester      = newTester(t, &testerConfig{layers: 12, writeBuffer: &writeBuffer, kvdb: kvdb})
+	)
+	defer tester.release()
+
+	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
+		t.Fatalf("Failed to commit, err: %v", err)
+	}
+	tester.extend(maxDiffLayers + 2)
+
+	var (
+		config    = *tester.db.config
+		journaled = tester.db.tree.bottom()
+	)
+	if journaled.stateID() <= rawdb.ReadPersistentStateID(kvdb) {
+		t.Fatalf("Empty write buffer in the disk layer #%d", journaled.stateID())
+	}
 	if err := tester.db.Journal(tester.lastHash()); err != nil {
 		t.Fatalf("Failed to journal, err: %v", err)
 	}
+	db := New(rawdb.NewDatabase(kvdb), &config)
+	defer db.Close()
+
+	if db.stateFreezer != nil {
+		t.Fatal("State histories without an ancient store")
+	}
+	if bottom := db.tree.bottom(); bottom.stateID() != journaled.stateID() || bottom.rootHash() != journaled.rootHash() {
+		t.Fatalf("Lost the journal's write buffer, disk layer #%d", bottom.stateID())
+	}
+
 	tester.db.Close()
-	tester.db = New(disk, &config)
-
-	// The journal can be removed from its directory, but the directory can't
-	// be opened for the sync.
-	if err := os.Chmod(journalDir, 0300); err != nil {
-		t.Fatalf("Failed to change the journal directory, err: %v", err)
+	ancient, err := tester.db.diskdb.AncientDatadir()
+	if err != nil {
+		t.Fatalf("No ancient store, err: %v", err)
 	}
-	t.Cleanup(func() { os.Chmod(journalDir, 0700) })
-
-	var (
-		target  = tester.roots[tester.bottomIndex()-1]
-		bottom  = tester.db.tree.bottom().stateID()
-		history = func() uint64 {
-			n, err := tester.db.stateFreezer.Ancients()
-			if err != nil {
-				t.Fatalf("Failed to read the state histories, err: %v", err)
-			}
-			return n
-		}
-		histories = history()
-	)
-	for i := 0; i < 2; i++ {
-		if err := tester.db.Recover(target); err == nil {
-			t.Fatalf("Rolled back with the journal's removal not synced, attempt %d", i)
-		}
-		if tester.db.tree.bottom().stateID() != bottom || history() != histories {
-			t.Fatalf("The failed rollback changed the state, attempt %d", i)
-		}
+	trienodes, err := rawdb.NewTrienodeFreezer(ancient, false)
+	if err != nil {
+		t.Fatalf("Failed to open the trienode history, err: %v", err)
 	}
-	if err := os.Chmod(journalDir, 0700); err != nil {
-		t.Fatalf("Failed to change the journal directory, err: %v", err)
+	if err := trienodes.Reset(); err != nil {
+		t.Fatalf("Failed to empty the trienode history, err: %v", err)
 	}
-	if err := tester.db.Recover(target); err != nil {
-		t.Fatalf("Failed to recover, err: %v", err)
-	}
-}
-
-// extendToBuffer extends the tester until a write buffer that isn't empty
-// sits on persisted state.
-func extendToBuffer(t *testing.T, tester *tester) {
-	for i := 0; rawdb.ReadPersistentStateID(tester.db.diskdb) == 0 || tester.db.tree.bottom().buffer.empty(); i++ {
-		if i == 256 {
-			t.Fatal("No persisted state under a write buffer that isn't empty")
-		}
-		tester.extend(1)
+	trienodes.Close()
+	tester.db = New(tester.db.diskdb, &config)
+	if bottom := tester.db.tree.bottom(); bottom.stateID() != journaled.stateID() || bottom.rootHash() != journaled.rootHash() {
+		t.Fatalf("Lost the journal's write buffer over an empty trienode history, disk layer #%d", bottom.stateID())
 	}
 }
 

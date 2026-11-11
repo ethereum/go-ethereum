@@ -45,6 +45,7 @@ var (
 	errUnexpectedVersion = errors.New("unexpected journal version")
 	errMissDiskRoot      = errors.New("disk layer root not found")
 	errUnmatchedJournal  = errors.New("unmatched journal")
+	errUnmatchedHistory  = errors.New("unmatched history")
 )
 
 // journalVersion ensures that an incompatible journal is detected and discarded.
@@ -208,6 +209,29 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	stored := rawdb.ReadPersistentStateID(db.diskdb)
 	if stored > id {
 		return nil, fmt.Errorf("invalid state id: stored %d resolved %d", stored, id)
+	}
+	// A buffered disk layer must match the state history of its id, written as
+	// it reached the disk layer: a rollback below it or a reactivation can
+	// remove or replace that history while the persistent root stays the same.
+	// A trienode history must reach it too, unless its head is zero:
+	// repairHistory starts it there.
+	if id > stored && db.stateFreezer != nil {
+		m, err := readStateHistoryMeta(db.stateFreezer, id)
+		if err != nil {
+			return nil, fmt.Errorf("%w: disk layer #%d: %v", errUnmatchedHistory, id, err)
+		}
+		if m.root != root {
+			return nil, fmt.Errorf("%w: disk layer #%d want %x got %x", errUnmatchedHistory, id, root, m.root)
+		}
+		if db.trienodeFreezer != nil {
+			head, err := db.trienodeFreezer.Ancients()
+			if err != nil {
+				return nil, err
+			}
+			if head != 0 && head < id {
+				return nil, fmt.Errorf("%w: disk layer #%d above the trienode history #%d", errUnmatchedHistory, id, head)
+			}
+		}
 	}
 	// Resolve nodes cached in aggregated buffer
 	var nodes nodeSet
@@ -448,23 +472,5 @@ func (db *Database) Journal(root common.Hash) error {
 	}
 	// Set the db in read only mode to reject all following mutations
 	db.readOnly = true
-	return nil
-}
-
-// deleteJournal removes the journal file and the key-value journal. The caller
-// must hold db.lock. The key-value deletion isn't synced here: the caller must
-// sync the key-value store before it truncates or purges the state histories.
-func (db *Database) deleteJournal() error {
-	rawdb.DeleteTrieJournal(db.diskdb)
-	if path := db.journalPath(); path != "" {
-		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove the journal %s: %v", path, err)
-		}
-		// Sync the directory even if the journal is gone already: an earlier
-		// removal may not be durable yet.
-		if err := syncDir(db.config.JournalDirectory); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to fsync the dir: %v", err)
-		}
-	}
 	return nil
 }
