@@ -283,6 +283,14 @@ func (contract *Contract) chargeDynamicGas(dynFn gasFunc, evm *EVM, stack *Stack
 	} else if !contract.Gas.charge(dynamicCost) {
 		return dynamicCost, ErrOutOfGas
 	}
+	// Apply refills only after the charge succeeds, so they cannot fund the
+	// opcode's execution-gas charge. Ordering does not matter for SSTORE:
+	// its pre-state checks ensure the access cost, its only execution-gas
+	// charge when refilling, is affordable. Future opcodes with inline state-gas
+	// refills may not provide this guarantee.
+	if dynamicCost.StateGasRefill != 0 {
+		contract.Gas.RefundState(dynamicCost.StateGasRefill)
+	}
 	return dynamicCost, nil
 }
 
