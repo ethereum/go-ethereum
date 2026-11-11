@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -168,20 +169,20 @@ func newDatabase(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
 		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.PBTPrefix))
 		db.hasher = pbt.DeserializeAndHash
 	}
+	// Open the histories before loading the journal, which is checked against
+	// them. The partitioned binary tree keeps none: rolling back replays history
+	// through a merkle-patricia trie, which cannot revert it.
+	if !isPBT {
+		db.stateFreezer, db.trienodeFreezer = openHistory(db.diskdb, db.config.ReadOnly, db.config.TrienodeHistory >= 0)
+	}
 	// Construct the layer tree by resolving the in-disk singleton state
 	// and in-memory layer journal.
 	db.tree = newLayerTree(db.loadLayers())
 
 	// Repair the history, which might not be aligned with the persistent
-	// state in the key-value store due to an unclean shutdown. The partitioned
-	// binary tree keeps none: rolling back replays history through a
-	// merkle-patricia trie, which cannot revert it.
-	if !isPBT {
-		states, trienodes, err := repairHistory(db.diskdb, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
-		if err != nil {
-			log.Crit("Failed to repair history", "err", err)
-		}
-		db.stateFreezer, db.trienodeFreezer = states, trienodes
+	// state in the key-value store due to an unclean shutdown.
+	if err := repairHistory(db.diskdb, db.stateFreezer, db.trienodeFreezer, db.tree.bottom().stateID()); err != nil {
+		log.Crit("Failed to repair history", "err", err)
 	}
 
 	// Disable database in case node is still in the initial state sync stage.
@@ -418,11 +419,18 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	if db.trienodeIndexer != nil {
 		db.trienodeIndexer.close()
 	}
-	// Drop the old state's layer journal, in the file and in the key-value
-	// store, before the histories are purged: if the sync ended at its root,
-	// a restart would load it.
-	if err := db.deleteJournal(); err != nil {
-		return err
+	// Drop the layer journal of the old state if exists.
+	if path := db.journalPath(); path != "" {
+		err := os.Remove(path)
+		if err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove stale journal %s: %v", path, err)
+		}
+		if err := syncDir(db.config.JournalDirectory); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to sync the journal directory: %v", err)
+		}
+		if err == nil {
+			log.Debug("Removed stale journal", "path", path)
+		}
 	}
 	// Drop the stale state journal marker and reset the persistent state id
 	// back to zero.
@@ -531,13 +539,6 @@ func (db *Database) Recover(root common.Hash) error {
 	// Short circuit if the target state is not recoverable
 	if !db.Recoverable(root) {
 		return errStateUnrecoverable
-	}
-	// A rollback within the write buffer leaves the persistent state as it was,
-	// so after a crash a journal left behind would be loaded again, with the
-	// state histories it needs truncated. Delete it first; the key-value store
-	// is synced below, before the truncation.
-	if err := db.deleteJournal(); err != nil {
-		return err
 	}
 	// Apply the state histories upon the disk layer in order
 	var (
