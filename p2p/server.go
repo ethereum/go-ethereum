@@ -998,7 +998,7 @@ func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *enode.Node) 
 		dialPub = dialDest.Pubkey()
 	}
 	if qc, ok := fd.(*quic.Conn); ok {
-		c.transport = newQUICTransport(qc, srv.protocolsFor(c))
+		c.transport = newQUICTransport(qc, filterProtocols(srv.Protocols, true))
 	} else {
 		c.transport = srv.newTransport(fd, dialPub)
 	}
