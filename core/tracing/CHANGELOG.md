@@ -4,6 +4,10 @@ All notable changes to the tracing interface will be documented in this file.
 
 ## [Unreleased]
 
+### Behavior changes
+
+- `OnOpcode` and `OnOpcodeV2` now report zero cost when `err` is non-nil. `OnFault` and `OnFaultV2` always report zero cost, including for `REVERT`. This replaces the computed or partial costs previously reported for error events. Zero means the cost is omitted, not that the failed opcode consumes no gas. A pre-execution opcode event may already have reported the computed cost before the fault event.
+
 ### Deprecated methods
 
 - `OnCodeChange(addr common.Address, prevCodeHash common.Hash, prevCode []byte, codeHash common.Hash, code []byte)`: This hook is deprecated in favor of `OnCodeChangeV2` which includes a reason parameter ([#32525](https://github.com/ethereum/go-ethereum/pull/32525)).

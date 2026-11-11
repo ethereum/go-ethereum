@@ -200,6 +200,32 @@ func TestHaltBetweenSteps(t *testing.T) {
 	}
 }
 
+func TestFaultCost(t *testing.T) {
+	tracer, err := newJsTracer(`{
+		costs: [],
+		step: function(log) { this.costs.push([log.getCost(), log.getStateGasCost()]); },
+		fault: function(log) { this.costs.push([log.getCost(), log.getStateGasCost()]); },
+		result: function() { return this.costs; }
+	}`, nil, nil, params.TestChainConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := &vm.ScopeContext{
+		Contract: vm.NewContract(common.Address{}, common.Address{}, new(uint256.Int), vm.GasBudget{}, nil),
+	}
+	evm := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer.Hooks})
+	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
+	tracer.OnOpcodeV2(0, byte(vm.CREATE), tracing.Gas{}, tracing.OpCost{Execution: 32000, State: 183600}, scope, nil, 0, nil)
+	tracer.OnFaultV2(0, byte(vm.CREATE), tracing.Gas{}, tracing.OpCost{}, scope, 0, vm.ErrOutOfGas)
+	result, err := tracer.GetResult()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := string(result), `[[32000,183600],[0,0]]`; have != want {
+		t.Errorf("costs = %s, want %s", have, want)
+	}
+}
+
 // TestNoStepExec tests a regular value transfer (no exec), and accessing the statedb
 // in 'result'
 func TestNoStepExec(t *testing.T) {

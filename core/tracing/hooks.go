@@ -178,18 +178,21 @@ type (
 	ExitHookV2 = func(depth int, output []byte, gasLeft Gas, err error, reverted bool)
 
 	// OpcodeHook is invoked just prior to the execution of an opcode.
+	// If err is non-nil, cost is zero.
 	OpcodeHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
 
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
+	// Cost is zero; a preceding OpcodeHook may already have reported the computed cost.
 	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 
 	// OpcodeHookV2 is the multi-dimensional successor to OpcodeHook: gas is the
 	// budget before the opcode and cost its two-dimensional cost. If both hooks
 	// are set, only V2 is invoked; register at most one.
+	// If err is non-nil, cost is empty, matching OpcodeHook's zero cost.
 	OpcodeHookV2 = func(pc uint64, op byte, gas Gas, cost OpCost, scope OpContext, rData []byte, depth int, err error)
 
 	// FaultHookV2 is the multi-dimensional successor to FaultHook. See OpcodeHookV2
-	// for how the two dimensions relate.
+	// for how the two dimensions relate. Cost is always empty.
 	FaultHookV2 = func(pc uint64, op byte, gas Gas, cost OpCost, scope OpContext, depth int, err error)
 
 	// GasChangeHook reports changes to the execution gas. Tracers

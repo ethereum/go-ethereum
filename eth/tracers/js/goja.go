@@ -363,6 +363,8 @@ func (t *jsTracer) OnFault(pc uint64, op byte, gas tracing.Gas, cost tracing.OpC
 		return
 	}
 	// Other log fields have been already set as part of the last OnOpcode.
+	t.log.cost = cost.Execution
+	t.log.stateCost = cost.State
 	t.log.err = err
 	if _, err := t.fault(t.obj, t.logValue, t.dbValue); err != nil {
 		t.onError("fault", err)
