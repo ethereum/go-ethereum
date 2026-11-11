@@ -19,7 +19,6 @@ package p2p
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -169,83 +168,102 @@ func TestServerQUICListen(t *testing.T) {
 	}
 }
 
+// This test checks the browser side of the QUIC transport against a running
+// Server. The server must offer its browser protocols in the encryption
+// handshake, i.e. before the peer identity is known, because the chosen
+// capabilities are reported to the browser in it.
 func TestQUICTransport(t *testing.T) {
-	ln := newTestQUICListener(t)
-	defer ln.Close()
+	// browserproto forwards the payload of every message it receives.
+	msgCh := make(chan []string, 1)
+	browserProto := Protocol{
+		Name:         "browserproto",
+		Version:      1,
+		Length:       2,
+		AllowBrowser: true,
+		Run: func(p *Peer, rw MsgReadWriter) error {
+			for {
+				msg, err := rw.ReadMsg()
+				if err != nil {
+					return err
+				}
+				var payload []string
+				if err := msg.Decode(&payload); err != nil {
+					return err
+				}
+				msgCh <- payload
+			}
+		},
+	}
+	srv := &Server{
+		Config: Config{
+			PrivateKey:      newkey(),
+			MaxPeers:        10,
+			MaxBrowserPeers: 4,
+			NoDial:          true,
+			NoDiscovery:     true,
+			ListenQUICAddr:  "127.0.0.1:0",
+			Protocols: []Protocol{
+				drainProtocol("nodeproto", false),
+				browserProto,
+			},
+			Logger: testlog.Logger(t, log.LevelError),
+		},
+	}
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer srv.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	serverKey := newkey()
+	// The dialer acts as a browser, announcing both protocols. Only the browser
+	// protocol may be chosen by the server.
 	nonce := make([]byte, quicNonceLen)
 	rand.Read(nonce)
-
-	// The dialer acts as a browser: it reads the server's id-proof and recovers
-	// the server key from the signature over its nonce.
-	type dialResult struct {
-		tr     transport
-		remote *ecdsa.PublicKey
-		err    error
-	}
-	dialCh := make(chan dialResult, 1)
-	go func() {
-		conn, err := dialQUICBrowser(ctx, ln, nonce)
-		if err != nil {
-			dialCh <- dialResult{err: err}
-			return
-		}
-		var hs struct {
-			Proof []byte
-			Caps  []string
-		}
-		if err := rlp.NewStream(conn, 0).Decode(&hs); err != nil {
-			dialCh <- dialResult{err: err}
-			return
-		}
-		remote, err := crypto.SigToPub(crypto.Keccak256([]byte("ENR-key-proof-v1"), nonce), hs.Proof)
-		conn.SetSnappy(true)
-		dialCh <- dialResult{tr: newQUICTransport(conn, nil), remote: remote, err: err}
-	}()
-
-	conn, err := ln.Accept()
+	conn, err := dialQUICBrowser(ctx, srv.quicListener, nonce, "browserproto/1", "nodeproto/1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	lt := newQUICTransport(conn.(*quic.Conn), nil)
-	if _, err := lt.doEncHandshake(serverKey); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := lt.doProtoHandshake(nil); err != nil {
-		t.Fatal(err)
-	}
+	defer conn.Close()
 
-	res := <-dialCh
-	if res.err != nil {
-		t.Fatal(res.err)
+	// The server sends the id-proof and the chosen capabilities in the
+	// encryption handshake. The server key is recovered from the signature over
+	// the nonce.
+	var hs struct {
+		Proof []byte
+		Caps  []string
 	}
-	if !res.remote.Equal(&serverKey.PublicKey) {
+	if err := rlp.NewStream(conn, 0).Decode(&hs); err != nil {
+		t.Fatal(err)
+	}
+	remote, err := crypto.SigToPub(crypto.Keccak256([]byte("ENR-key-proof-v1"), nonce), hs.Proof)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !remote.Equal(&srv.PrivateKey.PublicKey) {
 		t.Fatal("id-proof does not recover the server key")
 	}
-	if !lt.(*quicTransport).conn.SnappyEnabled() {
-		t.Fatal("snappy not enabled after handshake")
+	if len(hs.Caps) != 1 || hs.Caps[0] != "browserproto/1" {
+		t.Fatalf("chosen caps = %v, want [browserproto/1]", hs.Caps)
 	}
 
-	if err := Send(res.tr, 0x42, []string{"hello", "quic"}); err != nil {
+	// Send a message to the browser protocol. QUIC always uses snappy, and the
+	// single chosen protocol starts right after the base protocol messages.
+	conn.SetSnappy(true)
+	if err := Send(newQUICTransport(conn, nil), baseProtocolLength, []string{"hello", "quic"}); err != nil {
 		t.Fatal(err)
 	}
-	msg, err := lt.ReadMsg()
-	if err != nil {
-		t.Fatal(err)
+	select {
+	case payload := <-msgCh:
+		if len(payload) != 2 || payload[0] != "hello" || payload[1] != "quic" {
+			t.Fatalf("payload mismatch: %v", payload)
+		}
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for browserproto to receive the message")
 	}
-	if msg.Code != 0x42 {
-		t.Fatalf("got code %d, want 0x42", msg.Code)
-	}
-	var payload []string
-	if err := msg.Decode(&payload); err != nil {
-		t.Fatal(err)
-	}
-	if len(payload) != 2 || payload[0] != "hello" || payload[1] != "quic" {
-		t.Fatalf("payload mismatch: %v", payload)
+	if c := srv.PeerCount(); c != 1 {
+		t.Fatalf("peer count = %d, want 1", c)
 	}
 }
 
@@ -308,61 +326,5 @@ func drainProtocol(name string, browser bool) Protocol {
 				}
 			}
 		},
-	}
-}
-
-// This test checks that a browser connection can negotiate the capabilities of
-// browser protocols. The protocol list is needed before the peer identity is
-// known, i.e. before the encryption handshake, because the chosen capabilities
-// are reported to the browser in it.
-func TestServerQUICBrowserCaps(t *testing.T) {
-	srv := &Server{
-		Config: Config{
-			PrivateKey:      newkey(),
-			MaxPeers:        10,
-			MaxBrowserPeers: 4,
-			NoDial:          true,
-			NoDiscovery:     true,
-			ListenQUICAddr:  "127.0.0.1:0",
-			Protocols: []Protocol{
-				drainProtocol("nodeproto", false),
-				drainProtocol("browserproto", true),
-			},
-			Logger: testlog.Logger(t, log.LevelError),
-		},
-	}
-	if err := srv.Start(); err != nil {
-		t.Fatal(err)
-	}
-	defer srv.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	nonce := make([]byte, quicNonceLen)
-	rand.Read(nonce)
-
-	conn, err := dialQUICBrowser(ctx, srv.quicListener, nonce, "browserproto/1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-
-	// The server announces the capabilities it chose in the encryption handshake.
-	var hs struct {
-		Proof []byte
-		Caps  []string
-	}
-	if err := rlp.NewStream(conn, 0).Decode(&hs); err != nil {
-		t.Fatal(err)
-	}
-	if len(hs.Caps) != 1 || hs.Caps[0] != "browserproto/1" {
-		t.Fatalf("chosen caps = %v, want [browserproto/1]", hs.Caps)
-	}
-	for i := 0; i < 500 && srv.PeerCount() == 0; i++ {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if c := srv.PeerCount(); c != 1 {
-		t.Fatalf("peer count = %d, want 1", c)
 	}
 }
