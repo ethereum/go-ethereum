@@ -4143,10 +4143,11 @@ func TestCreateAccessListMovedPrecompileExclusion(t *testing.T) {
 	require.NotNil(t, result)
 	require.Empty(t, result.Error)
 
-	// The moved precompile (newSha256Addr) is excluded from the access list.
-	// The vacated address (sha256Addr) is no longer a precompile and must be present.
+	// StateDB.Prepare pre-warms vm.ActivePrecompiles(rules), so the source
+	// address (sha256Addr) remains warm and is excluded, while the destination
+	// (newSha256Addr) is cold and must be present in the access list.
 	expected := &types.AccessList{{
-		Address:     sha256Addr,
+		Address:     newSha256Addr,
 		StorageKeys: []common.Hash{},
 	}}
 	require.Equal(t, expected, result.Accesslist)

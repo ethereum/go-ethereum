@@ -1387,7 +1387,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 
 	// addressesToExclude contains sender, receiver, precompiles and valid authorizations
 	addressesToExclude := map[common.Address]struct{}{args.from(): {}, to: {}}
-	for addr := range precompiles {
+	for _, addr := range vm.ActivePrecompiles(rules) {
 		addressesToExclude[addr] = struct{}{}
 	}
 
