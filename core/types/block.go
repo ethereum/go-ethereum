@@ -201,8 +201,8 @@ type Body struct {
 //   - When new body data is attached to the block, a shallow copy of the block is returned.
 //     This ensures block modifications are race-free.
 //
-//   - We do not copy body data on access because it does not affect the caches, and also
-//     because it would be too expensive.
+//   - We do not copy body data on access because it would be too expensive. Callers must
+//     not modify it, as the cached body roots rely on it.
 type Block struct {
 	header       *Header
 	uncles       []*Header
@@ -214,7 +214,9 @@ type Block struct {
 	hash atomic.Pointer[common.Hash]
 	size atomic.Uint64
 
-	// roots derived from the body, set by NewBlockFromBody
+	// Roots derived from the body. Only NewBlockFromBody sets them, and copies that
+	// keep the same body carry them over. They are only valid if the body has not
+	// been modified since the block was constructed.
 	txHash          *common.Hash
 	withdrawalsHash *common.Hash
 
@@ -600,8 +602,9 @@ func (b *Block) Hash() common.Hash {
 	return h
 }
 
-// DeriveTxHash returns the root of the block's transactions. Blocks made by
-// NewBlockFromBody already know it, others derive it with hasher.
+// DeriveTxHash returns the root of the block's transactions. NewBlockFromBody is
+// the only constructor that caches it, and the cached root is only valid if the
+// block has not been mutated since. Blocks without it derive the root with hasher.
 func (b *Block) DeriveTxHash(hasher ListHasher) common.Hash {
 	if b.txHash != nil {
 		return *b.txHash
@@ -609,8 +612,9 @@ func (b *Block) DeriveTxHash(hasher ListHasher) common.Hash {
 	return DeriveSha(b.transactions, hasher)
 }
 
-// DeriveWithdrawalsHash returns the root of the block's withdrawals. Blocks made
-// by NewBlockFromBody already know it, others derive it with hasher.
+// DeriveWithdrawalsHash returns the root of the block's withdrawals. NewBlockFromBody
+// is the only constructor that caches it, and the cached root is only valid if the
+// block has not been mutated since. Blocks without it derive the root with hasher.
 func (b *Block) DeriveWithdrawalsHash(hasher ListHasher) common.Hash {
 	if b.withdrawalsHash != nil {
 		return *b.withdrawalsHash
