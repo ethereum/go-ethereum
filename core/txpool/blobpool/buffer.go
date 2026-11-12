@@ -42,6 +42,8 @@ var (
 	blobBufferTotalTxBytes      = metrics.NewRegisteredGauge("blobpool/buffer/txbytes", nil)
 	blobBufferTotalCellBytes    = metrics.NewRegisteredGauge("blobpool/buffer/cellbytes", nil)
 	blobBufferOverflowCounter   = metrics.NewRegisteredCounter("blobpool/buffer/overflow", nil)
+	blobBufferExtendedCounter   = metrics.NewRegisteredCounter("blobpool/buffer/extended", nil)
+	blobBufferExtendFailCounter = metrics.NewRegisteredCounter("blobpool/buffer/extendfail", nil)
 )
 
 const (
@@ -175,7 +177,7 @@ func (b *BlobBuffer) AddTx(txs []*types.Transaction, peer string) []error {
 			continue
 		}
 		if entry, ok := b.cells[hash]; ok {
-			b.storeCompleted(hash, tx, entry)
+			b.storeCompleted(hash, &txEntry{tx: tx, peer: peer, added: time.Now(), size: tx.Size()}, entry)
 			continue
 		}
 		// Refuse the transaction if the peer has exhausted its allowance.
@@ -214,7 +216,7 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 
 	// Check if this delivery completes the entry
 	if txe, ok := b.txs[hash]; ok {
-		b.storeCompleted(hash, txe.tx, entry)
+		b.storeCompleted(hash, txe, entry)
 		return
 	}
 
@@ -228,10 +230,11 @@ func (b *BlobBuffer) AddCells(hash common.Hash, deliveries map[string]*PeerDeliv
 	blobBufferCellsFirstCounter.Inc(1)
 }
 
-// storeCompleted verifies cells per-peer, sorts them, and schedules them for
-// addition into the pool. The actual addition happens in Flush().
-func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cells *cellEntry) {
-	sidecar := tx.BlobTxSidecar()
+// storeCompleted verifies cells per-peer, sorts them, extends them to the full
+// sell set if possible, and schedules the transaction for addition into the pool.
+// the actual addition happens in Flush().
+func (b *BlobBuffer) storeCompleted(hash common.Hash, txe *txEntry, cells *cellEntry) {
+	sidecar := txe.tx.BlobTxSidecar()
 
 	// Per-peer cell verification
 	if badPeers := b.verifyCells(cells, sidecar); len(badPeers) > 0 {
@@ -240,7 +243,7 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 		b.removeTx(hash)
 		return
 	}
-	blobCount := len(tx.BlobHashes())
+	blobCount := len(txe.tx.BlobHashes())
 
 	sorted, custody, err := sortCells(cells, blobCount)
 	if err != nil {
@@ -250,6 +253,30 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 		b.removeTx(hash)
 		return
 	}
+
+	// If enough cells were collected to reconstruct the blobs, recover the
+	// remaining cells locally so the node can serve all of them.
+
+	// TODO: this runs with b.mu held and on the caller's goroutine, so it
+	// stalls the blob fetcher loop, flush, and every AddTx for its duration.
+	// Take the entry outside the lock, extend unlocked, and re-lock only to
+	// append the result.
+	if n := custody.OneCount(); n >= kzg4844.DataPerBlob && n < kzg4844.CellsPerBlob {
+		extended, err := extendCells(sidecar, sorted, custody)
+		if err != nil {
+			// This code path is reachable by a peer with a corrupt proof set, so
+			// drop the peer who delivered tx.
+			log.Debug("Dropping blob tx with unverifiable extension proofs", "hash", hash, "err", err)
+			blobBufferExtendFailCounter.Inc(1)
+			b.removeCells(hash)
+			b.removeTx(hash)
+			b.cb.DropPeer(txe.peer)
+			return
+		}
+		sorted, custody = extended, types.CustodyBitmapAll
+		blobBufferExtendedCounter.Inc(1)
+	}
+
 	cellSidecar := types.BlobTxCellSidecar{
 		Version:     sidecar.Version,
 		Commitments: sidecar.Commitments,
@@ -258,7 +285,7 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, tx *types.Transaction, cel
 		Custody:     custody,
 	}
 	pooledTx := &BlobTxForPool{
-		Tx:          tx.WithoutBlobTxSidecar(),
+		Tx:          txe.tx.WithoutBlobTxSidecar(),
 		CellSidecar: &cellSidecar,
 	}
 
@@ -507,4 +534,34 @@ func sortCells(entry *cellEntry, blobCount int) ([]kzg4844.Cell, types.CustodyBi
 		}
 	}
 	return res, custody, nil
+}
+
+// extendCells recovers the full cell set from at least DataPerBlob verified cells per
+// blob, and verifies the recovered cells against the sidecar proofs. Those proofs could
+// not be checked before, because their cells did not exist until reconstruction.
+func extendCells(sidecar *types.BlobTxSidecar, cells []kzg4844.Cell, custody types.CustodyBitmap) ([]kzg4844.Cell, error) {
+	blobCount := len(sidecar.Commitments)
+	if len(sidecar.Proofs) != blobCount*kzg4844.CellProofsPerBlob {
+		return nil, fmt.Errorf("invalid number of cell proofs: %d", len(sidecar.Proofs))
+	}
+	all, err := kzg4844.RecoverCells(cells, custody.Indices())
+	if err != nil {
+		return nil, err
+	}
+	// Verify the recovered cells, which are not previously verified.
+	var (
+		newIndices = types.CustodyBitmapAll.Difference(custody).Indices()
+		vcells     = make([]kzg4844.Cell, 0, blobCount*len(newIndices))
+		vproofs    = make([]kzg4844.Proof, 0, blobCount*len(newIndices))
+	)
+	for b := range blobCount {
+		for _, idx := range newIndices {
+			vcells = append(vcells, all[b*kzg4844.CellsPerBlob+int(idx)])
+			vproofs = append(vproofs, sidecar.Proofs[b*kzg4844.CellProofsPerBlob+int(idx)])
+		}
+	}
+	if err := kzg4844.VerifyCells(vcells, sidecar.Commitments, vproofs, newIndices); err != nil {
+		return nil, err
+	}
+	return all, nil
 }

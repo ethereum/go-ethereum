@@ -472,7 +472,7 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 				if gasCapped {
 					msg += " (gas limit was capped by the RPC server's global gas cap)"
 				}
-				callRes.Error = &callError{Message: msg, Code: errCodeVMError}
+				callRes.Error = &callError{Message: msg, Code: ErrCodeVMError}
 			}
 		} else {
 			callRes.Status = hexutil.Uint64(types.ReceiptStatusSuccessful)

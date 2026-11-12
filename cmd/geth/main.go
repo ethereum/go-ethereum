@@ -60,7 +60,6 @@ var (
 		utils.OverrideAmsterdam,
 		utils.OverrideBPO1,
 		utils.OverrideBPO2,
-		utils.OverrideUBT,
 		utils.OverrideGenesisFlag,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
@@ -91,7 +90,6 @@ var (
 		utils.StateHistoryFlag,
 		utils.TrienodeHistoryFlag,
 		utils.TrienodeHistoryFullValueCheckpointFlag,
-		utils.BinTrieGroupDepthFlag,
 		utils.LightKDFFlag,
 		utils.EthRequiredBlocksFlag,
 		utils.CacheFlag,
@@ -107,8 +105,11 @@ var (
 		utils.MemoryLimitFlag,
 		utils.GOGCFlag,
 		utils.CryptoKZGFlag,
+		utils.CryptoKZGLazyFlag,
 		utils.ListenPortFlag,
 		utils.DiscoveryPortFlag,
+		utils.QUICPortFlag,
+		utils.QUICMaxBrowsersFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
 		utils.MinerGasLimitFlag,
@@ -234,8 +235,6 @@ func init() {
 		utils.ShowDeprecated,
 		// See snapshot.go
 		snapshotCommand,
-		// See bintrie_convert.go
-		bintrieCommand,
 	}
 	if logTestCommand != nil {
 		app.Commands = append(app.Commands, logTestCommand)

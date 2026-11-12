@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
+	"github.com/ethereum/go-ethereum/eth/protocols/webtx"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -246,7 +247,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			StateHistory:            config.StateHistory,
 			TrienodeHistory:         config.TrienodeHistory,
 			NodeFullValueCheckpoint: config.NodeFullValueCheckpoint,
-			BinTrieGroupDepth:       config.BinTrieGroupDepth,
 			StateScheme:             scheme,
 			HistoryPolicy:           histPolicy,
 			TxLookupLimit:           int64(min(config.TransactionHistory, math.MaxInt64)),
@@ -256,7 +256,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			// Enables file journaling for the trie database. The journal files will be stored
 			// within the data directory. The corresponding paths will be either:
 			// - DATADIR/triedb/merkle.journal
-			// - DATADIR/triedb/verkle.journal
+			// - DATADIR/triedb/pbt.journal
 			TrieJournalDirectory: stack.ResolvePath("triedb"),
 			SlowBlockThreshold:   config.SlowBlockThreshold,
 
@@ -288,9 +288,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	if config.OverrideBPO2 != nil {
 		overrides.OverrideBPO2 = config.OverrideBPO2
-	}
-	if config.OverrideUBT != nil {
-		overrides.OverrideUBT = config.OverrideUBT
 	}
 	options.Overrides = &overrides
 
@@ -467,6 +464,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 		advertiseV2 := dl.SnapSyncVersion() == snap.SNAP2 || dl.ConfigSyncMode() != ethconfig.SnapSync
 		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), advertiseV2)...)
 	}
+	protos = append(protos, webtx.NewProtocol(s.handler.txpool))
 	return protos
 }
 

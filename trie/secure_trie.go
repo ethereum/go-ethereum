@@ -370,6 +370,6 @@ func (t *StateTrie) MustNodeIterator(start []byte) NodeIterator {
 	return t.trie.MustNodeIterator(start)
 }
 
-func (t *StateTrie) IsUBT() bool {
+func (t *StateTrie) IsPBT() bool {
 	return false
 }

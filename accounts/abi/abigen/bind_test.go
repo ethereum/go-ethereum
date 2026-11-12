@@ -1467,17 +1467,24 @@ var bindTests = []struct {
 		// Finish deploy.
 		sim.Commit()
 
+		// Subscribe before sending the transactions, so the events can't be missed
+		barSink := make(chan *OverloadBar)
+		sub, err := contract.WatchBar(nil, barSink)
+		if err != nil {
+			t.Fatalf("Failed to subscribe to bar events: %v", err)
+		}
+		defer sub.Unsubscribe()
+
+		bar0Sink := make(chan *OverloadBar0)
+		sub0, err := contract.WatchBar0(nil, bar0Sink)
+		if err != nil {
+			t.Fatalf("Failed to subscribe to bar0 events: %v", err)
+		}
+		defer sub0.Unsubscribe()
+
 		resCh, stopCh := make(chan uint64), make(chan struct{})
 
 		go func() {
-			barSink := make(chan *OverloadBar)
-			sub, _ := contract.WatchBar(nil, barSink)
-			defer sub.Unsubscribe()
-
-			bar0Sink := make(chan *OverloadBar0)
-			sub0, _ := contract.WatchBar0(nil, bar0Sink)
-			defer sub0.Unsubscribe()
-
 			for {
 				select {
 				case ev := <-barSink:

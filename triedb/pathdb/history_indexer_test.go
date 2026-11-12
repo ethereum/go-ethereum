@@ -29,7 +29,7 @@ import (
 func TestHistoryIndexerShortenDeadlock(t *testing.T) {
 	// log.SetDefault(log.NewLogger(log.NewTerminalHandlerWithLevel(os.Stderr, log.LevelDebug, true)))
 	db := rawdb.NewMemoryDatabase()
-	freezer, _ := rawdb.NewStateFreezer(t.TempDir(), false, false)
+	freezer, _ := rawdb.NewStateFreezer(t.TempDir(), false)
 	defer freezer.Close()
 
 	histories := makeStateHistories(100)

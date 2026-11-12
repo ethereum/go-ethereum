@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/triedb/database"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -480,7 +481,7 @@ func checkStateAvail(state stateIdent, exptyp historyType, freezer ethdb.Ancient
 	// stateID+1 == firstID is allowed, as all the subsequent history entries
 	// are present with no gap inside.
 	if stateID < tail {
-		return 0, fmt.Errorf("historical state has been pruned, first: %d, state: %d", tail+1, stateID)
+		return 0, fmt.Errorf("%w: historical state has been pruned, first: %d, state: %d", database.ErrStateUnavailable, tail+1, stateID)
 	}
 	// To serve the request, all history entries from stateID+1 to lastID
 	// must be indexed. The histories are written in background, wait for the

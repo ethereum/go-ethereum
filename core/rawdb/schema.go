@@ -135,12 +135,13 @@ var (
 	StateHistoryStorageBlockPrefix    = []byte("mbs") // StateHistoryStorageBlockPrefix + account address hash + storage slot hash + blockID => slot block
 	TrienodeHistoryBlockPrefix        = []byte("mbt") // TrienodeHistoryBlockPrefix + account address hash + trienode path + blockID => trienode block
 
-	// VerklePrefix is the database prefix for Verkle trie data, which includes:
+	// PBTPrefix is the database prefix for the EIP-8297 partitioned binary
+	// tree data, which includes:
 	// (a) Trie nodes
 	// (b) In-memory trie node journal
 	// (c) Persistent state ID
 	// (d) State ID lookups, etc.
-	VerklePrefix = []byte("v")
+	PBTPrefix = []byte("p")
 
 	PreimagePrefix = []byte("secure-key-")       // PreimagePrefix + hash -> preimage
 	configPrefix   = []byte("ethereum-config-")  // config prefix for the db
@@ -165,9 +166,6 @@ var (
 	preimageCounter     = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitsCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
 	preimageMissCounter = metrics.NewRegisteredCounter("db/preimage/miss", nil)
-
-	// Verkle transition information
-	VerkleTransitionStatePrefix = []byte("verkle-transition-state-")
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary
@@ -459,9 +457,4 @@ func trienodeHistoryIndexBlockKey(addressHash common.Hash, path []byte, blockID 
 	binary.BigEndian.PutUint32(out[off:], blockID)
 
 	return out
-}
-
-// transitionStateKey = transitionStatusKey + hash
-func transitionStateKey(hash common.Hash) []byte {
-	return append(VerkleTransitionStatePrefix, hash.Bytes()...)
 }

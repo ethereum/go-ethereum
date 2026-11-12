@@ -499,7 +499,7 @@ func (api *BlockChainAPI) GetHeaderByNumber(ctx context.Context, number rpc.Bloc
 	}
 	header, err := api.b.HeaderByNumber(ctx, number)
 	if err != nil {
-		if number == rpc.SafeBlockNumber || number == rpc.FinalizedBlockNumber {
+		if errors.Is(err, ErrSafeBlockNotFound) || errors.Is(err, ErrFinalizedBlockNotFound) {
 			return nil, nil
 		}
 		return nil, err
