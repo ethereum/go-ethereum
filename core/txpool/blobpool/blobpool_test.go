@@ -2530,3 +2530,59 @@ func TestGetRLPCache(t *testing.T) {
 		t.Fatalf("expected nil after the tx left the pool, got %d bytes", len(got))
 	}
 }
+
+// TestFeedDeadlock verifies that event subscriber callback or read handling
+// that synchronously queries the pool (e.g. GetMetadata or Has) does not
+// deadlock with BlobPool.Add.
+func TestFeedDeadlock(t *testing.T) {
+	storage := t.TempDir()
+	key, _ := crypto.GenerateKey()
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+	tx := makeMultiBlobTx(0, 10, 2000, 200, 1, 0, key)
+
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
+	statedb.Commit(params.Rules{IsEIP158: true}, 0)
+	chain := &testBlockChain{
+		config:  params.MainnetChainConfig,
+		basefee: uint256.NewInt(1050),
+		blobfee: uint256.NewInt(105),
+		statedb: statedb,
+	}
+	pool := New(Config{Datadir: storage}, chain, nil)
+	if err := pool.Init(1, chain.CurrentBlock(), newReserver()); err != nil {
+		t.Fatalf("failed to create blob pool: %v", err)
+	}
+	defer pool.Close()
+
+	ch := make(chan core.NewTxsEvent, 1)
+	sub := pool.SubscribeTransactions(ch, false)
+	defer sub.Unsubscribe()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		select {
+		case ev := <-ch:
+			for _, tx := range ev.Txs {
+				// Query metadata or pool existence under feed notification.
+				// If p.lock is held during feed send, this deadlocks.
+				_ = pool.GetMetadata(tx.Hash())
+				_ = pool.Has(tx.Hash())
+			}
+		case <-time.After(3 * time.Second):
+			t.Errorf("timed out waiting for transaction event")
+		}
+	}()
+
+	errs := pool.Add([]*types.Transaction{tx}, true)
+	if len(errs) != 1 || errs[0] != nil {
+		t.Fatalf("failed to add transaction: %v", errs)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("deadlock detected while receiving feed event and querying pool")
+	}
+}

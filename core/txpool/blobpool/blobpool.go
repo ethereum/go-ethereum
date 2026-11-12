@@ -1250,7 +1250,6 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	waitStart := time.Now()
 	p.lock.Lock()
 	resetwaitHist.Update(time.Since(waitStart).Nanoseconds())
-	defer p.lock.Unlock()
 
 	defer func(start time.Time) {
 		resettimeHist.Update(time.Since(start).Nanoseconds())
@@ -1261,16 +1260,22 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 
 	statedb, err := p.chain.StateAt(newHead.Root, newHead.Number, newHead.Time)
 	if err != nil {
+		p.lock.Unlock()
 		log.Error("Failed to reset blobpool state", "err", err)
 		return
 	}
 	p.head.Store(newHead)
 	p.state = statedb
 
+	var (
+		adds        []*types.Transaction
+		promoted    []*types.Transaction
+		announcable []*types.Transaction
+	)
+
 	// Run the reorg between the old and new head and figure out which accounts
 	// need to be rechecked and which transactions need to be readded
 	if reinject, inclusions := p.reorg(oldHead, newHead); reinject != nil {
-		var adds []*types.Transaction
 		for addr, txs := range reinject {
 			// Blindly push all the lost transactions back into the pool
 			for _, tx := range txs {
@@ -1281,9 +1286,6 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 			// Recheck the account's pooled transactions to drop included and
 			// invalidated ones
 			p.recheck(addr, inclusions)
-		}
-		if len(adds) > 0 {
-			p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
 		}
 	}
 	// Flush out any blobs from limbo that are older than the latest finality
@@ -1301,11 +1303,10 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	p.evict.reinit(basefee, blobfee, false)
 	// The new head may have filled nonce gaps, promote what became executable
 	for from := range p.gapped {
-		p.promoteGapped(from)
+		p.promoteGapped(from, &promoted)
 	}
 
 	// Announce transactions that became announcable due to fee changes
-	var announcable []*types.Transaction
 	for addr, txs := range p.index {
 		for i, meta := range txs {
 			if !meta.announced && (i == 0 || txs[i-1].announced) && p.isAnnouncable(meta) {
@@ -1330,14 +1331,26 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 			}
 		}
 	}
-	if len(announcable) > 0 {
-		p.discoverFeed.Send(core.NewTxsEvent{Txs: announcable})
-	}
 
 	// Update the basefee and blobfee metrics
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
 	p.updateStorageMetrics()
+
+	// Unlock before broadcasting events to avoid deadlock with subscribers
+	// that might query the pool under lock.
+	p.lock.Unlock()
+
+	if len(adds) > 0 {
+		p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
+	}
+	if len(promoted) > 0 {
+		p.discoverFeed.Send(core.NewTxsEvent{Txs: promoted})
+		p.insertFeed.Send(core.NewTxsEvent{Txs: promoted})
+	}
+	if len(announcable) > 0 {
+		p.discoverFeed.Send(core.NewTxsEvent{Txs: announcable})
+	}
 }
 
 // vhashesByTx returns a snapshot of the mapping between transaction hash and
@@ -2085,19 +2098,26 @@ func (p *BlobPool) AddPooledTx(ptx *BlobTxForPool) (err error) {
 	waitStart := time.Now()
 	p.lock.Lock()
 	addwaitHist.Update(time.Since(waitStart).Nanoseconds())
-	defer p.lock.Unlock()
 
 	defer func(start time.Time) {
 		addtimeHist.Update(time.Since(start).Nanoseconds())
 	}(time.Now())
 
-	return p.addLocked(ptx, true)
+	var announced []*types.Transaction
+	err = p.addLocked(ptx, true, &announced)
+	p.lock.Unlock()
+
+	if len(announced) > 0 {
+		p.discoverFeed.Send(core.NewTxsEvent{Txs: announced})
+		p.insertFeed.Send(core.NewTxsEvent{Txs: announced})
+	}
+	return err
 }
 
 // addLocked inserts a new blob transaction into the pool if it passes validation (both
 // consensus validity and pool restrictions). It must be called with the pool lock held.
 // Only for internal use.
-func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
+func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool, announced *[]*types.Transaction) (err error) {
 	tx := ptx.Tx
 
 	// Ensure the transaction is valid from all perspectives
@@ -2274,22 +2294,23 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 	// includable and the previous one was already announced.
 	if p.isAnnouncable(meta) && (meta.nonce == next || (len(txs) > 1 && txs[offset-1].announced)) {
 		meta.announced = true
-		p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
-		p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+		if announced != nil {
+			*announced = append(*announced, tx.WithoutBlobTxSidecar())
+		}
 	} else {
 		log.Trace("Blob transaction not announcable yet", "hash", tx.Hash(), "nonce", tx.Nonce())
 	}
 
 	//check the gapped queue for this account and try to promote
 	if checkGapped {
-		p.promoteGapped(from)
+		p.promoteGapped(from, announced)
 	}
 	return nil
 }
 
 // promoteGapped moves gapped transactions of an account into the pool once their
 // nonce gap is filled. The caller must hold the pool lock.
-func (p *BlobPool) promoteGapped(from common.Address) {
+func (p *BlobPool) promoteGapped(from common.Address, announced *[]*types.Transaction) {
 	if gtxs, ok := p.gapped[from]; ok && len(gtxs) > 0 {
 		// We have to add in nonce order, but we want to stable sort to cater for situations
 		// where transactions are replaced, keeping the original receive order for same nonce
@@ -2323,7 +2344,7 @@ func (p *BlobPool) promoteGapped(from common.Address) {
 				// If we hit the pending range, including the first gap, add it and continue to try to add more.
 				// We do not recurse here, but continue to loop instead.
 				// We are under lock, so we can add the transaction directly.
-				if err := p.addLocked(ptx, false); err == nil {
+				if err := p.addLocked(ptx, false, announced); err == nil {
 					gappedPromotedMeter.Mark(1)
 					log.Trace("Gapped blob transaction added to pool", "hash", ptx.Tx.Hash(), "from", from, "nonce", ptx.Tx.Nonce(), "qlen", len(p.gapped[from]))
 				} else {
