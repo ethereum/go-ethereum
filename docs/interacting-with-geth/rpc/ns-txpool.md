@@ -13,6 +13,8 @@ The result is an object with two fields `pending` and `queued`. Each of these fi
 
 Please note, there may be multiple transactions associated with the same account and nonce. This can happen if the user broadcast multiple ones with varying gas allowances (or even completely different transactions).
 
+Note: blob transactions (type 3) are not listed by this method. Use `txpool_status` to count them; it includes blob transactions.
+
 | Client  | Method invocation                                                     |
 | :-----: | --------------------------------------------------------------------- |
 |   Go    | `txpool.Content() (map[string]map[string]map[string]*RPCTransaction)` |
@@ -108,6 +110,8 @@ Please note, there may be multiple transactions associated with the same account
 
 Retrieves the transactions contained within the txpool, returning pending as well as queued transactions of this address, grouped by nonce.
 
+Note: blob transactions (type 3) are not listed by this method. Use `txpool_status` to count them; it includes blob transactions.
+
 | Client  | Method invocation                                      |
 | :-----: | ------------------------------------------------------ |
 | Console | `txpool.contentFrom(address)`                          |
@@ -120,6 +124,8 @@ The `inspect` inspection property can be queried to list a textual summary of al
 The result is an object with two fields `pending` and `queued`. Each of these fields are associative arrays, in which each entry maps an origin-address to a batch of scheduled transactions. These batches themselves are maps associating nonces with transactions summary strings.
 
 Please note, there may be multiple transactions associated with the same account and nonce. This can happen if the user broadcast multiple ones with varying gas allowances (or even completely different transactions).
+
+Note: blob transactions (type 3) are not listed by this method. Use `txpool_status` to count them; it includes blob transactions.
 
 | Client  | Method invocation                                            |
 | :-----: | ------------------------------------------------------------ |
