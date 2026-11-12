@@ -17,11 +17,14 @@
 package override
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
 	"math/big"
+	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -50,6 +53,69 @@ type OverrideAccount struct {
 
 // StateOverride is the collection of overridden accounts.
 type StateOverride map[common.Address]OverrideAccount
+
+// UnmarshalJSON rejects account override keys that are not defined.
+// encoding/json alone ignores unknown keys.
+func (diff *StateOverride) UnmarshalJSON(input []byte) error {
+	var raw map[common.Address]json.RawMessage
+	if err := json.Unmarshal(input, &raw); err != nil {
+		return err
+	}
+	if raw == nil {
+		*diff = nil
+		return nil
+	}
+	overrides := make(StateOverride, len(raw))
+	for _, addr := range slices.SortedFunc(maps.Keys(raw), common.Address.Cmp) {
+		if err := CheckOverrideKeys(raw[addr], reflect.TypeFor[OverrideAccount](), "state override for "+addr.Hex()); err != nil {
+			return err
+		}
+		var account OverrideAccount
+		if err := json.Unmarshal(raw[addr], &account); err != nil {
+			return err
+		}
+		overrides[addr] = account
+	}
+	*diff = overrides
+	return nil
+}
+
+// CheckOverrideKeys returns an error for a key of the JSON object that does not
+// name a field of t, or that names a field another key already names. Names
+// match case-insensitively, as in encoding/json. Repeated identical keys cannot
+// be seen here; encoding/json keeps the last one.
+func CheckOverrideKeys(input json.RawMessage, t reflect.Type, what string) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(input, &keys); err != nil || keys == nil {
+		return nil
+	}
+	seen := make(map[int]string)
+	for _, key := range slices.Sorted(maps.Keys(keys)) {
+		field := -1
+		for i := 0; i < t.NumField(); i++ {
+			f := t.Field(i)
+			name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+			if !f.IsExported() || name == "-" {
+				continue
+			}
+			if name == "" {
+				name = f.Name
+			}
+			if strings.EqualFold(key, name) {
+				field = i
+				break
+			}
+		}
+		if field < 0 {
+			return fmt.Errorf("unknown field %q in %s", key, what)
+		}
+		if prev, ok := seen[field]; ok {
+			return fmt.Errorf("keys %q and %q in %s name the same field", prev, key, what)
+		}
+		seen[field] = key
+	}
+	return nil
+}
 
 func (diff *StateOverride) has(address common.Address) bool {
 	_, ok := (*diff)[address]
