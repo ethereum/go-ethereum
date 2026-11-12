@@ -250,8 +250,7 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 }
 
 // computeMemorySize runs an operation's memorySize function and word-aligns the
-// result, guarding overflow. The traced loop and the default case call it, and the
-// direct-call ops splice its body with memFn bound to the opcode's own function.
+// result, guarding overflow.
 func computeMemorySize(memFn memorySizeFunc, stack *Stack) (uint64, error) {
 	memSize, overflow := memFn(stack)
 	if overflow {
@@ -267,8 +266,7 @@ func computeMemorySize(memFn memorySizeFunc, stack *Stack) (uint64, error) {
 
 // chargeDynamicGas runs an operation's dynamicGas function, treats a computation
 // failure as out of gas, and charges the cost. It returns the cost so the traced
-// loop can report it. The traced loop and the default case call it, and the
-// direct-call ops splice its body with dynFn bound to the opcode's own function.
+// loop can report it.
 func (contract *Contract) chargeDynamicGas(dynFn gasFunc, evm *EVM, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 	dynamicCost, gerr := dynFn(evm, contract, stack, mem, memorySize)
 	if gerr != nil {
@@ -297,8 +295,7 @@ func (contract *Contract) chargeDynamicGas(dynFn gasFunc, evm *EVM, stack *Stack
 // meterDynamicGas sizes the memory an operation needs and charges its dynamic
 // gas, returning the size to expand to and the charged cost (which the traced
 // loop reports). The caller expands the memory afterward. computeMemorySize and
-// chargeDynamicGas do the work, guarded here for the generic table paths. The
-// direct-call ops splice those two by name and skip the guards.
+// chargeDynamicGas do the work.
 func (contract *Contract) meterDynamicGas(operation *operation, evm *EVM, stack *Stack, mem *Memory) (memorySize uint64, dynamicCost GasCosts, err error) {
 	if operation.dynamicGas != nil {
 		if operation.memorySize != nil {
