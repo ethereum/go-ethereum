@@ -21,12 +21,17 @@ package eth
 
 import (
 	"crypto/rand"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 // testPeer is a simulated peer to allow testing direct network calls.
@@ -76,6 +81,7 @@ func TestBufferReceiptsNoProgress(t *testing.T) {
 		for i := 0; i < blocks; i++ {
 			req.request = append(req.request, common.Hash{byte(i + 1)})
 			req.gasUsed = append(req.gasUsed, 1_000_000)
+			req.numbers = append(req.numbers, uint64(i+1))
 			req.timestamps = append(req.timestamps, 0)
 		}
 		p.receiptBuffer[id] = req
@@ -101,6 +107,82 @@ func TestBufferReceiptsNoProgress(t *testing.T) {
 	}
 	if _, ok := p.receiptBuffer[2]; !ok {
 		t.Fatal("buffer entry missing after valid incomplete response")
+	}
+}
+
+func TestValidateBlockReceiptsTransactionCount(t *testing.T) {
+	pragueTime, amsterdamTime := uint64(200), uint64(300)
+	config := &params.ChainConfig{
+		LondonBlock:   big.NewInt(10),
+		PragueTime:    &pragueTime,
+		AmsterdamTime: &amsterdamTime,
+	}
+	tests := []struct {
+		name      string
+		config    *params.ChainConfig
+		number    uint64
+		timestamp uint64
+		minGas    uint64
+	}{
+		{"before London", config, 9, 100, 10500},
+		{"at London", config, 10, 100, 16800},
+		{"before Prague", config, 20, 199, 16800},
+		{"at Prague", config, 20, 200, 21000},
+		{"before Amsterdam", config, 20, 299, 21000},
+		{"at Amsterdam", config, 20, 300, 12000},
+	}
+	receipts := NewReceiptList([]*types.Receipt{{Status: types.ReceiptStatusSuccessful}})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &Peer{chainConfig: tt.config}
+			for _, previousTxs := range []int{0, 1} {
+				gasUsed := uint64(previousTxs+1) * tt.minGas
+				if _, err := p.validateBlockReceipts(receipts, previousTxs, 0, gasUsed, tt.number, tt.timestamp); err != nil {
+					t.Fatalf("rejected transaction count at gas bound with %d buffered receipts: %v", previousTxs, err)
+				}
+				if _, err := p.validateBlockReceipts(receipts, previousTxs, 0, gasUsed-1, tt.number, tt.timestamp); err == nil {
+					t.Fatalf("accepted transaction count above gas bound with %d buffered receipts", previousTxs)
+				}
+			}
+		})
+	}
+}
+
+func TestBufferReceiptsRefundedTransaction(t *testing.T) {
+	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
+	sender := crypto.PubkeyToAddress(key.PublicKey)
+	contract := common.Address{0xaa}
+	config := &params.ChainConfig{
+		ChainID:        big.NewInt(3),
+		HomesteadBlock: big.NewInt(0),
+		EIP150Block:    big.NewInt(0),
+		EIP155Block:    big.NewInt(0),
+		EIP158Block:    big.NewInt(0),
+		ByzantiumBlock: big.NewInt(0),
+	}
+	genesis := &core.Genesis{Config: config, GasLimit: 5_000_000, Alloc: types.GenesisAlloc{
+		sender:   {Balance: big.NewInt(1_000_000_000_000_000)},
+		contract: {Code: []byte{0x58, 0xff}, Balance: common.Big1}, // PC; SELFDESTRUCT
+		{}:       {Balance: common.Big1},
+	}}
+	db, blocks, receipts := core.GenerateChainWithGenesis(genesis, ethash.NewFaker(), 1, func(_ int, b *core.BlockGen) {
+		b.AddTx(types.MustSignNewTx(key, types.HomesteadSigner{}, &types.LegacyTx{To: &contract, Gas: 100_000, GasPrice: common.Big1}))
+	})
+	defer db.Close()
+
+	if receipts[0][0].Status != types.ReceiptStatusSuccessful || blocks[0].GasUsed() >= params.TxGas {
+		t.Fatalf("expected successful transaction using less than intrinsic gas, got status %d and gas %d", receipts[0][0].Status, blocks[0].GasUsed())
+	}
+	p := &Peer{
+		chainConfig: config,
+		receiptBuffer: map[uint64]*receiptRequest{1: {
+			request:    []common.Hash{blocks[0].Hash()},
+			gasUsed:    []uint64{blocks[0].GasUsed()},
+			numbers:    []uint64{blocks[0].NumberU64()},
+			timestamps: []uint64{blocks[0].Time()},
+		}}}
+	if err := p.bufferReceipts(1, []*ReceiptList{NewReceiptList(receipts[0])}, false); err != nil {
+		t.Fatalf("valid refunded transaction rejected: %v", err)
 	}
 }
 

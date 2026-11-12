@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -51,6 +52,7 @@ const (
 // receiptRequest tracks the state of an in-flight receipt retrieval operation.
 type receiptRequest struct {
 	request     []common.Hash  // block hashes corresponding to the requested receipts
+	numbers     []uint64       // block numbers corresponding to the requested receipts
 	gasUsed     []uint64       // block gas used corresponding to the requested receipts
 	timestamps  []uint64       // block timestamps corresponding to the requested receipts
 	list        []*ReceiptList // list of partially collected receipts
@@ -450,8 +452,9 @@ func (p *Peer) RequestBodies(hashes []common.Hash, sink chan *Response) (*Reques
 
 // RequestReceipts fetches a batch of transaction receipts from a remote node.
 // `gasUsed` provides the total gas used per block, used to estimate the maximum
-// log byte size. `timestamps` provides the block timestamps for fork aware validation.
-func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamps []uint64, sink chan *Response) (*Request, error) {
+// log byte size. `numbers` and `timestamps` provide the block numbers and timestamps
+// for fork-aware validation.
+func (p *Peer) RequestReceipts(hashes []common.Hash, numbers []uint64, gasUsed []uint64, timestamps []uint64, sink chan *Response) (*Request, error) {
 	p.Log().Debug("Fetching batch of receipts", "count", len(hashes))
 	id := rand.Uint64()
 
@@ -480,6 +483,7 @@ func (p *Peer) RequestReceipts(hashes []common.Hash, gasUsed []uint64, timestamp
 		p.receiptBufferLock.Lock()
 		p.receiptBuffer[id] = &receiptRequest{
 			request:    hashes,
+			numbers:    numbers,
 			gasUsed:    gasUsed,
 			timestamps: timestamps,
 		}
@@ -569,7 +573,7 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, las
 			previousLog = buffer.lastLogSize
 		}
 		var err error
-		logSize, err = p.validateBlockReceipts(receipts, previousTxs, previousLog, buffer.gasUsed[offset+i], buffer.timestamps[offset+i])
+		logSize, err = p.validateBlockReceipts(receipts, previousTxs, previousLog, buffer.gasUsed[offset+i], buffer.numbers[offset+i], buffer.timestamps[offset+i])
 		if err != nil {
 			delete(p.receiptBuffer, requestId)
 			return err
@@ -622,13 +626,22 @@ func (p *Peer) flushReceipts(requestId uint64) []*ReceiptList {
 
 // validateBlockReceipts validates the receipts of a single block, with its
 // previously buffered part, and returns the accumulated log size.
-func (p *Peer) validateBlockReceipts(receipts *ReceiptList, previousTxs int, previousLog uint64, gasUsed uint64, timestamp uint64) (uint64, error) {
+func (p *Peer) validateBlockReceipts(receipts *ReceiptList, previousTxs int, previousLog uint64, gasUsed uint64, blockNumber uint64, timestamp uint64) (uint64, error) {
 	// Verify that the total number of transactions delivered is under the limit.
-	var minTxGas uint64
-	if p.chainConfig != nil && p.chainConfig.AmsterdamTime != nil && *p.chainConfig.AmsterdamTime <= timestamp {
-		minTxGas = params.TxBaseCost2780
-	} else {
-		minTxGas = params.TxGas
+	minTxGas := params.TxGas - params.TxGas/params.RefundQuotient
+	if p.chainConfig != nil {
+		number := new(big.Int).SetUint64(blockNumber)
+		switch {
+		case p.chainConfig.IsAmsterdam(number, timestamp):
+			// The header accounts for execution gas before refunds, with a
+			// floor of at least the EIP-2780 transaction base cost.
+			minTxGas = params.TxBaseCost2780
+		case p.chainConfig.IsPrague(number, timestamp):
+			// EIP-7623 applies the calldata gas floor after refunds.
+			minTxGas = params.TxGas
+		case p.chainConfig.IsLondon(number):
+			minTxGas = params.TxGas - params.TxGas/params.RefundQuotientEIP3529
+		}
 	}
 	if uint64(previousTxs+receipts.items.Len()) > gasUsed/minTxGas {
 		// should be dropped, don't clear the buffer

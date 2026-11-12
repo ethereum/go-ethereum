@@ -68,7 +68,7 @@ type Peer interface {
 	RequestHeadersByNumber(uint64, int, int, bool, chan *eth.Response) (*eth.Request, error)
 
 	RequestBodies([]common.Hash, chan *eth.Response) (*eth.Request, error)
-	RequestReceipts([]common.Hash, []uint64, []uint64, chan *eth.Response) (*eth.Request, error)
+	RequestReceipts([]common.Hash, []uint64, []uint64, []uint64, chan *eth.Response) (*eth.Request, error)
 	RequestBALs([]common.Hash, chan *eth.Response) (*eth.Request, error)
 
 	// BlockRange returns the range of blocks the peer announced to serve
