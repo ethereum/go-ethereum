@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"go/format"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -80,6 +82,48 @@ func TestGeneratedProfileUpToDate(t *testing.T) {
 	t.Fatalf("%s is out of date; run `go generate ./core/vm/...` and commit the result.\n"+
 		"  %d call sites committed, %d generated\n  first difference: committed %q, generated %q",
 		pgoFile, len(got), len(want), firstEdge(got, want), firstEdge(want, got))
+}
+
+// TestHandlersInlined asserts the compiler inlines every handler call the profile marks hot.
+func TestHandlersInlined(t *testing.T) {
+	if testing.Short() {
+		t.Skip("compiles core/vm")
+	}
+	src, err := os.ReadFile(filepath.Join(vmDir(), generatedFile))
+	if err != nil {
+		t.Fatalf("reading committed %s: %v", generatedFile, err)
+	}
+	g := &generator{}
+	_, sites := g.callSites(src)
+
+	// Build core/vm with the committed profile, as make geth does, and have the
+	// compiler print its inlining decisions. A cached build prints them again.
+	root := filepath.Join(vmDir(), "..", "..")
+	gocmd := filepath.Join(runtime.GOROOT(), "bin", "go")
+	cmd := exec.Command(gocmd, "build", "-pgo="+filepath.Join(root, pgoFile), "-gcflags="+vmPkgPath+"=-m", "-o", os.DevNull, vmPkgPath)
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("building core/vm: %v\n%s", err, out)
+	}
+	inlined := make(map[string]bool)
+	re := regexp.MustCompile(regexp.QuoteMeta(generatedFile) + `:(\d+):\d+: inlining call to (\S+)`)
+	for _, m := range re.FindAllStringSubmatch(string(out), -1) {
+		inlined[m[1]+" "+m[2]] = true
+	}
+
+	// A profile can match every call site and still be refused, for example once
+	// the dispatch is big enough that the compiler only inlines tiny callees into it.
+	var missing []string
+	for _, s := range sites {
+		if !inlined[fmt.Sprintf("%d %s", s.line, s.callee)] {
+			missing = append(missing, fmt.Sprintf("%s on line %d", s.callee, s.line))
+		}
+	}
+	if len(missing) > 0 {
+		t.Fatalf("%d of %d handler calls in %s are not inlined:\n  %s\nbuild with -gcflags=%s=-m=2 to see why",
+			len(missing), len(sites), dispatchFunc, strings.Join(missing, "\n  "), vmPkgPath)
+	}
 }
 
 // profileEdges reduces a serialized profile to what the compiler reads out of it:
