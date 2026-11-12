@@ -574,7 +574,6 @@ func handleReceipts70(backend Backend, msg Decoder, peer *Peer) error {
 	if complete := peer.flushReceipts(res.RequestId); complete != nil {
 		receiptLists = complete
 	}
-
 	return dispatchReceipts(res.RequestId, receiptLists, peer)
 }
 

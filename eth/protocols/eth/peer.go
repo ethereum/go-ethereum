@@ -535,8 +535,8 @@ func (p *Peer) requestPartialReceipts(id uint64) error {
 	})
 }
 
-// bufferReceipts validates a receipt packet and buffer the incomplete packet.
-// If the request is completed, it appends previously collected receipts.
+// bufferReceipts buffers a receipt packet, validating responses that span
+// multiple packets and appending to previously collected receipts.
 func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, lastBlockIncomplete bool) error {
 	p.receiptBufferLock.Lock()
 	defer p.receiptBufferLock.Unlock()
@@ -558,55 +558,46 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, las
 		}
 		return nil
 	}
-	var offset int
-	if len(buffer.list) > 0 {
-		offset = len(buffer.list) - 1
-	}
+	// Complete responses without buffered fragments can be verified by their
+	// receipt roots without applying the buffer bounds.
 	var logSize uint64
-	for i, receipts := range receiptLists {
-		var (
-			previousTxs int
-			previousLog uint64
-		)
-		if i == 0 && len(buffer.list) > 0 {
-			previousTxs = buffer.list[offset].items.Len()
-			previousLog = buffer.lastLogSize
+	if lastBlockIncomplete || len(buffer.list) > 0 {
+		var offset int
+		if len(buffer.list) > 0 {
+			offset = len(buffer.list) - 1
 		}
-		var err error
-		logSize, err = p.validateBlockReceipts(receipts, previousTxs, previousLog, buffer.gasUsed[offset+i], buffer.numbers[offset+i], buffer.timestamps[offset+i])
-		if err != nil {
-			delete(p.receiptBuffer, requestId)
-			return err
+		for i, receipts := range receiptLists {
+			var (
+				previousTxs int
+				previousLog uint64
+			)
+			if i == 0 && len(buffer.list) > 0 {
+				previousTxs = buffer.list[offset].items.Len()
+				previousLog = buffer.lastLogSize
+			}
+			var err error
+			logSize, err = p.validateBlockReceipts(receipts, previousTxs, previousLog, buffer.gasUsed[offset+i], buffer.numbers[offset+i], buffer.timestamps[offset+i])
+			if err != nil {
+				delete(p.receiptBuffer, requestId)
+				return err
+			}
 		}
 	}
-	// Buffer the last block when the response is incomplete.
 	if lastBlockIncomplete {
 		// Prevent sending a single empty receipt.
 		if len(receiptLists) == 1 && receiptLists[0].items.Len() == 0 {
 			delete(p.receiptBuffer, requestId)
 			return errors.New("no receipt delivered in incomplete receipt response")
 		}
-		// Update the buffered data and trim the packet to exclude the incomplete block.
-		if len(buffer.list) > 0 {
-			// If the buffer is already allocated, it means that the previous response
-			// was incomplete Append the first block receipts.
-			buffer.list[len(buffer.list)-1].Append(receiptLists[0])
-			buffer.list = append(buffer.list, receiptLists[1:]...)
-			buffer.lastLogSize = logSize
-		} else {
-			buffer.list = receiptLists
-			buffer.lastLogSize = logSize
-		}
-		return nil
+		buffer.lastLogSize = logSize
 	}
-	// Short circuit if there is nothing cached previously.
-	if len(buffer.list) == 0 {
-		delete(p.receiptBuffer, requestId)
-		return nil
+	// Aggregate the response with any previously buffered receipts.
+	if len(buffer.list) > 0 {
+		buffer.list[len(buffer.list)-1].Append(receiptLists[0])
+		buffer.list = append(buffer.list, receiptLists[1:]...)
+	} else {
+		buffer.list = receiptLists
 	}
-	// Aggregate the cached result into the packet.
-	buffer.list[len(buffer.list)-1].Append(receiptLists[0])
-	buffer.list = append(buffer.list, receiptLists[1:]...)
 	return nil
 }
 
