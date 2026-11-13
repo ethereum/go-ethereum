@@ -99,17 +99,39 @@ func (r *historicStateReader) Storage(addr common.Address, key common.Hash) (com
 
 // historicTrieOpener is a wrapper of pathdb.HistoricalNodeReader, implementing
 // the database.NodeDatabase by adding NodeReader function.
+//
+// It also serves the preimages from the given trie database, if any, so that
+// a trie opened on it can resolve the raw keys of the hashed ones. Preimages
+// are not versioned, so the live store serves every historical state.
 type historicTrieOpener struct {
-	root   common.Hash
-	reader *pathdb.HistoricalNodeReader
+	root      common.Hash
+	reader    *pathdb.HistoricalNodeReader
+	preimages *triedb.Database
 }
 
 // newHistoricTrieOpener constructs the historical trie opener.
-func newHistoricTrieOpener(root common.Hash, reader *pathdb.HistoricalNodeReader) *historicTrieOpener {
+func newHistoricTrieOpener(root common.Hash, reader *pathdb.HistoricalNodeReader, preimages *triedb.Database) *historicTrieOpener {
 	return &historicTrieOpener{
-		root:   root,
-		reader: reader,
+		root:      root,
+		reader:    reader,
+		preimages: preimages,
 	}
+}
+
+// Preimage retrieves the preimage of the specified hash.
+func (o *historicTrieOpener) Preimage(hash common.Hash) []byte {
+	if o.preimages == nil {
+		return nil
+	}
+	return o.preimages.Preimage(hash)
+}
+
+// InsertPreimage is a no-op, as the historical trie is read-only.
+func (o *historicTrieOpener) InsertPreimage(map[common.Hash][]byte) {}
+
+// PreimageEnabled returns true if the preimage store is enabled.
+func (o *historicTrieOpener) PreimageEnabled() bool {
+	return o.preimages != nil && o.preimages.PreimageEnabled()
 }
 
 // NodeReader implements database.NodeDatabase, returning a node reader of a
@@ -135,7 +157,7 @@ type historicalTrieReader struct {
 
 // newHistoricalTrieReader constructs a reader for historical trie node serving.
 func newHistoricalTrieReader(root common.Hash, r *pathdb.HistoricalNodeReader) (*historicalTrieReader, error) {
-	opener := newHistoricTrieOpener(root, r)
+	opener := newHistoricTrieOpener(root, r, nil)
 	tr, err := trie.NewStateTrie(trie.StateTrieID(root), opener)
 	if err != nil {
 		return nil, err
@@ -267,7 +289,7 @@ func (db *HistoricDB) OpenTrie(root common.Hash) (Trie, error) {
 	if err != nil {
 		return nil, err
 	}
-	tr, err := trie.NewStateTrie(trie.StateTrieID(root), newHistoricTrieOpener(root, nr))
+	tr, err := trie.NewStateTrie(trie.StateTrieID(root), newHistoricTrieOpener(root, nr, db.triedb))
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +304,7 @@ func (db *HistoricDB) OpenStorageTrie(stateRoot common.Hash, address common.Addr
 		return nil, err
 	}
 	id := trie.StorageTrieID(stateRoot, crypto.Keccak256Hash(address.Bytes()), root)
-	tr, err := trie.NewStateTrie(id, newHistoricTrieOpener(stateRoot, nr))
+	tr, err := trie.NewStateTrie(id, newHistoricTrieOpener(stateRoot, nr, db.triedb))
 	if err != nil {
 		return nil, err
 	}
@@ -304,5 +326,54 @@ func (db *HistoricDB) Commit(update *StateUpdate) error {
 // Iteratee returns a state iteratee associated with the specified state root,
 // through which the account iterator and storage iterator can be created.
 func (db *HistoricDB) Iteratee(root common.Hash) (Iteratee, error) {
-	return nil, errors.New("not implemented")
+	if _, err := db.triedb.HistoricNodeReader(root); err != nil {
+		return nil, err
+	}
+	return &historicIteratee{db: db, root: root}, nil
+}
+
+// historicIteratee implements Iteratee, traversing a historical state through
+// its tries, whose nodes the path database rebuilds from the trienode history.
+// No flat state exists for a historical state, so the traversal is much slower
+// than the one of a live state.
+type historicIteratee struct {
+	db   *HistoricDB
+	root common.Hash
+}
+
+// NewAccountIterator creates an account iterator for the state, beginning at
+// the given account hash, or the next one if it does not exist.
+func (it *historicIteratee) NewAccountIterator(start common.Hash) (AccountIterator, error) {
+	tr, err := it.db.OpenTrie(it.root)
+	if err != nil {
+		return nil, err
+	}
+	return newMerkleTrieIterator(tr, start, true)
+}
+
+// NewStorageIterator creates a storage iterator for the account specified by
+// the address hash, beginning at the given slot hash, or the next one if it
+// does not exist.
+func (it *historicIteratee) NewStorageIterator(addressHash common.Hash, start common.Hash) (StorageIterator, error) {
+	nr, err := it.db.triedb.HistoricNodeReader(it.root)
+	if err != nil {
+		return nil, err
+	}
+	opener := newHistoricTrieOpener(it.root, nr, it.db.triedb)
+	tr, err := trie.NewStateTrie(trie.StateTrieID(it.root), opener)
+	if err != nil {
+		return nil, err
+	}
+	acct, err := tr.GetAccountByHash(addressHash)
+	if err != nil {
+		return nil, err
+	}
+	if acct == nil || acct.Root == types.EmptyRootHash {
+		return &exhaustedIterator{}, nil
+	}
+	storageTr, err := trie.NewStateTrie(trie.StorageTrieID(it.root, addressHash, acct.Root), opener)
+	if err != nil {
+		return nil, err
+	}
+	return newMerkleTrieIterator(storageTr, start, false)
 }
