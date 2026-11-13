@@ -385,6 +385,46 @@ func TestEffectiveGasPriceNotRequired(t *testing.T) {
 	}
 }
 
+// TestReceiptJSONTypeRange checks that a receipt type which does not fit in a
+// byte is rejected instead of being truncated.
+func TestReceiptJSONTypeRange(t *testing.T) {
+	b, err := getTestReceipts()[0].MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(b, &fields); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		input   string
+		want    uint8
+		wantErr error
+	}{
+		{"0x0", 0, nil},
+		{"0x3", 3, nil},
+		{"0xff", 0xff, nil},
+		{"0x100", 0, errReceiptTypeOverflow},
+		{"0x103", 0, errReceiptTypeOverflow},
+	}
+	for _, test := range tests {
+		fields["type"] = test.input
+		enc, err := json.Marshal(fields)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var r Receipt
+		err = json.Unmarshal(enc, &r)
+		if err != test.wantErr {
+			t.Errorf("type %s: wrong error %v, want %v", test.input, err, test.wantErr)
+			continue
+		}
+		if err == nil && r.Type != test.want {
+			t.Errorf("type %s: wrong type %d, want %d", test.input, r.Type, test.want)
+		}
+	}
+}
+
 // TestTypedReceiptEncodingDecoding reproduces a flaw that existed in the receipt
 // rlp decoder, which failed due to a shadowing error.
 func TestTypedReceiptEncodingDecoding(t *testing.T) {

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"unsafe"
 
@@ -39,7 +40,10 @@ var (
 	receiptStatusSuccessfulRLP = []byte{0x01}
 )
 
-var errShortTypedReceipt = errors.New("typed receipt too short")
+var (
+	errShortTypedReceipt   = errors.New("typed receipt too short")
+	errReceiptTypeOverflow = errors.New("receipt 'type' field must fit in uint8")
+)
 
 const (
 	// ReceiptStatusFailed is the status code of a transaction if execution failed.
@@ -75,7 +79,7 @@ type Receipt struct {
 }
 
 type receiptMarshaling struct {
-	Type              hexutil.Uint64
+	Type              receiptTypeJSON
 	PostState         hexutil.Bytes
 	Status            hexutil.Uint64
 	CumulativeGasUsed hexutil.Uint64
@@ -85,6 +89,28 @@ type receiptMarshaling struct {
 	BlobGasPrice      *hexutil.Big
 	BlockNumber       *hexutil.Big
 	TransactionIndex  hexutil.Uint
+}
+
+// receiptTypeJSON is the JSON encoding of a receipt type: a hex quantity that
+// must fit in uint8.
+type receiptTypeJSON uint8
+
+// MarshalText implements encoding.TextMarshaler.
+func (t receiptTypeJSON) MarshalText() ([]byte, error) {
+	return hexutil.Uint64(t).MarshalText()
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (t *receiptTypeJSON) UnmarshalJSON(input []byte) error {
+	var v hexutil.Uint64
+	if err := v.UnmarshalJSON(input); err != nil {
+		return err
+	}
+	if v > math.MaxUint8 {
+		return errReceiptTypeOverflow
+	}
+	*t = receiptTypeJSON(v)
+	return nil
 }
 
 // receiptRLP is the consensus encoding of a receipt.
