@@ -242,13 +242,14 @@ func validateDecoded(inner TxData) error {
 	return nil
 }
 
-// setDecoded sets the inner transaction and size after decoding.
+// setDecoded sets the inner transaction and size after decoding. Caches derived
+// from a previously decoded value are cleared, since tx may be reused.
 func (tx *Transaction) setDecoded(inner TxData, size uint64) {
 	tx.inner = inner
 	tx.time = time.Now()
-	if size > 0 {
-		tx.size.Store(size)
-	}
+	tx.hash.Store(nil)
+	tx.size.Store(size)
+	tx.from.Store(nil)
 }
 
 func sanityCheckSignature(v *big.Int, r *big.Int, s *big.Int, maybeProtected bool) error {

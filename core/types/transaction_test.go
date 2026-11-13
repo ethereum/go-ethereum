@@ -806,3 +806,58 @@ func TestEffectiveGasTipIntCmp(t *testing.T) {
 		}
 	}
 }
+
+// TestTransactionDecodeReuse checks that decoding into a Transaction that already
+// holds a decoded value does not keep the hash, size and sender of the old one.
+func TestTransactionDecodeReuse(t *testing.T) {
+	keyA, _ := crypto.GenerateKey()
+	keyB, _ := crypto.GenerateKey()
+	signer := LatestSignerForChainID(big.NewInt(1))
+	to := common.Address{1}
+	a := MustSignNewTx(keyA, signer, &DynamicFeeTx{ChainID: big.NewInt(1), Nonce: 0, GasTipCap: big.NewInt(1), GasFeeCap: big.NewInt(1), Gas: 21000, To: &to, Value: big.NewInt(0)})
+	b := MustSignNewTx(keyB, signer, &DynamicFeeTx{ChainID: big.NewInt(1), Nonce: 5, GasTipCap: big.NewInt(1), GasFeeCap: big.NewInt(1), Gas: 21000, To: &to, Value: big.NewInt(0), Data: []byte{1, 2, 3}})
+	wantFrom := crypto.PubkeyToAddress(keyB.PublicKey)
+
+	encode := map[string]func(*Transaction) ([]byte, error){
+		"binary": (*Transaction).MarshalBinary,
+		"rlp":    func(tx *Transaction) ([]byte, error) { return rlp.EncodeToBytes(tx) },
+		"json":   func(tx *Transaction) ([]byte, error) { return json.Marshal(tx) },
+	}
+	decode := map[string]func([]byte, *Transaction) error{
+		"binary": func(b []byte, tx *Transaction) error { return tx.UnmarshalBinary(b) },
+		"rlp":    func(b []byte, tx *Transaction) error { return rlp.DecodeBytes(b, tx) },
+		"json":   func(b []byte, tx *Transaction) error { return json.Unmarshal(b, tx) },
+	}
+	for name, enc := range encode {
+		encA, err := enc(a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encB, err := enc(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var tx Transaction
+		if err := decode[name](encA, &tx); err != nil {
+			t.Fatalf("%s: decode a: %v", name, err)
+		}
+		// Fill the caches.
+		tx.Hash()
+		tx.Size()
+		if _, err := Sender(signer, &tx); err != nil {
+			t.Fatal(err)
+		}
+		if err := decode[name](encB, &tx); err != nil {
+			t.Fatalf("%s: decode b: %v", name, err)
+		}
+		if tx.Hash() != b.Hash() {
+			t.Errorf("%s: wrong hash %x, want %x", name, tx.Hash(), b.Hash())
+		}
+		if tx.Size() != b.Size() {
+			t.Errorf("%s: wrong size %d, want %d", name, tx.Size(), b.Size())
+		}
+		if from, err := Sender(signer, &tx); err != nil || from != wantFrom {
+			t.Errorf("%s: wrong sender %x (err %v), want %x", name, from, err, wantFrom)
+		}
+	}
+}
