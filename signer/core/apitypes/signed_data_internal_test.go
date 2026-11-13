@@ -289,3 +289,91 @@ func TestTypedDataArrayValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestTypedDataArrayShape(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		typ    string
+		value  string // JSON
+		digest string // empty => error
+	}{
+		// Values matching their declared type, digests from @metamask/eth-sig-util.
+		{"uint256[]", `[1,2]`, "0x9c9967ec3784119776f1457211397f2966aa0f79373ec299bfe0219b5a8cbc89"},
+		{"uint256[][]", `[[1,2],[3]]`, "0x48a56be876dad2e5a6e25ad5b49c6ca74ba8769120794ea088b77acd7d114ff3"},
+		{"uint256[2][]", `[[1,2],[3,4]]`, "0x25925b83064f3bb2cdb7408af9518f455ba7dd4ead44e0812f72a3ab8f99dee2"},
+		{"uint256[][2]", `[[1],[2,3]]`, "0xe264c687826045a2010aa525e28a8045e60a005cc303fedd6e8a247f616955f5"},
+		{"uint256[2]", `[1,2]`, "0x2a5075318e6f411c6742ad68d80c9cfd110d52466f3a6ed94f97992d02f67a87"},
+		{"P[1]", `[{"v":1}]`, "0x57bc77817c84e0c122f0ccd22610a1b784bfa827ac87e0d7f6267ebfb2510010"},
+		{"P[][]", `[[{"v":1}],[{"v":2},{"v":3}]]`, "0x7899f85c190f86609dda7ac98f56b035f5a5e146b65c0e2c412ba309413770a7"},
+		{"bytes[2][]", `[["0x01","0x0203"]]`, "0x2fa52b6daf335717fd28a4e7e3dfd81336bfd784b5fb9531b98a193302ca841e"},
+		{"bytes2[]", `["0x0102"]`, "0xae54038a0cc257005234ad15f28098a1f1ad079047fe5eb457e8aa7ca552af3f"},
+
+		// Null elements.
+		{"uint256[]", `[null]`, ""},
+		{"P[]", `[null]`, ""},
+		{"uint256[][]", `[[1],null]`, ""},
+
+		// Wrong number of dimensions.
+		{"uint256[]", `[[1,2],[3]]`, ""},
+		{"uint256[][]", `[1,2]`, ""},
+		{"P[]", `[[{"v":1}]]`, ""},
+		{"P[][]", `[{"v":1}]`, ""},
+
+		// Wrong fixed length.
+		{"uint256[2]", `[1]`, ""},
+		{"uint256[2]", `[1,2,3]`, ""},
+		{"P[1]", `[{"v":1},{"v":2}]`, ""},
+		{"uint256[2][]", `[[1,2],[3]]`, ""},
+		{"uint256[][2]", `[[1]]`, ""},
+
+		// Malformed array types.
+		{"uint256[x]", `[1]`, ""},
+		{"uint256[x][]", `[]`, ""},
+	}
+	for i, test := range tests {
+		var value interface{}
+		if err := json.Unmarshal([]byte(test.value), &value); err != nil {
+			t.Fatalf("test %d: invalid JSON: %v", i, err)
+		}
+		digest, err := arrayShapeDigest(test.typ, value)
+		if test.digest == "" {
+			if err == nil {
+				t.Errorf("test %d (%s %s): expected error, got digest %x", i, test.typ, test.value, digest)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("test %d (%s %s): unexpected error: %v", i, test.typ, test.value, err)
+		} else if have := hexutil.Encode(digest); have != test.digest {
+			t.Errorf("test %d (%s %s): digest mismatch: have %s, want %s", i, test.typ, test.value, have, test.digest)
+		}
+	}
+
+	// Go byte types stay primitive values inside arrays of bytesN.
+	want := "0xae54038a0cc257005234ad15f28098a1f1ad079047fe5eb457e8aa7ca552af3f"
+	for _, item := range []interface{}{[]byte{1, 2}, hexutil.Bytes{1, 2}, [2]byte{1, 2}} {
+		digest, err := arrayShapeDigest("bytes2[]", []interface{}{item})
+		if err != nil {
+			t.Errorf("bytes2[] with %T: unexpected error: %v", item, err)
+		} else if have := hexutil.Encode(digest); have != want {
+			t.Errorf("bytes2[] with %T: digest mismatch: have %s, want %s", item, have, want)
+		}
+	}
+}
+
+func arrayShapeDigest(typ string, value interface{}) ([]byte, error) {
+	chainId := math.HexOrDecimal256(*big.NewInt(1))
+	td := TypedData{
+		Types: Types{
+			"EIP712Domain": {{Name: "name", Type: "string"}, {Name: "version", Type: "string"}, {Name: "chainId", Type: "uint256"}},
+			"P":            {{Name: "v", Type: "uint256"}},
+			"M":            {{Name: "x", Type: typ}},
+		},
+		PrimaryType: "M",
+		Domain:      TypedDataDomain{Name: "Shape", Version: "1", ChainId: &chainId},
+		Message:     TypedDataMessage{"x": value},
+	}
+	digest, _, err := TypedDataAndHash(td)
+	return digest, err
+}
