@@ -211,6 +211,7 @@ type HistoricalStateReader struct {
 	db     *Database
 	reader *stateHistoryReader
 	id     uint64
+	seq    uint64
 }
 
 // HistoricReader constructs a reader for accessing the requested historic state.
@@ -233,6 +234,10 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	if err := db.waitWrites(); err != nil {
 		return nil, err
 	}
+	seq := db.rollback.Load()
+	if seq&1 != 0 {
+		return nil, fmt.Errorf("%w: %#x, state rollback in progress", database.ErrStateUnavailable, root)
+	}
 	id := rawdb.ReadStateID(db.diskdb, root)
 	if id == nil {
 		return nil, fmt.Errorf("%w: %#x", database.ErrStateUnavailable, root)
@@ -246,8 +251,12 @@ func (db *Database) HistoricReader(root common.Hash) (*HistoricalStateReader, er
 	if meta.parent != root {
 		return nil, fmt.Errorf("state %#x is not canonical", root)
 	}
+	if db.rollback.Load() != seq {
+		return nil, fmt.Errorf("%w: %#x, state rollback in progress", database.ErrStateUnavailable, root)
+	}
 	return &HistoricalStateReader{
 		id:     *id,
+		seq:    seq,
 		db:     db,
 		reader: newStateHistoryReader(db.diskdb, db.stateFreezer, db.waitWrites),
 	}, nil
@@ -267,10 +276,17 @@ func (r *HistoricalStateReader) AccountRLP(address common.Address) ([]byte, erro
 
 	hash := crypto.Keccak256Hash(address.Bytes())
 	for {
+		if r.db.rollback.Load() != r.seq {
+			return nil, fmt.Errorf("%w: state has been rolled back", database.ErrStateUnavailable)
+		}
 		dl := r.db.tree.bottom()
 		latest, err := dl.account(hash, 0)
 		if err == nil {
-			return r.reader.read(newAccountIdentQuery(address, hash), r.id, dl.stateID(), latest)
+			blob, err := r.reader.read(newAccountIdentQuery(address, hash), r.id, dl.stateID(), latest)
+			if r.db.rollback.Load() != r.seq {
+				return nil, fmt.Errorf("%w: state has been rolled back", database.ErrStateUnavailable)
+			}
+			return blob, err
 		}
 		if !errors.Is(err, errSnapshotStale) {
 			return nil, err
@@ -318,10 +334,17 @@ func (r *HistoricalStateReader) Storage(address common.Address, key common.Hash)
 	addrHash := crypto.Keccak256Hash(address.Bytes())
 	keyHash := crypto.Keccak256Hash(key.Bytes())
 	for {
+		if r.db.rollback.Load() != r.seq {
+			return nil, fmt.Errorf("%w: state has been rolled back", database.ErrStateUnavailable)
+		}
 		dl := r.db.tree.bottom()
 		latest, err := dl.storage(addrHash, keyHash, 0)
 		if err == nil {
-			return r.reader.read(newStorageIdentQuery(address, addrHash, key, keyHash), r.id, dl.stateID(), latest)
+			blob, err := r.reader.read(newStorageIdentQuery(address, addrHash, key, keyHash), r.id, dl.stateID(), latest)
+			if r.db.rollback.Load() != r.seq {
+				return nil, fmt.Errorf("%w: state has been rolled back", database.ErrStateUnavailable)
+			}
+			return blob, err
 		}
 		if !errors.Is(err, errSnapshotStale) {
 			return nil, err

@@ -26,7 +26,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/testrand"
+	"github.com/ethereum/go-ethereum/trie/trienode"
+	"github.com/ethereum/go-ethereum/triedb/database"
+	"github.com/holiman/uint256"
 )
 
 func waitIndexing(db *Database) {
@@ -435,4 +441,382 @@ func TestHistoricalStateReaderStaleDiskLayerRetry(t *testing.T) {
 	if _, err := disabledNodeReader.Node(common.Hash{}, nil, common.Hash{}); !errors.Is(err, errSnapshotStale) {
 		t.Fatalf("Expected errSnapshotStale on disabled database for Node, got: %v", err)
 	}
+}
+
+// TestHistoricalStateReaderRollback verifies that a HistoricalStateReader
+// returns an error after a rollback rather than answering from another state:
+//   - After a rollback below the reader's state, reads fail instead of
+//     returning the value at the new disk layer.
+//   - After replacement histories reuse the state IDs and re-index as far, a
+//     reader with a cached index reader fails instead of answering from the
+//     discarded index, while a newly opened reader returns the canonical value.
+func TestHistoricalStateReaderRollback(t *testing.T) {
+	disk, err := rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{Ancient: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer disk.Close()
+
+	db := New(disk, &Config{
+		EnableStateIndexing: true,
+		TrieCleanSize:       256 * 1024,
+		StateCleanSize:      256 * 1024,
+		WriteBufferSize:     256 * 1024,
+		NoAsyncFlush:        true,
+		NoHistoryIndexDelay: true,
+	})
+	defer db.Close()
+	waitIndexing(db)
+
+	var (
+		addr  = common.Address{0x01}
+		other = common.Address{0x02}
+		slot  = common.Hash{0x01}
+
+		accounts = make(map[common.Address]types.StateAccount)
+		storages = make(map[common.Address]map[common.Hash][]byte)
+		root     = types.EmptyRootHash
+	)
+	applyBlock := func(block uint64, balances map[common.Address]uint64, slots map[common.Address]map[common.Hash][]byte) common.Hash {
+		var (
+			nodes          = trienode.NewMergedNodeSet()
+			trieAccounts   = make(map[common.Hash][]byte)
+			accountUpdates = make(map[common.Hash][]byte)
+			storageUpdates = make(map[common.Hash]map[common.Hash][]byte)
+			accountOrigin  = make(map[common.Address][]byte)
+			storageOrigin  = make(map[common.Address]map[common.Hash][]byte)
+		)
+		for a, bal := range balances {
+			addrHash := crypto.Keccak256Hash(a.Bytes())
+			prev, exists := accounts[a]
+			if !exists {
+				prev = types.StateAccount{
+					Root:     types.EmptyRootHash,
+					CodeHash: types.EmptyCodeHash.Bytes(),
+				}
+				accountOrigin[a] = nil
+			} else {
+				accountOrigin[a] = types.SlimAccountRLP(prev)
+			}
+			stRoot := prev.Root
+			if slotChanges, ok := slots[a]; ok {
+				if storages[a] == nil {
+					storages[a] = make(map[common.Hash][]byte)
+				}
+				storageUpdates[addrHash] = make(map[common.Hash][]byte)
+				storageOrigin[a] = make(map[common.Hash][]byte)
+				for k, v := range slotChanges {
+					kHash := crypto.Keccak256Hash(k.Bytes())
+					storageOrigin[a][k] = storages[a][k]
+					storages[a][k] = v
+					storageUpdates[addrHash][kHash] = v
+				}
+				var stNodes *trienode.NodeSet
+				stRoot, stNodes = updateTrie(db, root, addrHash, prev.Root, storageUpdates[addrHash])
+				nodes.Merge(stNodes)
+			}
+			next := prev
+			next.Balance = uint256.NewInt(bal)
+			next.Root = stRoot
+			accounts[a] = next
+			accountUpdates[addrHash] = types.SlimAccountRLP(next)
+			full, err := types.FullAccountRLP(accountUpdates[addrHash])
+			if err != nil {
+				t.Fatalf("Failed to encode full account: %v", err)
+			}
+			trieAccounts[addrHash] = full
+		}
+		newRoot, acctNodes := updateTrie(db, root, common.Hash{}, root, trieAccounts)
+		nodes.Merge(acctNodes)
+
+		stateSet := NewStateSetWithOrigin(accountUpdates, storageUpdates, accountOrigin, storageOrigin, true)
+		if err := db.Update(newRoot, root, block, nodes, stateSet); err != nil {
+			t.Fatalf("Failed to update block %d: %v", block, err)
+		}
+		if err := db.Commit(newRoot, false); err != nil {
+			t.Fatalf("Failed to commit block %d: %v", block, err)
+		}
+		if err := db.waitWrites(); err != nil {
+			t.Fatalf("Failed to wait writes for block %d: %v", block, err)
+		}
+		root = newRoot
+		return newRoot
+	}
+
+	// Block 1 sets addr balance to 101 (and slot to 0x01); blocks 2 and 3 keep it
+	// unchanged; block 4 sets addr balance to 150 (and slot to 0x02).
+	root1 := applyBlock(1, map[common.Address]uint64{addr: 101, other: 1}, map[common.Address]map[common.Hash][]byte{addr: {slot: {0x01}}})
+	root2 := applyBlock(2, map[common.Address]uint64{other: 2}, nil)
+	root3 := applyBlock(3, map[common.Address]uint64{other: 3}, nil)
+	_ = applyBlock(4, map[common.Address]uint64{addr: 150}, map[common.Address]map[common.Hash][]byte{addr: {slot: {0x02}}})
+	waitIndexing(db)
+
+	// Open a reader at state 1 and read addr and slot, caching their index readers.
+	reader1, err := db.HistoricReader(root1)
+	if err != nil {
+		t.Fatalf("Failed to open reader at state 1: %v", err)
+	}
+	acct, err := reader1.Account(addr)
+	if err != nil {
+		t.Fatalf("Failed to read account at state 1: %v", err)
+	}
+	if got := acct.Balance.Uint64(); got != 101 {
+		t.Fatalf("Unexpected balance at state 1: got %d, want 101", got)
+	}
+	val, err := reader1.Storage(addr, slot)
+	if err != nil {
+		t.Fatalf("Failed to read storage at state 1: %v", err)
+	}
+	if !bytes.Equal(val, []byte{0x01}) {
+		t.Fatalf("Unexpected storage at state 1: got %x, want 01", val)
+	}
+
+	// Also open a reader at state 3 before the rollback without reading yet.
+	reader3, err := db.HistoricReader(root3)
+	if err != nil {
+		t.Fatalf("Failed to open reader at state 3: %v", err)
+	}
+
+	// Roll back to state 2 (below reader3's state 3, above reader1's state 1).
+	if err := db.Recover(root2); err != nil {
+		t.Fatalf("Failed to recover to state 2: %v", err)
+	}
+	accounts[addr] = types.StateAccount{
+		Balance:  uint256.NewInt(101),
+		Root:     accounts[addr].Root,
+		CodeHash: types.EmptyCodeHash.Bytes(),
+	}
+	storages[addr][slot] = []byte{0x01}
+	// Restore accounts[addr].Root to state 1/2's storage root.
+	state2Acct, err := types.FullAccount(rawdb.ReadAccountSnapshot(disk, crypto.Keccak256Hash(addr.Bytes())))
+	if err != nil {
+		t.Fatalf("Failed to decode state 2 account: %v", err)
+	}
+	accounts[addr] = *state2Acct
+	state2Other, err := types.FullAccount(rawdb.ReadAccountSnapshot(disk, crypto.Keccak256Hash(other.Bytes())))
+	if err != nil {
+		t.Fatalf("Failed to decode state 2 other account: %v", err)
+	}
+	accounts[other] = *state2Other
+	root = root2
+
+	// Case 1: reader3's target state (3) is now above the disk layer (2).
+	// Reads must fail rather than returning the disk layer's state 2 value.
+	if _, err := reader3.Account(other); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable from reader3.Account after rollback, got: %v", err)
+	}
+	if _, err := reader3.Storage(addr, slot); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable from reader3.Storage after rollback, got: %v", err)
+	}
+	// Direct stateHistoryReader check: checkStateAvail rejects stateID > lastID.
+	hr := newStateHistoryReader(db.diskdb, db.stateFreezer, nil)
+	otherHash := crypto.Keccak256Hash(other.Bytes())
+	latestOther, _ := db.tree.bottom().account(otherHash, 0)
+	if _, err := hr.read(newAccountIdentQuery(other, otherHash), 3, db.tree.bottom().stateID(), latestOther); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable from checkStateAvail when stateID > lastID, got: %v", err)
+	}
+
+	// Pre-rollback reader1 must also fail immediately after the rollback.
+	if _, err := reader1.Account(addr); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable from reader1.Account after rollback, got: %v", err)
+	}
+	if _, err := reader1.Storage(addr, slot); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable from reader1.Storage after rollback, got: %v", err)
+	}
+
+	// Apply replacement blocks 3 and 4 setting addr balance to 205, then 300
+	// (and slot to 0x03, then 0x04).
+	root3b := applyBlock(3, map[common.Address]uint64{addr: 205}, map[common.Address]map[common.Hash][]byte{addr: {slot: {0x03}}})
+	_ = applyBlock(4, map[common.Address]uint64{addr: 300}, map[common.Address]map[common.Hash][]byte{addr: {slot: {0x04}}})
+	waitIndexing(db)
+
+	// Case 2: Replacement histories are now indexed up to state 4 again.
+	// Pre-rollback reader1 must still fail rather than answering 205 / 0x03
+	// from its cached pre-rollback index.
+	if acct, err := reader1.Account(addr); !errors.Is(err, database.ErrStateUnavailable) {
+		var got uint64
+		if acct != nil {
+			got = acct.Balance.Uint64()
+		}
+		t.Fatalf("Expected ErrStateUnavailable from pre-rollback reader1.Account, got balance=%d, err=%v", got, err)
+	}
+	if val, err := reader1.Storage(addr, slot); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable from pre-rollback reader1.Storage, got val=%x, err=%v", val, err)
+	}
+
+	// A newly opened reader at state 1 must succeed and answer 101 and 0x01.
+	newReader1, err := db.HistoricReader(root1)
+	if err != nil {
+		t.Fatalf("Failed to open new reader at state 1: %v", err)
+	}
+	acct, err = newReader1.Account(addr)
+	if err != nil {
+		t.Fatalf("Failed to read account from new reader at state 1: %v", err)
+	}
+	if got := acct.Balance.Uint64(); got != 101 {
+		t.Fatalf("Unexpected balance from new reader at state 1: got %d, want 101", got)
+	}
+	val, err = newReader1.Storage(addr, slot)
+	if err != nil {
+		t.Fatalf("Failed to read storage from new reader at state 1: %v", err)
+	}
+	if !bytes.Equal(val, []byte{0x01}) {
+		t.Fatalf("Unexpected storage from new reader at state 1: got %x, want 01", val)
+	}
+
+	// A newly opened reader at replacement state 3 must answer 205 and 0x03.
+	newReader3, err := db.HistoricReader(root3b)
+	if err != nil {
+		t.Fatalf("Failed to open new reader at replacement state 3: %v", err)
+	}
+	acct, err = newReader3.Account(addr)
+	if err != nil {
+		t.Fatalf("Failed to read account from new reader at state 3: %v", err)
+	}
+	if got := acct.Balance.Uint64(); got != 205 {
+		t.Fatalf("Unexpected balance from new reader at state 3: got %d, want 205", got)
+	}
+	val, err = newReader3.Storage(addr, slot)
+	if err != nil {
+		t.Fatalf("Failed to read storage from new reader at state 3: %v", err)
+	}
+	if !bytes.Equal(val, []byte{0x03}) {
+		t.Fatalf("Unexpected storage from new reader at state 3: got %x, want 03", val)
+	}
+}
+
+// syncHookedKV wraps a KeyValueStore and runs an optional hook during SyncKeyValue.
+type syncHookedKV struct {
+	ethdb.KeyValueStore
+	onSync func()
+}
+
+func (s *syncHookedKV) SyncKeyValue() error {
+	if s.onSync != nil {
+		s.onSync()
+	}
+	return s.KeyValueStore.SyncKeyValue()
+}
+
+// TestHistoricalStateReaderDuringRollback verifies that:
+//  1. Opening a HistoricReader or reading from an existing reader while a
+//     rollback is actively in progress fails with ErrStateUnavailable.
+//  2. A read that started before a rollback and is in flight when a rollback
+//     runs is rejected by the post-read rollback counter check.
+func TestHistoricalStateReaderDuringRollback(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	var (
+		inSync      = make(chan struct{})
+		releaseSync = make(chan struct{})
+		hookedKV    = &syncHookedKV{KeyValueStore: rawdb.NewMemoryDatabase()}
+	)
+	env := newTester(t, &testerConfig{
+		layers:      16,
+		enableIndex: true,
+		kvdb:        hookedKV,
+	})
+	defer env.release()
+	waitIndexing(env.db)
+
+	var (
+		root1      = env.roots[0]
+		targetRoot = env.roots[env.bottomIndex()-1]
+		testAddr   common.Address
+		testSlot   common.Hash
+	)
+	for addrHash, slots := range env.snapStorages[root1] {
+		testAddr = env.accountPreimage(addrHash)
+		for slotHash := range slots {
+			testSlot = env.hashPreimage(slotHash)
+			break
+		}
+		break
+	}
+
+	reader, err := env.db.HistoricReader(root1)
+	if err != nil {
+		t.Fatalf("Failed to open reader before rollback: %v", err)
+	}
+
+	// Pause Recover inside SyncKeyValue while the rollback counter is odd.
+	var once sync.Once
+	hookedKV.onSync = func() {
+		once.Do(func() {
+			close(inSync)
+			<-releaseSync
+		})
+	}
+
+	recoverErr := make(chan error, 1)
+	go func() {
+		recoverErr <- env.db.Recover(targetRoot)
+	}()
+
+	<-inSync
+	// While Recover is in progress, creating a new reader or reading from an
+	// existing one must fail with ErrStateUnavailable.
+	if _, err := env.db.HistoricReader(root1); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable from HistoricReader during rollback, got: %v", err)
+	}
+	if _, err := reader.AccountRLP(testAddr); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable from AccountRLP during rollback, got: %v", err)
+	}
+	if _, err := reader.Storage(testAddr, testSlot); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable from Storage during rollback, got: %v", err)
+	}
+	close(releaseSync)
+	if err := <-recoverErr; err != nil {
+		t.Fatalf("Recover failed: %v", err)
+	}
+	hookedKV.onSync = nil
+	waitIndexing(env.db)
+
+	// Next, verify the post-read check when a rollback occurs mid-read, after the
+	// pre-read check and disk layer lookup have already passed.
+	reader2, err := env.db.HistoricReader(root1)
+	if err != nil {
+		t.Fatalf("Failed to open reader after first rollback: %v", err)
+	}
+	dlID := env.db.tree.bottom().stateID()
+	nextTarget := env.roots[env.bottomIndex()-1]
+	reader2.reader.wait = func() error {
+		storeIndexMetadata(env.db.diskdb, typeStateHistory, dlID)
+		if err := env.db.Recover(nextTarget); err != nil {
+			return err
+		}
+		// Bump metadata back to dlID so checkStateAvail and r.reader.read succeed,
+		// ensuring the post-read rollback check is what rejects the read.
+		storeIndexMetadata(env.db.diskdb, typeStateHistory, dlID)
+		return nil
+	}
+	storeIndexMetadata(env.db.diskdb, typeStateHistory, dlID-1)
+	if _, err := reader2.AccountRLP(testAddr); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable when rollback occurs during AccountRLP, got: %v", err)
+	}
+	storeIndexMetadata(env.db.diskdb, typeStateHistory, env.db.tree.bottom().stateID())
+
+	// Repeat for Storage mid-read rollback.
+	reader3, err := env.db.HistoricReader(root1)
+	if err != nil {
+		t.Fatalf("Failed to open reader for storage mid-read test: %v", err)
+	}
+	dlID = env.db.tree.bottom().stateID()
+	nextTarget2 := env.roots[env.bottomIndex()-1]
+	reader3.reader.wait = func() error {
+		storeIndexMetadata(env.db.diskdb, typeStateHistory, dlID)
+		if err := env.db.Recover(nextTarget2); err != nil {
+			return err
+		}
+		storeIndexMetadata(env.db.diskdb, typeStateHistory, dlID)
+		return nil
+	}
+	storeIndexMetadata(env.db.diskdb, typeStateHistory, dlID-1)
+	if _, err := reader3.Storage(testAddr, testSlot); !errors.Is(err, database.ErrStateUnavailable) {
+		t.Fatalf("Expected ErrStateUnavailable when rollback occurs during Storage, got: %v", err)
+	}
+	storeIndexMetadata(env.db.diskdb, typeStateHistory, env.db.tree.bottom().stateID())
 }
