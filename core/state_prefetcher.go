@@ -56,6 +56,7 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, j
 		skips   atomic.Int64
 		header  = block.Header()
 		signer  = types.MakeSigner(p.config, header.Number, header.Time)
+		context = NewEVMBlockContext(header, p.chain, nil)
 		workers errgroup.Group
 		reader  = statedb.Reader()
 		txs     = block.Transactions()
@@ -101,8 +102,11 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, j
 					}
 				}
 			}
-			// Execute the message to preload the implicit touched states
-			evm := vm.NewEVM(NewEVMBlockContext(header, p.chain, nil), stateCpy, p.config, cfg)
+			// Execute the message to preload the implicit touched states. Each
+			// transaction gets its own GetHash, whose cache isn't thread-safe.
+			blockCtx := context
+			blockCtx.GetHash = GetHashFn(header, p.chain)
+			evm := vm.NewEVM(blockCtx, stateCpy, p.config, cfg)
 			defer evm.Release()
 
 			// Set the caches for EVM interpreter
