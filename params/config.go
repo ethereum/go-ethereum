@@ -23,6 +23,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params/forks"
 )
 
@@ -57,6 +58,7 @@ var (
 		EIP150Block:             big.NewInt(0),
 		EIP155Block:             big.NewInt(0),
 		EIP158Block:             big.NewInt(0),
+		EIP170Block:             big.NewInt(0),
 		ByzantiumBlock:          big.NewInt(0),
 		ConstantinopleBlock:     big.NewInt(0),
 		PetersburgBlock:         big.NewInt(0),
@@ -83,6 +85,7 @@ var (
 		EIP150Block:             big.NewInt(0),
 		EIP155Block:             big.NewInt(0),
 		EIP158Block:             big.NewInt(0),
+		EIP170Block:             big.NewInt(0),
 		ByzantiumBlock:          big.NewInt(0),
 		ConstantinopleBlock:     big.NewInt(0),
 		PetersburgBlock:         big.NewInt(0),
@@ -114,6 +117,7 @@ var (
 		EIP150Block:             big.NewInt(0),
 		EIP155Block:             big.NewInt(0),
 		EIP158Block:             big.NewInt(0),
+		EIP170Block:             big.NewInt(0),
 		ByzantiumBlock:          big.NewInt(0),
 		ConstantinopleBlock:     big.NewInt(0),
 		PetersburgBlock:         big.NewInt(0),
@@ -144,6 +148,7 @@ var (
 		EIP150Block:             big.NewInt(0),
 		EIP155Block:             big.NewInt(0),
 		EIP158Block:             big.NewInt(0),
+		EIP170Block:             big.NewInt(0),
 		ByzantiumBlock:          big.NewInt(0),
 		ConstantinopleBlock:     big.NewInt(0),
 		PetersburgBlock:         big.NewInt(0),
@@ -174,6 +179,7 @@ var (
 		EIP150Block:             big.NewInt(0),
 		EIP155Block:             big.NewInt(0),
 		EIP158Block:             big.NewInt(0),
+		EIP170Block:             big.NewInt(0),
 		ByzantiumBlock:          big.NewInt(0),
 		ConstantinopleBlock:     big.NewInt(0),
 		PetersburgBlock:         big.NewInt(0),
@@ -208,6 +214,7 @@ var (
 		EIP150Block:             nil,
 		EIP155Block:             nil,
 		EIP158Block:             nil,
+		EIP170Block:             nil,
 		ByzantiumBlock:          nil,
 		ConstantinopleBlock:     nil,
 		PetersburgBlock:         nil,
@@ -298,6 +305,13 @@ type ChainConfig struct {
 	EIP150Block *big.Int `json:"eip150Block,omitempty"` // EIP150 HF block (nil = no fork)
 	EIP155Block *big.Int `json:"eip155Block,omitempty"` // EIP155 HF block
 	EIP158Block *big.Int `json:"eip158Block,omitempty"` // EIP158 HF block
+
+	// EIP170Block and EIP170Time schedule EIP-170 (contract code size limit)
+	// by block number or timestamp. They are mutually exclusive; EIP170Time
+	// takes precedence. On Ethereum this coincides with EIP158Block. If neither
+	// is set, EIP-170 activates with EIP158Block (legacy configs).
+	EIP170Block *big.Int `json:"eip170Block,omitempty"`
+	EIP170Time  *uint64  `json:"eip170Time,omitempty"`
 
 	ByzantiumBlock      *big.Int `json:"byzantiumBlock,omitempty"`      // Byzantium switch block (nil = no fork, 0 = already on byzantium)
 	ConstantinopleBlock *big.Int `json:"constantinopleBlock,omitempty"` // Constantinople switch block (nil = no fork, 0 = already activated)
@@ -415,6 +429,12 @@ func (c *ChainConfig) String() string {
 	}
 	if c.MergeNetsplitBlock != nil {
 		result += fmt.Sprintf(", MergeNetsplitBlock: %v", c.MergeNetsplitBlock)
+	}
+	if c.EIP170Block != nil {
+		result += fmt.Sprintf(", EIP170Block: %v", c.EIP170Block)
+	}
+	if c.EIP170Time != nil {
+		result += fmt.Sprintf(", EIP170Time: %v", *c.EIP170Time)
 	}
 
 	// Add timestamp-based forks
@@ -611,6 +631,26 @@ func (c *ChainConfig) IsEIP158(num *big.Int) bool {
 	return isBlockForked(c.EIP158Block, num)
 }
 
+// IsEIP170 returns whether EIP-170 is active at the given block and time,
+// with EIP170Time taking precedence over EIP170Block.
+func (c *ChainConfig) IsEIP170(num *big.Int, time uint64) bool {
+	block, timestamp := c.eip170Schedule()
+	if timestamp != nil {
+		return isTimestampForked(timestamp, time)
+	}
+	return isBlockForked(block, num)
+}
+
+// eip170Schedule returns the effective EIP-170 activation. Chain configs that
+// predate eip170Block/eip170Time, such as those persisted in the database by
+// older versions, activate EIP-170 together with EIP-158.
+func (c *ChainConfig) eip170Schedule() (*big.Int, *uint64) {
+	if c.EIP170Block == nil && c.EIP170Time == nil {
+		return c.EIP158Block, nil
+	}
+	return c.EIP170Block, c.EIP170Time
+}
+
 // IsByzantium returns whether num is either equal to the Byzantium fork block or greater.
 func (c *ChainConfig) IsByzantium(num *big.Int) bool {
 	return isBlockForked(c.ByzantiumBlock, num)
@@ -778,6 +818,7 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		{name: "eip150Block", block: c.EIP150Block},
 		{name: "eip155Block", block: c.EIP155Block},
 		{name: "eip158Block", block: c.EIP158Block},
+		{name: "eip170Block", block: c.EIP170Block, timestamp: c.EIP170Time, optional: true},
 		{name: "byzantiumBlock", block: c.ByzantiumBlock},
 		{name: "constantinopleBlock", block: c.ConstantinopleBlock},
 		{name: "petersburgBlock", block: c.PetersburgBlock},
@@ -833,6 +874,12 @@ func (c *ChainConfig) CheckConfigForkOrder() error {
 		if !cur.optional || (cur.block != nil || cur.timestamp != nil) {
 			lastFork = cur
 		}
+	}
+	if c.EIP170Block != nil && c.EIP170Time != nil {
+		return fmt.Errorf("unsupported fork configuration: eip170Block %v and eip170Time %v are mutually exclusive", c.EIP170Block, *c.EIP170Time)
+	}
+	if c.EIP170Block == nil && c.EIP170Time == nil && c.EIP158Block != nil {
+		log.Warn("Chain config does not set eip170Block/eip170Time; EIP-170 activation implicitly follows eip158Block. This fallback is deprecated, please set eip170Block/eip170Time explicitly")
 	}
 
 	// Check that all forks with blobs explicitly define the blob schedule configuration.
@@ -936,6 +983,14 @@ func (c *ChainConfig) checkCompatible(newcfg *ChainConfig, headNumber *big.Int, 
 	}
 	if isForkBlockIncompatible(c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock, headNumber) {
 		return newBlockCompatError("Merge netsplit fork block", c.MergeNetsplitBlock, newcfg.MergeNetsplitBlock)
+	}
+	storedEIP170Block, storedEIP170Time := c.eip170Schedule()
+	newEIP170Block, newEIP170Time := newcfg.eip170Schedule()
+	if isForkBlockIncompatible(storedEIP170Block, newEIP170Block, headNumber) {
+		return newBlockCompatError("EIP-170 fork block", storedEIP170Block, newEIP170Block)
+	}
+	if isForkTimestampIncompatible(storedEIP170Time, newEIP170Time, headTimestamp) {
+		return newTimestampCompatError("EIP-170 fork timestamp", storedEIP170Time, newEIP170Time)
 	}
 	if isForkTimestampIncompatible(c.ShanghaiTime, newcfg.ShanghaiTime, headTimestamp) {
 		return newTimestampCompatError("Shanghai fork timestamp", c.ShanghaiTime, newcfg.ShanghaiTime)
@@ -1237,7 +1292,7 @@ func (err *ConfigCompatError) Error() string {
 // phases.
 type Rules struct {
 	IsHomestead, IsEIP150, IsEIP155, IsEIP158               bool
-	IsEIP2929                                               bool
+	IsEIP170, IsEIP2929                                     bool
 	IsByzantium, IsConstantinople, IsPetersburg, IsIstanbul bool
 	IsBerlin, IsLondon                                      bool
 	IsMerge, IsShanghai, IsCancun, IsPrague, IsOsaka        bool
@@ -1253,6 +1308,7 @@ func (c *ChainConfig) Rules(num *big.Int, isMerge bool, timestamp uint64) Rules 
 		IsEIP150:         c.IsEIP150(num),
 		IsEIP155:         c.IsEIP155(num),
 		IsEIP158:         c.IsEIP158(num),
+		IsEIP170:         c.IsEIP170(num, timestamp),
 		IsByzantium:      c.IsByzantium(num),
 		IsConstantinople: c.IsConstantinople(num),
 		IsPetersburg:     c.IsPetersburg(num),

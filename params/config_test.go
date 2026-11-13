@@ -110,6 +110,26 @@ func TestCheckCompatible(t *testing.T) {
 				RewindToTime: 9,
 			},
 		},
+		{
+			// Configs persisted before eip170Block existed activate EIP-170
+			// with EIP-158, so scheduling it explicitly at the same block is
+			// not a change.
+			stored:    &ChainConfig{EIP158Block: big.NewInt(10)},
+			new:       &ChainConfig{EIP158Block: big.NewInt(10), EIP170Block: big.NewInt(10)},
+			headBlock: 100,
+			wantErr:   nil,
+		},
+		{
+			stored:    &ChainConfig{EIP158Block: big.NewInt(10)},
+			new:       &ChainConfig{EIP158Block: big.NewInt(10), EIP170Block: big.NewInt(20)},
+			headBlock: 100,
+			wantErr: &ConfigCompatError{
+				What:          "EIP-170 fork block",
+				StoredBlock:   big.NewInt(10),
+				NewBlock:      big.NewInt(20),
+				RewindToBlock: 9,
+			},
+		},
 	}
 
 	for _, test := range tests {
