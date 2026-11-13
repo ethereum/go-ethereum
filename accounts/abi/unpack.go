@@ -62,7 +62,10 @@ func ReadInteger(typ Type, b []byte) (interface{}, error) {
 			}
 			return u64, nil
 		default:
-			// the only case left for unsigned integer is uint256.
+			// The remaining sizes (24, 40, ..., 256) are returned as *big.Int.
+			if ret.BitLen() > typ.Size {
+				return nil, errBadUint
+			}
 			return ret, nil
 		}
 	}
@@ -98,8 +101,11 @@ func ReadInteger(typ Type, b []byte) (interface{}, error) {
 		}
 		return i64, nil
 	default:
-		// the only case left for integer is int256
-
+		// The remaining sizes (24, 40, ..., 256) are returned as *big.Int.
+		bound := new(big.Int).Lsh(common.Big1, uint(typ.Size-1))
+		if ret.Cmp(bound) >= 0 || ret.Cmp(new(big.Int).Neg(bound)) < 0 {
+			return nil, errBadInt
+		}
 		return ret, nil
 	}
 }
