@@ -372,6 +372,12 @@ func (f *BlobFetcher) loop() {
 						}
 						// For eager mode, always fetch immediately
 						if uint64(randomValue) < f.fetchProbability || f.custody.OneCount() >= kzg4844.DataPerBlob {
+							// A full request needs an announcer holding all the
+							// cells. Leave the tx undecided otherwise, so that
+							// no state is kept for an announcement we ignore.
+							if ann.cells != types.CustodyBitmapAll {
+								continue
+							}
 							f.full[hash] = struct{}{}
 						} else {
 							f.partial[hash] = struct{}{}
@@ -689,16 +695,20 @@ func (f *BlobFetcher) loop() {
 				}
 			}
 			// Clean up general announcement tracking
-			if _, ok := f.announces[drop.peer]; ok {
-				for hash := range f.announces[drop.peer] {
+			if anns, ok := f.announces[drop.peer]; ok {
+				delete(f.announces, drop.peer)
+				for hash := range anns {
 					delete(f.alternates[hash], drop.peer)
 					if len(f.alternates[hash]) == 0 {
 						delete(f.alternates, hash)
 					}
+					// Forget the tx if it is not being fetched and nobody
+					// announces it any more.
+					if f.fetches[hash] == nil && !f.announced(hash) {
+						f.discard(hash)
+					}
 				}
-				delete(f.announces, drop.peer)
 			}
-			delete(f.announces, drop.peer)
 
 			// Clean up any active requests
 			if request, ok := f.requests[drop.peer]; ok && len(request) != 0 {
@@ -837,6 +847,16 @@ func (f *BlobFetcher) recoverable(hash common.Hash) bool {
 	// Partial case:
 	// return true if our custody can be covered
 	return f.custody.Difference(covered).OneCount() == 0
+}
+
+// announced reports whether any peer still announces the given transaction.
+func (f *BlobFetcher) announced(hash common.Hash) bool {
+	for _, anns := range f.announces {
+		if _, ok := anns[hash]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // discard removes every trace of a transaction from the fetcher: its fetch
