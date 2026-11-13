@@ -65,7 +65,8 @@ func newMuxTracerFromConfig(ctx *tracers.Context, cfg json.RawMessage, chainConf
 // The names parameter associates a label with each tracer, used as keys in
 // the aggregated JSON result returned by GetResult.
 //
-// For hooks that have both a V1 and V2 form (OnCodeChange / OnCodeChangeV2,
+// For hooks that have both a V1 and V2 form (OnTxEnd / OnTxEndV2,
+// OnCodeChange / OnCodeChangeV2,
 // OnNonceChange / OnNonceChangeV2, OnGasChange / OnGasChangeV2, OnEnter /
 // OnEnterV2, OnExit / OnExitV2, OnOpcode / OnOpcodeV2, OnFault / OnFaultV2,
 // OnSystemCallStart / OnSystemCallStartV2), the mux exposes only the V2
@@ -77,7 +78,7 @@ func NewMuxTracer(names []string, objects []*tracers.Tracer) (*tracers.Tracer, e
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart:           t.OnTxStart,
-			OnTxEnd:             t.OnTxEnd,
+			OnTxEndV2:           t.OnTxEndV2,
 			OnEnterV2:           t.OnEnterV2,
 			OnExitV2:            t.OnExitV2,
 			OnOpcodeV2:          t.OnOpcodeV2,
@@ -143,11 +144,9 @@ func (t *muxTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, fro
 	}
 }
 
-func (t *muxTracer) OnTxEnd(receipt *types.Receipt, err error) {
+func (t *muxTracer) OnTxEndV2(receipt *types.Receipt, usage *tracing.TxGasUsage, err error) {
 	for _, t := range t.tracers {
-		if t.OnTxEnd != nil {
-			t.OnTxEnd(receipt, err)
-		}
+		t.EmitTxEnd(receipt, usage, err)
 	}
 }
 

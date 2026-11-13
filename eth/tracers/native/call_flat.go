@@ -215,7 +215,7 @@ func (t *flatCallTracer) OnTxEnd(receipt *types.Receipt, err error) {
 	if t.interrupt.Load() {
 		return
 	}
-	t.tracer.OnTxEnd(receipt, err)
+	t.tracer.OnTxEnd(receipt, nil, err)
 }
 
 // GetResult returns an empty json object.

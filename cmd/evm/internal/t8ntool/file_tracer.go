@@ -107,11 +107,9 @@ func (l *fileWritingTracer) OnTxStart(env *tracing.VMContext, tx *types.Transact
 }
 
 // OnTxEnd writes result (if getResult exist), closes any currently open output-file,
-// and invokes the inner OnTxEnd handler.
-func (l *fileWritingTracer) OnTxEnd(receipt *types.Receipt, err error) {
-	if l.inner != nil && l.inner.OnTxEnd != nil {
-		l.inner.OnTxEnd(receipt, err)
-	}
+// and invokes the inner transaction-end handler.
+func (l *fileWritingTracer) OnTxEnd(receipt *types.Receipt, usage *tracing.TxGasUsage, err error) {
+	l.inner.EmitTxEnd(receipt, usage, err)
 	if l.getResult != nil && l.destination != nil {
 		if result, err := l.getResult(); result != nil {
 			json.NewEncoder(l.destination).Encode(result)
@@ -127,7 +125,7 @@ func (l *fileWritingTracer) OnTxEnd(receipt *types.Receipt, err error) {
 func (l *fileWritingTracer) hooks() *tracing.Hooks {
 	return &tracing.Hooks{
 		OnTxStart: l.OnTxStart,
-		OnTxEnd:   l.OnTxEnd,
+		OnTxEndV2: l.OnTxEnd,
 		OnEnterV2: func(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
 			l.frames = append(l.frames, gas)
 			l.inner.EmitEnter(depth, typ, from, to, input, gas, value)

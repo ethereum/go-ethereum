@@ -60,7 +60,14 @@ func WrapWithJournal(hooks *Hooks) (*Hooks, error) {
 		hooks: hooks,
 	}
 	// Scope hooks need to be re-implemented.
-	wrapped.OnTxEnd = j.OnTxEnd
+	noTxEndHook := hooks.OnTxEnd == nil && hooks.OnTxEndV2 == nil
+	wrapped.OnTxEnd, wrapped.OnTxEndV2 = nil, nil
+	if hooks.OnTxEnd != nil || noTxEndHook {
+		wrapped.OnTxEnd = j.OnTxEnd
+	}
+	if hooks.OnTxEndV2 != nil {
+		wrapped.OnTxEndV2 = j.OnTxEndV2
+	}
 
 	noEnterHook := hooks.OnEnter == nil && hooks.OnEnterV2 == nil
 	wrapped.OnEnter, wrapped.OnEnterV2 = nil, nil
@@ -143,6 +150,13 @@ func (j *journal) OnTxEnd(receipt *types.Receipt, err error) {
 	if j.hooks.OnTxEnd != nil {
 		j.hooks.OnTxEnd(receipt, err)
 	}
+}
+
+// OnTxEndV2 resets the journal and forwards a transaction end reported through
+// the multi-dimensional hook.
+func (j *journal) OnTxEndV2(receipt *types.Receipt, usage *TxGasUsage, err error) {
+	j.reset()
+	j.hooks.OnTxEndV2(receipt, usage, err)
 }
 
 // OnEnter records a journal revision for a frame reported through the
