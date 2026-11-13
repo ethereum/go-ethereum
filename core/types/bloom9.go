@@ -135,7 +135,7 @@ func MergeBloom(receipts Receipts) Bloom {
 // Bloom9 returns the bloom filter for the given data
 func Bloom9(data []byte) []byte {
 	var b Bloom
-	b.SetBytes(data)
+	b.Add(data)
 	return b.Bytes()
 }
 

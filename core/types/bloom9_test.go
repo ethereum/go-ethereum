@@ -76,6 +76,33 @@ func TestBloomExtensively(t *testing.T) {
 	}
 }
 
+func TestBloom9(t *testing.T) {
+	for _, data := range [][]byte{
+		nil,
+		[]byte("testtest"),
+		common.HexToAddress("0x00000000219ab540356cbb839cbe05303d7705fa").Bytes(),
+		make([]byte, 300),
+	} {
+		// Yellow Paper M3:2048: set the bits given by the low 11 bits of the
+		// first three byte pairs of keccak256(data).
+		h := crypto.Keccak256(data)
+		want := new(big.Int)
+		for i := 0; i < 6; i += 2 {
+			want.SetBit(want, int(uint(h[i])<<8|uint(h[i+1]))&2047, 1)
+		}
+		got := Bloom9(data)
+		if len(got) != BloomByteLength {
+			t.Fatalf("Bloom9(%x): length %d, want %d", data, len(got), BloomByteLength)
+		}
+		if new(big.Int).SetBytes(got).Cmp(want) != 0 {
+			t.Errorf("Bloom9(%x) = %x, want %x", data, got, want)
+		}
+		if bloom := BytesToBloom(got); !bloom.Test(data) {
+			t.Errorf("Bloom9(%x) does not test true for its input", data)
+		}
+	}
+}
+
 func BenchmarkBloom9(b *testing.B) {
 	test := []byte("testestestest")
 	for b.Loop() {
