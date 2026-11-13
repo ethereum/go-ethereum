@@ -528,6 +528,20 @@ func (op ptrOp) genDecode(ctx *genContext) (string, string) {
 	fmt.Fprintf(&b, "} else if %s != 0 || %s != %s {\n", sizeV, kindV, wantKind)
 	fmt.Fprint(&b, code)
 	fmt.Fprintf(&b, "  %s = &%s\n", resultV, result)
+	fmt.Fprintf(&b, "} else {\n")
+	// The empty value must be consumed, otherwise the next field decodes it again.
+	if op.nilValue == rlpstruct.NilKindList {
+		fmt.Fprintf(&b, "  if _, err := dec.List(); err != nil {\n")
+		fmt.Fprintf(&b, "    return err\n")
+		fmt.Fprintf(&b, "  }\n")
+		fmt.Fprintf(&b, "  if err := dec.ListEnd(); err != nil {\n")
+		fmt.Fprintf(&b, "    return err\n")
+		fmt.Fprintf(&b, "  }\n")
+	} else {
+		fmt.Fprintf(&b, "  if _, err := dec.Bytes(); err != nil {\n")
+		fmt.Fprintf(&b, "    return err\n")
+		fmt.Fprintf(&b, "  }\n")
+	}
 	fmt.Fprintf(&b, "}\n")
 	return resultV, b.String()
 }
