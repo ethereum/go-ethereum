@@ -71,7 +71,7 @@ func (db *Database) loadJournal(diskRoot common.Hash) (layer, error) {
 		reader = f
 	} else {
 		log.Info("Load database journal from disk")
-		journal := rawdb.ReadTrieJournal(db.diskdb)
+		journal := rawdb.ReadTrieJournal(db.statedb)
 		if len(journal) == 0 {
 			return nil, errMissJournal
 		}
@@ -127,7 +127,7 @@ type journalGenerator struct {
 }
 
 // loadGenerator loads the state generation progress marker from the database.
-func loadGenerator(db ethdb.KeyValueReader, hash nodeHasher) (*journalGenerator, common.Hash, error) {
+func loadGenerator(db ethdb.KeyValueReader, hash func([]byte) (common.Hash, error)) (*journalGenerator, common.Hash, error) {
 	trieRoot, err := hash(rawdb.ReadAccountTrieNode(db, nil))
 	if err != nil {
 		return nil, common.Hash{}, err
@@ -170,8 +170,8 @@ func (db *Database) loadLayers() layer {
 		root common.Hash
 		err  error
 	)
-	blob := rawdb.ReadAccountTrieNode(db.diskdb, nil)
-	root, err = db.hasher(blob)
+	blob := rawdb.ReadAccountTrieNode(db.statedb, nil)
+	root, err = db.trie.hashRoot(blob)
 	if err != nil {
 		log.Crit("Failed to compute node hash", "err", err)
 	}
@@ -187,7 +187,7 @@ func (db *Database) loadLayers() layer {
 		log.Info("Failed to load journal, discard it", "err", err)
 	}
 	// Return single layer with persistent state.
-	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.diskdb), db, nil, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0), nil)
+	return newDiskLayer(root, rawdb.ReadPersistentStateID(db.statedb), db, nil, nil, newBuffer(db.config.WriteBufferSize, nil, nil, 0), nil)
 }
 
 // loadDiskLayer reads the binary blob from the layer journal, reconstructing
@@ -205,7 +205,7 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	if err := r.Decode(&id); err != nil {
 		return nil, fmt.Errorf("load state id: %v", err)
 	}
-	stored := rawdb.ReadPersistentStateID(db.diskdb)
+	stored := rawdb.ReadPersistentStateID(db.statedb)
 	if stored > id {
 		return nil, fmt.Errorf("invalid state id: stored %d resolved %d", stored, id)
 	}
@@ -401,7 +401,7 @@ func (db *Database) Journal(root common.Hash) error {
 	}
 	// Secondly write out the state root in disk, ensure all layers
 	// on top are continuous with disk.
-	diskRoot, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
+	diskRoot, err := db.trie.hashRoot(rawdb.ReadAccountTrieNode(db.statedb, nil))
 	if err != nil {
 		return err
 	}
@@ -417,7 +417,7 @@ func (db *Database) Journal(root common.Hash) error {
 	if file == nil {
 		data := journal.(*bytes.Buffer)
 		size := data.Len()
-		rawdb.WriteTrieJournal(db.diskdb, data.Bytes())
+		rawdb.WriteTrieJournal(db.statedb, data.Bytes())
 		log.Info("Persisted dirty state to disk", "size", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
 	} else {
 		if err := buffered.Flush(); err != nil {

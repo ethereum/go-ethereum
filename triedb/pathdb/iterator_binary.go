@@ -66,7 +66,7 @@ func (dl *diskLayer) initBinaryAccountIterator(seek common.Hash) *binaryIterator
 		// is constructed, no matter the referenced disk layer is stale or not
 		// later.
 		a: newDiffAccountIterator(seek, accountList, nil),
-		b: newDiskAccountIterator(dl.db.diskdb, seek),
+		b: newDiskAccountIterator(dl.db.statedb, seek),
 	}
 	l.aDone = !l.a.Next()
 	l.bDone = !l.b.Next()
@@ -139,7 +139,7 @@ func (dl *diskLayer) initBinaryStorageIterator(account common.Hash, seek common.
 		// is constructed, no matter the referenced disk layer is stale or not
 		// later.
 		a: newDiffStorageIterator(account, seek, storageList, nil),
-		b: newDiskStorageIterator(dl.db.diskdb, account, seek),
+		b: newDiskStorageIterator(dl.db.statedb, account, seek),
 	}
 	l.aDone = !l.a.Next()
 	l.bDone = !l.b.Next()
