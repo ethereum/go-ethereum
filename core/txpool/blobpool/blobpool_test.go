@@ -1104,7 +1104,7 @@ func TestChangingSlotterSize(t *testing.T) {
 
 	// Write the two safely sized txs to store. note: although the store is
 	// configured for a blob count of 6, it can also support around ~1mb of call
-	// data - all this to say that we aren't using the the absolute largest shelf
+	// data - all this to say that we aren't using the absolute largest shelf
 	// available.
 	store.Put(blob1)
 	store.Put(blob2)
@@ -1207,7 +1207,7 @@ func TestBillyMigration(t *testing.T) {
 
 	// Write the two safely sized txs to store. note: although the store is
 	// configured for a blob count of 6, it can also support around ~1mb of call
-	// data - all this to say that we aren't using the the absolute largest shelf
+	// data - all this to say that we aren't using the absolute largest shelf
 	// available.
 	store.Put(blob1)
 	store.Put(blob2)
@@ -2039,7 +2039,7 @@ func TestGetBlobs(t *testing.T) {
 
 	// Write the two safely sized txs to store. note: although the store is
 	// configured for a blob count of 6, it can also support around ~1mb of call
-	// data - all this to say that we aren't using the the absolute largest shelf
+	// data - all this to say that we aren't using the absolute largest shelf
 	// available.
 	store.Put(blob1)
 	store.Put(blob2)
