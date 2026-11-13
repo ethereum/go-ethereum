@@ -120,6 +120,9 @@ type isBlobScheduled struct {
 }
 
 type isCompleted []common.Hash
+
+// isForgotten checks that the fetcher keeps no state for the given hashes.
+type isForgotten []common.Hash
 type isDropped []string
 
 type isFetching struct {
@@ -639,6 +642,92 @@ func TestBlobFetcherPeerDrop(t *testing.T) {
 	})
 }
 
+// TestBlobFetcherUnservedFullAnnounce checks that no state is kept for a tx
+// which would be fetched in full, but is announced without the full cell set.
+func TestBlobFetcherUnservedFullAnnounce(t *testing.T) {
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload: func(common.Hash) bool { return false },
+					AddCells:   func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
+						return nil
+					},
+					DropPeer: func(string) {},
+				},
+				custody,
+				&mockRand{value: 5}, // Force full requests (5 < fetchProbability)
+				15,
+			)
+		},
+		steps: []interface{}{
+			// A announces a subset of the cells -> nothing to fetch, nothing to keep
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, custody: frontCustody},
+			isBlobScheduled{announces: nil, fetching: nil},
+			isForgotten{testBlobTxHashes[0]},
+
+			// B announces all the cells -> full decision, fetch starts
+			doBlobNotify{peer: "B", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			isDecidedFull{testBlobTxHashes[0]: struct{}{}},
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"B": {{hash: testBlobTxHashes[0], custody: halfCustody}},
+				},
+				fetching: map[string][]blobAnnounce{
+					"B": {{hash: testBlobTxHashes[0], custody: halfCustody}},
+				},
+			},
+		},
+	})
+}
+
+// TestBlobFetcherPeerDropUnrequested checks that dropping the only announcer of
+// a tx removes all traces of it, also when the tx was not requested yet.
+func TestBlobFetcherPeerDropUnrequested(t *testing.T) {
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload: func(common.Hash) bool { return false },
+					AddCells:   func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error {
+						return nil
+					},
+					DropPeer: func(string) {},
+				},
+				custody,
+				&mockRand{value: 5}, // Force full requests (5 < fetchProbability)
+				15,
+			)
+		},
+		steps: []interface{}{
+			// A announces the first tx -> fetch starts
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, custody: fullCustody},
+			// A announces a second tx while the request is running -> only tracked
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[1]}, custody: fullCustody},
+			isDecidedFull{testBlobTxHashes[0]: struct{}{}, testBlobTxHashes[1]: struct{}{}},
+			isBlobScheduled{
+				announces: map[string][]blobAnnounce{
+					"A": {
+						{hash: testBlobTxHashes[0], custody: halfCustody},
+						{hash: testBlobTxHashes[1], custody: halfCustody},
+					},
+				},
+				fetching: map[string][]blobAnnounce{
+					"A": {{hash: testBlobTxHashes[0], custody: halfCustody}},
+				},
+			},
+
+			// Drop peer A -> both txs are forgotten
+			doDrop("A"),
+			isBlobScheduled{announces: nil, fetching: nil},
+			isFetching{hashes: nil},
+			isForgotten{testBlobTxHashes[0], testBlobTxHashes[1]},
+		},
+	})
+}
+
 // TestBlobFetcherPartialUnrecoverable checks that a partial fetch is discarded
 // once the remaining announcing peers can no longer cover the required custody
 func TestBlobFetcherPartialUnrecoverable(t *testing.T) {
@@ -863,6 +952,27 @@ func testBlobFetcher(t *testing.T, tt blobFetcherTest) {
 				if _, ok := fetcher.full[hash]; !ok {
 					t.Errorf("step %d: hash %x not decided for full request", i, hash)
 					return
+				}
+			}
+
+		case isForgotten:
+			for _, hash := range step {
+				if _, ok := fetcher.full[hash]; ok {
+					t.Errorf("step %d: hash %x still decided for full request", i, hash)
+				}
+				if _, ok := fetcher.partial[hash]; ok {
+					t.Errorf("step %d: hash %x still decided for partial request", i, hash)
+				}
+				if _, ok := fetcher.fetches[hash]; ok {
+					t.Errorf("step %d: hash %x still being fetched", i, hash)
+				}
+				if _, ok := fetcher.alternates[hash]; ok {
+					t.Errorf("step %d: hash %x still has alternates", i, hash)
+				}
+				for peer, anns := range fetcher.announces {
+					if _, ok := anns[hash]; ok {
+						t.Errorf("step %d: hash %x still announced by %s", i, hash, peer)
+					}
 				}
 			}
 
