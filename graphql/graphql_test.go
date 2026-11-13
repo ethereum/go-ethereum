@@ -154,6 +154,11 @@ func TestGraphQLBlockSerialization(t *testing.T) {
 			want: `{"errors":[{"message":"from block number must be specified","path":["blocks"]}],"data":null}`,
 			code: 400,
 		},
+		{
+			body: `{"query": "{blocks(from:-2,to:1){number}}"}`,
+			want: `{"errors":[{"message":"from block number must not be negative","path":["blocks"]}],"data":null}`,
+			code: 400,
+		},
 	} {
 		resp, err := http.Post(fmt.Sprintf("%s/graphql", stack.HTTPEndpoint()), "application/json", strings.NewReader(tt.body))
 		if err != nil {
