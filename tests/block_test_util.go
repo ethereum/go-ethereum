@@ -26,6 +26,8 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"strings"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -37,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/params"
@@ -46,9 +49,38 @@ import (
 	"github.com/ethereum/go-ethereum/triedb/pathdb"
 )
 
+// RunConfig holds the execution settings for BlockTest.Run and EngineTest.Run.
+// The zero value runs blocks as the chain does by default.
+type RunConfig struct {
+	// Sequential executes every block sequentially, even one the EIP-7928
+	// parallel processor could run.
+	Sequential bool
+
+	// WithholdAccessList never attaches a block test's delivered access list,
+	// so every block executes without one. Engine tests carry the list in the
+	// payload and ignore it.
+	WithholdAccessList bool
+
+	// NoPrecompileCache turns off the precompile result cache the chain
+	// shares across a test's blocks.
+	NoPrecompileCache bool
+}
+
 // A BlockTest checks handling of entire blocks.
 type BlockTest struct {
 	json btJSON
+
+	// Rejections lists every block the chain rejected during Run, in fixture
+	// order, so a consumer can check why each was rejected.
+	Rejections []Rejection
+}
+
+// A Rejection is a test block or payload the client rejected, with the
+// client's own error.
+type Rejection struct {
+	Index int          `json:"index"`          // position in the fixture's blocks or engineNewPayloads
+	Hash  *common.Hash `json:"hash,omitempty"` // the block's hash, when the client computed one
+	Error string       `json:"error"`
 }
 
 // UnmarshalJSON implements json.Unmarshaler interface.
@@ -71,6 +103,77 @@ type btBlock struct {
 	ExpectException string
 	Rlp             string
 	UncleHeaders    []*btHeader
+
+	// The EIP-7928 block access list travels beside the block, not in its RLP.
+	// Fixtures carry it as blockAccessList, or, for a block expected to be
+	// rejected, only inside rlp_decoded.
+	BlockAccessList json.RawMessage `json:"blockAccessList"`
+	RlpDecoded      *struct {
+		BlockAccessList json.RawMessage `json:"blockAccessList"`
+	} `json:"rlp_decoded"`
+}
+
+// balQuantityKeys are the access list fields holding hex quantities, which the
+// fixtures zero-pad ("0x00") and geth's hexutil decoders reject.
+var balQuantityKeys = map[string]bool{
+	"blockAccessIndex": true, "postNonce": true, "postBalance": true,
+	"postValue": true, "slot": true, "storageReads": true,
+}
+
+// trimHexQuantity strips the leading zeros from a hex quantity.
+func trimHexQuantity(v string) string {
+	if !strings.HasPrefix(v, "0x") {
+		return v
+	}
+	digits := strings.TrimLeft(v[2:], "0")
+	if digits == "" {
+		digits = "0"
+	}
+	return "0x" + digits
+}
+
+// trimBALQuantities rewrites the hex quantities in a decoded access list JSON
+// tree into the form geth's decoders accept, leaving addresses and code alone.
+func trimBALQuantities(node any, quantity bool) any {
+	switch n := node.(type) {
+	case map[string]any:
+		for k, v := range n {
+			n[k] = trimBALQuantities(v, balQuantityKeys[k])
+		}
+	case []any:
+		for i, v := range n {
+			n[i] = trimBALQuantities(v, quantity)
+		}
+	case string:
+		if quantity {
+			return trimHexQuantity(n)
+		}
+	}
+	return node
+}
+
+// accessList decodes the fixture's block access list, if it carries one.
+func (bb *btBlock) accessList() (*bal.BlockAccessList, error) {
+	raw := bb.BlockAccessList
+	if len(raw) == 0 && bb.RlpDecoded != nil {
+		raw = bb.RlpDecoded.BlockAccessList
+	}
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var tree any
+	if err := json.Unmarshal(raw, &tree); err != nil {
+		return nil, err
+	}
+	trimmed, err := json.Marshal(trimBALQuantities(tree, false))
+	if err != nil {
+		return nil, err
+	}
+	var list bal.BlockAccessList
+	if err := json.Unmarshal(trimmed, &list); err != nil {
+		return nil, err
+	}
+	return &list, nil
 }
 
 //go:generate go run github.com/fjl/gencodec -type btHeader -field-override btHeaderMarshaling -out gen_btheader.go
@@ -113,7 +216,8 @@ type btHeaderMarshaling struct {
 	SlotNumber    *math.HexOrDecimal64
 }
 
-func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, postCheck func(error, *core.BlockChain)) (result error) {
+func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *tracing.Hooks, cfg RunConfig, postCheck func(error, *core.BlockChain)) (result error) {
+	t.Rejections = []Rejection{}
 	config, ok := Forks[t.json.Network]
 	if !ok {
 		return UnsupportedForkError{t.json.Network}
@@ -122,7 +226,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	// import pre accounts & construct test genesis block & state root
 	// Commit genesis state
 	var (
-		gspec = t.genesis(config)
+		gspec = genesisFromHeader(config, &t.json.Genesis, t.json.Pre)
 		db    = rawdb.NewMemoryDatabase()
 		tconf = &triedb.Config{
 			Preimages: true,
@@ -161,8 +265,10 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 		Preimages:      true,
 		TxLookupLimit:  -1, // disable tx indexing
 		VmConfig: vm.Config{
-			Tracer: tracer,
+			Tracer:                   tracer,
+			DisableParallelExecution: cfg.Sequential,
 		},
+		NoPrecompileCache:       cfg.NoPrecompileCache,
 		StatelessSelfValidation: witness,
 	}
 	if snapshotter {
@@ -175,7 +281,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	}
 	defer chain.Stop()
 
-	validBlocks, err := t.insertBlocks(chain)
+	validBlocks, err := t.insertBlocks(chain, cfg.WithholdAccessList)
 	if err != nil {
 		return err
 	}
@@ -192,7 +298,7 @@ func (t *BlockTest) Run(snapshotter bool, scheme string, witness bool, tracer *t
 	if err != nil {
 		return err
 	}
-	if err = t.validatePostState(newDB); err != nil {
+	if err = validatePostState(t.json.Post, newDB); err != nil {
 		return fmt.Errorf("post state validation failed: %v", err)
 	}
 	// Cross-check the snapshot-to-hash against the trie hash
@@ -211,23 +317,25 @@ func (t *BlockTest) Network() string {
 	return t.json.Network
 }
 
-func (t *BlockTest) genesis(config *params.ChainConfig) *core.Genesis {
+// genesisFromHeader returns the genesis of a block or engine test, built from
+// its genesis block header and pre-state.
+func genesisFromHeader(config *params.ChainConfig, header *btHeader, alloc types.GenesisAlloc) *core.Genesis {
 	return &core.Genesis{
 		Config:        config,
-		Nonce:         t.json.Genesis.Nonce.Uint64(),
-		Timestamp:     t.json.Genesis.Timestamp,
-		ParentHash:    t.json.Genesis.ParentHash,
-		ExtraData:     t.json.Genesis.ExtraData,
-		GasLimit:      t.json.Genesis.GasLimit,
-		GasUsed:       t.json.Genesis.GasUsed,
-		Difficulty:    t.json.Genesis.Difficulty,
-		Mixhash:       t.json.Genesis.MixHash,
-		Coinbase:      t.json.Genesis.Coinbase,
-		Alloc:         t.json.Pre,
-		BaseFee:       t.json.Genesis.BaseFeePerGas,
-		BlobGasUsed:   t.json.Genesis.BlobGasUsed,
-		ExcessBlobGas: t.json.Genesis.ExcessBlobGas,
-		SlotNumber:    t.json.Genesis.SlotNumber,
+		Nonce:         header.Nonce.Uint64(),
+		Timestamp:     header.Timestamp,
+		ParentHash:    header.ParentHash,
+		ExtraData:     header.ExtraData,
+		GasLimit:      header.GasLimit,
+		GasUsed:       header.GasUsed,
+		Difficulty:    header.Difficulty,
+		Mixhash:       header.MixHash,
+		Coinbase:      header.Coinbase,
+		Alloc:         alloc,
+		BaseFee:       header.BaseFeePerGas,
+		BlobGasUsed:   header.BlobGasUsed,
+		ExcessBlobGas: header.ExcessBlobGas,
+		SlotNumber:    header.SlotNumber,
 	}
 }
 
@@ -244,12 +352,13 @@ See https://ethereum-tests.readthedocs.io/en/latest/blockchain-ref.html
 	expected we are expected to ignore it and continue processing and then validate the
 	post state.
 */
-func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error) {
+func (t *BlockTest) insertBlocks(blockchain *core.BlockChain, withholdAccessList bool) ([]btBlock, error) {
 	validBlocks := make([]btBlock, 0)
 	// insert the test blocks, which will execute all transactions
 	for bi, b := range t.json.Blocks {
-		cb, err := b.decode()
+		cb, dropped, err := b.decode(withholdAccessList)
 		if err != nil {
+			t.Rejections = append(t.Rejections, Rejection{Index: bi, Error: err.Error()})
 			if b.BlockHeader == nil {
 				log.Info("Block decoding failed", "index", bi, "err", err)
 				continue // OK - block is supposed to be invalid, continue with next block
@@ -259,8 +368,12 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		}
 		// RLP decoding worked, try to insert into chain:
 		blocks := types.Blocks{cb}
+		beginImport(cb.Hash(), dropped)
 		i, err := blockchain.InsertChain(blocks)
+		endImport(cb.Hash())
 		if err != nil {
+			hash := cb.Hash()
+			t.Rejections = append(t.Rejections, Rejection{Index: bi, Hash: &hash, Error: err.Error()})
 			if b.BlockHeader == nil {
 				continue // OK - block is supposed to be invalid, continue with next block
 			} else {
@@ -269,7 +382,7 @@ func (t *BlockTest) insertBlocks(blockchain *core.BlockChain) ([]btBlock, error)
 		}
 		if b.BlockHeader == nil {
 			if data, err := json.MarshalIndent(cb.Header(), "", "  "); err == nil {
-				fmt.Fprintf(os.Stdout, "block (index %d) insertion should have failed due to: %v:\n%v\n",
+				fmt.Fprintf(os.Stderr, "block (index %d) insertion should have failed due to: %v:\n%v\n",
 					bi, b.ExpectException, string(data))
 			}
 			return nil, fmt.Errorf("block (index %d) insertion should have failed due to: %v",
@@ -358,9 +471,10 @@ func validateHeader(h *btHeader, h2 *types.Header) error {
 	return nil
 }
 
-func (t *BlockTest) validatePostState(statedb *state.StateDB) error {
-	// validate post state accounts in test file against what we have in state db
-	for addr, acct := range t.json.Post {
+// validatePostState checks the accounts of a test's expected post-state
+// against the state database.
+func validatePostState(post types.GenesisAlloc, statedb *state.StateDB) error {
+	for addr, acct := range post {
 		// address is indirectly verified by the other fields, as it's the db key
 		code2 := statedb.GetCode(addr)
 		balance2 := statedb.GetBalance(addr).ToBig()
@@ -403,12 +517,86 @@ func (t *BlockTest) validateImportedHeaders(cm *core.BlockChain, validBlocks []b
 	return nil
 }
 
-func (bb *btBlock) decode() (*types.Block, error) {
+// decode returns the fixture block, with its delivered access list attached
+// when that list is the one the header commits to, and whether a delivered
+// list was dropped. With withholdAccessList, no list is ever attached, and a
+// delivered one counts as dropped.
+func (bb *btBlock) decode(withholdAccessList bool) (*types.Block, bool, error) {
 	data, err := hexutil.Decode(bb.Rlp)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	var b types.Block
-	err = rlp.DecodeBytes(data, &b)
-	return &b, err
+	if err = rlp.DecodeBytes(data, &b); err != nil {
+		return nil, false, err
+	}
+	list, err := bb.accessList()
+	if withholdAccessList {
+		return &b, list != nil || err != nil, nil
+	}
+	// The access list is delivered beside the block, as it is from a peer in
+	// sync, so it is used only if it is the one the header commits to.
+	// Otherwise it is dropped, like the downloader drops a peer's list, and
+	// the block is judged on its header with the list computed in execution.
+	h := b.BlockAccessListHash()
+	switch {
+	case err != nil:
+		log.Debug("Dropped block access list", "number", b.NumberU64(), "hash", b.Hash(), "err", err)
+	case list == nil:
+	case h == nil || list.Hash() != *h:
+		log.Debug("Dropped block access list", "number", b.NumberU64(), "hash", b.Hash(), "err", "hash mismatch")
+	default:
+		return b.WithAccessListUnsafe(list), false, nil
+	}
+	return &b, list != nil || err != nil, nil
+}
+
+// imports tracks the blocks being inserted by every running block test, so a
+// block's execution can be tied to the import that dropped its delivered access
+// list. Core logs a block's execution by hash alone, and fixtures run in
+// parallel can import the same block, with and without a valid list, so only
+// one import of a given hash runs at a time. Only evm --bal-report reads it,
+// and only evm --workers runs fixtures in parallel.
+var imports = struct {
+	lock     sync.Mutex
+	inFlight map[common.Hash]chan struct{}
+	dropped  map[common.Hash]bool
+}{
+	inFlight: make(map[common.Hash]chan struct{}),
+	dropped:  make(map[common.Hash]bool),
+}
+
+// beginImport waits until no other import of the block is in flight, then
+// records whether this one dropped the block's delivered access list.
+func beginImport(hash common.Hash, dropped bool) {
+	imports.lock.Lock()
+	defer imports.lock.Unlock()
+	for {
+		done, busy := imports.inFlight[hash]
+		if !busy {
+			break
+		}
+		imports.lock.Unlock()
+		<-done
+		imports.lock.Lock()
+	}
+	imports.inFlight[hash] = make(chan struct{})
+	imports.dropped[hash] = dropped
+}
+
+// endImport releases the block for the next import of it.
+func endImport(hash common.Hash) {
+	imports.lock.Lock()
+	defer imports.lock.Unlock()
+	close(imports.inFlight[hash])
+	delete(imports.inFlight, hash)
+	delete(imports.dropped, hash)
+}
+
+// AccessListDropped reports whether the block with the given hash is being
+// imported by a block test that dropped its delivered access list.
+func AccessListDropped(hash common.Hash) bool {
+	imports.lock.Lock()
+	defer imports.lock.Unlock()
+	return imports.dropped[hash]
 }

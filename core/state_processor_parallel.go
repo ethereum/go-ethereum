@@ -47,25 +47,37 @@ var (
 // supportsParallelExecution reports whether the block can be executed using the
 // BAL-driven parallel processor.
 func supportsParallelExecution(block *types.Block, config *params.ChainConfig, wantWitness bool, wantTrace bool, disableParallel bool) bool {
+	return sequentialExecutionReason(block, config, wantWitness, wantTrace, disableParallel) == ""
+}
+
+// sequentialExecutionReason returns the first condition that rules out the
+// BAL-driven parallel processor for the block, or "" if it can be used.
+func sequentialExecutionReason(block *types.Block, config *params.ChainConfig, wantWitness bool, wantTrace bool, disableParallel bool) string {
 	// Parallel execution explicitly disabled via config (e.g. by tests that
 	// want to force the sequential path).
 	if disableParallel {
-		return false
+		return "disabled"
 	}
 	// No tracer is attached (tracing requires the strict sequential
 	// ordering of state operations that parallel execution does not
 	// preserve).
 	if wantTrace {
-		return false
+		return "tracer"
 	}
 	// No witness is being collected (witness building must observe
 	// every state access alongside the proof).
 	if wantWitness {
-		return false
+		return "witness"
 	}
 	// Disable the parallel execution if either the Amsterdam hasn't been
 	// activated, or the accessList is not accessible.
-	return block.AccessList() != nil && config.IsAmsterdam(block.Number(), block.Time())
+	if block.AccessList() == nil {
+		return "no-access-list"
+	}
+	if !config.IsAmsterdam(block.Number(), block.Time()) {
+		return "pre-amsterdam"
+	}
+	return ""
 }
 
 // txExecResult holds the per-transaction outcome of parallel execution.

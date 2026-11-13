@@ -18,10 +18,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -30,7 +33,9 @@ import (
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/internal/flags"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sync/errgroup"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
@@ -65,6 +70,27 @@ var (
 		Name:    "cross-check",
 		Aliases: []string{"xc"},
 		Usage:   "Cross-check stateful execution against stateless, verifying the witness generation.",
+	}
+	WorkersFlag = &cli.IntFlag{
+		Name:  "workers",
+		Usage: "Number of test files to run in parallel (0 = one per CPU)",
+		Value: 1,
+	}
+	BALSequentialFlag = &cli.BoolFlag{
+		Name:  "bal-sequential",
+		Usage: "Execute every block sequentially, even one the EIP-7928 parallel processor could run. The delivered block access list is still validated.",
+	}
+	BALWithholdFlag = &cli.BoolFlag{
+		Name:  "bal-withhold",
+		Usage: "Never deliver the fixture's block access list, so every block executes without one, as a block received without its list does.",
+	}
+	CacheNoPrecompileFlag = &cli.BoolFlag{
+		Name:  "cache.noprecompile",
+		Usage: "Disable precompile result caching",
+	}
+	BALReportFlag = &cli.BoolFlag{
+		Name:  "bal-report",
+		Usage: "Print one JSON line per executed block on stderr, naming the processor that ran it (EIP-7928 parallel or sequential) and why parallel was ruled out.",
 	}
 
 	// Debugging flags.
@@ -214,6 +240,7 @@ func init() {
 	app.Commands = []*cli.Command{
 		runCommand,
 		blockTestCommand,
+		engineTestCommand,
 		stateTestCommand,
 		stateTransitionCommand,
 		transactionCommand,
@@ -268,6 +295,15 @@ func tracerFromFlags(ctx *cli.Context) *tracing.Hooks {
 	}
 }
 
+// runConfig returns the block and engine test execution settings set by flags.
+func runConfig(ctx *cli.Context) tests.RunConfig {
+	return tests.RunConfig{
+		Sequential:         ctx.Bool(BALSequentialFlag.Name),
+		WithholdAccessList: ctx.Bool(BALWithholdFlag.Name),
+		NoPrecompileCache:  ctx.Bool(CacheNoPrecompileFlag.Name),
+	}
+}
+
 // collectFiles walks the given path. If the path is a directory, it will
 // return a list of all accumulates all files with json extension.
 // Otherwise (if path points to a file), it will return the path.
@@ -290,6 +326,69 @@ func collectFiles(path string) []string {
 		fmt.Fprintln(os.Stderr, err)
 	}
 	return out
+}
+
+// collectFixtures walks the given paths for blocktest and enginetest. A
+// directory contributes all files with json extension below it, except in a
+// .meta directory, where EEST keeps files that are not fixtures; a path that
+// points to a file is used as is. A path that does not exist or cannot be read
+// is an error, returned before any test runs.
+func collectFixtures(paths ...string) ([]string, error) {
+	var out []string
+	for _, path := range paths {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			// User explicitly pointed out a file, ignore extension.
+			out = append(out, path)
+			continue
+		}
+		err := filepath.Walk(path, func(path string, info fs.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() && info.Name() == ".meta" {
+				return filepath.SkipDir
+			}
+			if !info.IsDir() && filepath.Ext(info.Name()) == ".json" {
+				out = append(out, path)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, path := range out {
+		f, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		f.Close()
+	}
+	return out, nil
+}
+
+// runFiles runs the test files with run, on as many files at once as the workers
+// flag allows, and returns their results in file order. A file that cannot be
+// run does not stop the others; the errors of all such files are returned.
+func runFiles(ctx *cli.Context, files []string, run func(*cli.Context, string) ([]testResult, error)) ([]testResult, error) {
+	workers := ctx.Int(WorkersFlag.Name)
+	if workers <= 0 {
+		workers = runtime.NumCPU()
+	}
+	var (
+		results = make([][]testResult, len(files))
+		errs    = make([]error, len(files))
+		group   errgroup.Group
+	)
+	group.SetLimit(workers)
+	for i, fname := range files {
+		group.Go(func() error {
+			results[i], errs[i] = run(ctx, fname)
+			return nil
+		})
+	}
+	group.Wait()
+	return slices.Concat(results...), errors.Join(errs...)
 }
 
 // dump returns a state dump for the most current trie.

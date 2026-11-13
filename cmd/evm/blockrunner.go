@@ -17,7 +17,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -36,53 +35,42 @@ import (
 var blockTestCommand = &cli.Command{
 	Action:    blockTestCmd,
 	Name:      "blocktest",
-	Usage:     "Executes the given blockchain tests. Filenames can be fed via standard input (batch mode) or as an argument (one-off execution).",
-	ArgsUsage: "<path>",
+	Usage:     "Executes the given blockchain tests. Filenames can be fed via standard input (batch mode) or as arguments.",
+	ArgsUsage: "<path>...",
 	Flags: slices.Concat([]cli.Flag{
 		DumpFlag,
 		HumanReadableFlag,
 		RunFlag,
 		WitnessCrossCheckFlag,
+		BALSequentialFlag,
+		BALWithholdFlag,
+		CacheNoPrecompileFlag,
+		BALReportFlag,
 		FuzzFlag,
+		WorkersFlag,
 	}, traceFlags),
 }
 
 func blockTestCmd(ctx *cli.Context) error {
-	path := ctx.Args().First()
+	if ctx.Bool(BALReportFlag.Name) {
+		reportExecution(log.Root().Handler(), ctx.Bool(BALWithholdFlag.Name))
+	}
 
-	// If path is provided, run the tests at that path.
-	if len(path) != 0 {
-		var (
-			collected = collectFiles(path)
-			results   []testResult
-		)
-		for _, fname := range collected {
-			r, err := runBlockTest(ctx, fname)
-			if err != nil {
-				return err
-			}
-			results = append(results, r...)
+	// If paths are provided, run the tests at those paths.
+	if ctx.Args().Present() {
+		files, err := collectFixtures(ctx.Args().Slice()...)
+		if err != nil {
+			return cli.Exit(err, exitIncomplete)
 		}
+		results, err := runFiles(ctx, files, runBlockTest)
 		report(ctx, results)
-		return nil
+		if err != nil {
+			return cli.Exit(err, exitIncomplete)
+		}
+		return failures(results)
 	}
 	// Otherwise, read filenames from stdin and execute back-to-back.
-	scanner := bufio.NewScanner(os.Stdin)
-	for scanner.Scan() {
-		fname := scanner.Text()
-		if len(fname) == 0 {
-			return nil
-		}
-		results, err := runBlockTest(ctx, fname)
-		if err != nil {
-			return err
-		}
-		// During fuzzing, we report the result after every block
-		if !ctx.Bool(FuzzFlag.Name) {
-			report(ctx, results)
-		}
-	}
-	return nil
+	return runStdin(ctx, runBlockTest)
 }
 
 func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
@@ -92,7 +80,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	}
 	var tests map[string]*tests.BlockTest
 	if err = json.Unmarshal(src, &tests); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to read test file %s: %w", fname, err)
 	}
 	re, err := regexp.Compile(ctx.String(RunFlag.Name))
 	if err != nil {
@@ -102,7 +90,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 
 	// Suppress INFO logs during fuzzing
 	if ctx.Bool(FuzzFlag.Name) {
-		log.SetDefault(log.NewLogger(log.DiscardHandler()))
+		discardLogs(ctx)
 	}
 
 	// Pull out keys to sort and ensure tests are run in order.
@@ -117,7 +105,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		test := tests[name]
 		result := &testResult{Name: name, Pass: true}
 		var finalRoot *common.Hash
-		if err := test.Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, func(res error, chain *core.BlockChain) {
+		if err := test.Run(false, rawdb.PathScheme, ctx.Bool(WitnessCrossCheckFlag.Name), tracer, runConfig(ctx), func(res error, chain *core.BlockChain) {
 			if ctx.Bool(DumpFlag.Name) {
 				if s, _ := chain.State(); s != nil {
 					result.State = dump(s)
@@ -138,6 +126,7 @@ func runBlockTest(ctx *cli.Context, fname string) ([]testResult, error) {
 		if result.Pass && finalRoot != nil {
 			result.Root = finalRoot
 		}
+		result.Rejections = test.Rejections
 
 		// When fuzzing, write results after every block
 		if ctx.Bool(FuzzFlag.Name) {
