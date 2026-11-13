@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -80,6 +81,7 @@ type indexReader struct {
 	readers    map[uint32]*blockReader
 	state      stateIdent
 	bitmapSize int
+	lock       sync.RWMutex
 }
 
 // loadIndexData loads the index data associated with the specified state.
@@ -110,6 +112,9 @@ func newIndexReader(db ethdb.KeyValueReader, state stateIdent, bitmapSize int) (
 // refresh reloads the last section of index data to account for any additional
 // elements that may have been written to disk.
 func (r *indexReader) refresh() error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	// Release the reader for the last section of index data, as its content
 	// may have been modified by additional elements written to the disk.
 	if len(r.descList) != 0 {
