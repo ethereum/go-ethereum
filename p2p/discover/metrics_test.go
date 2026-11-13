@@ -84,6 +84,11 @@ func TestMetricsSharedSocket(t *testing.T) {
 	}
 	// Every packet crossed localhost between two metered sockets, so bytes
 	// received can not exceed bytes sent unless the shared read counted twice.
+	// A write is metered after it returns, so close the nodes first; v4 goes
+	// first, as v5's reads on the shared socket end only when v4 closes.
+	remote.Close()
+	v4.Close()
+	v5.Close()
 	in, out := ingressTrafficMeter.Snapshot().Count()-ingress, egressTrafficMeter.Snapshot().Count()-egress
 	if in > out {
 		t.Errorf("ingress %d bytes > egress %d bytes: shared socket reads counted twice", in, out)

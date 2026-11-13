@@ -104,9 +104,9 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 	}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnTxStart: t.OnTxStart,
-			OnTxEnd:   t.OnTxEnd,
-			OnOpcode:  t.OnOpcode,
+			OnTxStart:  t.OnTxStart,
+			OnTxEnd:    t.OnTxEnd,
+			OnOpcodeV2: t.OnOpcode,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -114,7 +114,7 @@ func newPrestateTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 }
 
 // OnOpcode implements the EVMLogger interface to trace a single step of VM execution.
-func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *prestateTracer) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 	if err != nil {
 		return
 	}

@@ -55,10 +55,11 @@ const (
 type mutation struct {
 	typ     mutationType
 	applied bool
+	wipe    bool // set when an account is deleted then re-created
 }
 
 func (m *mutation) copy() *mutation {
-	return &mutation{typ: m.typ, applied: m.applied}
+	return &mutation{typ: m.typ, applied: m.applied, wipe: m.wipe}
 }
 
 func (m *mutation) isDelete() bool {
@@ -125,8 +126,7 @@ type StateDB struct {
 	preimages map[common.Hash][]byte
 
 	// Per-transaction access list
-	accessList   *accessList
-	accessEvents *AccessEvents
+	accessList *accessList
 
 	// Per-transaction state access footprint for EIP-7928
 	stateAccessList *bal.ConstructionBlockAccessList
@@ -197,9 +197,6 @@ func NewWithReader(root common.Hash, db Database, reader Reader) (*StateDB, erro
 		journal:              newJournal(),
 		accessList:           newAccessList(),
 		transientStorage:     newTransientStorage(),
-	}
-	if db.Type().Is(TypeUBT) {
-		sdb.accessEvents = NewAccessEvents()
 	}
 	return sdb, nil
 }
@@ -586,7 +583,9 @@ func (s *StateDB) updateStateObject(obj *stateObject) {
 		s.setError(fmt.Errorf("updateStateObject (%x) error: %v", obj.Address(), err))
 	}
 	if obj.dirtyCode {
-		s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code)
+		if err := s.trie.UpdateContractCode(obj.Address(), common.BytesToHash(obj.CodeHash()), obj.code); err != nil {
+			s.setError(fmt.Errorf("updateContractCode (%x) error: %v", obj.Address(), err))
+		}
 	}
 }
 
@@ -727,9 +726,6 @@ func (s *StateDB) Copy() *StateDB {
 	}
 	if s.witness != nil {
 		state.witness = s.witness.Copy()
-	}
-	if s.accessEvents != nil {
-		state.accessEvents = s.accessEvents.Copy()
 	}
 	// Deep copy cached state objects.
 	for addr, obj := range s.stateObjects {
@@ -960,7 +956,16 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 		start   = time.Now()
 		workers errgroup.Group
 	)
-	if s.db.Type().Is(TypeUBT) {
+	if s.db.Type().Is(TypePBT) {
+		// Remove recreated accounts from the binary tree first
+		for addr, op := range s.mutations {
+			if op.wipe && !op.applied && !op.isDelete() {
+				if err := s.trie.DeleteAccount(addr); err != nil {
+					s.setError(fmt.Errorf("deleteAccount (%x) error: %v", addr, err))
+				}
+				op.wipe = false
+			}
+		}
 		// Bypass per-account updateTrie() for binary trie. In binary trie mode
 		// there is only one unified trie (OpenStorageTrie returns self), so the
 		// per-account trie setup in updateTrie() (getPrefetchedTrie, getTrie,
@@ -1063,9 +1068,9 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 	// _untouched_. We can check with the prefetcher, if it can give us a trie
 	// which has the same root, but also has some content loaded into it.
 	//
-	// Don't check prefetcher if verkle trie has been used. In the context of verkle,
-	// only a single trie is used for state hashing. Replacing a non-nil verkle tree
-	// here could result in losing uncommitted changes from storage.
+	// Don't check prefetcher if the binary tree has been used. In that context,
+	// only a single trie is used for state hashing. Replacing a non-nil binary
+	// tree here could result in losing uncommitted changes from storage.
 	start = time.Now()
 	if s.prefetcher != nil && s.db.Type().Is(TypeMPT) {
 		if trie := s.prefetcher.trie(common.Hash{}, s.originalRoot); trie == nil {
@@ -1093,6 +1098,7 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 			continue
 		}
 		op.applied = true
+		op.wipe = false
 
 		if op.isDelete() {
 			deletedAddrs = append(deletedAddrs, addr)
@@ -1193,7 +1199,7 @@ func (s *StateDB) deleteStorage(addrHash common.Hash, root common.Hash) (map[com
 	if err := it.Error(); err != nil {
 		return nil, nil, nil, err
 	}
-	if stack.Hash() != root {
+	if root != types.EmptyRootHash && stack.Hash() != root {
 		return nil, nil, nil, fmt.Errorf("snapshot is not matched, exp %x, got %x", root, stack.Hash())
 	}
 	return storages, storageOrigins, nodes, nil
@@ -1241,8 +1247,18 @@ func (s *StateDB) handleDestruction(rules params.Rules) (map[common.Hash]*Accoun
 		}
 		deletes[addrHash] = op
 
+		// The tree drops the storage along with the account, while the flat
+		// state keeps it per slot: enumerate the slots there to delete them.
+		if s.db.Type().Is(TypePBT) {
+			storages, storagesOrigin, _, err := s.deleteStorage(addrHash, types.EmptyRootHash)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to delete storage, err: %w", err)
+			}
+			op.Storages, op.StoragesOrigin = storages, storagesOrigin
+			continue
+		}
 		// Short circuit if the origin storage was empty.
-		if prev.Root == types.EmptyRootHash || s.db.Type().Is(TypeUBT) {
+		if prev.Root == types.EmptyRootHash {
 			continue
 		}
 		if rules.IsCancun {
@@ -1418,8 +1434,12 @@ func (s *StateDB) commit(rules params.Rules, blockNumber uint64) (*StateUpdate, 
 	origin := s.originalRoot
 	s.originalRoot = root
 
+	// Unlike the merkle-patricia trie, the binary tree still wipes stored
+	// slots after Cancun, when EIP-161 clears an empty account holding storage
+	// (a genesis allocation can create one). Those slots are read from the
+	// flat state, which keys them by hash.
 	typ := StorageKeyHashed
-	if rules.IsCancun {
+	if rules.IsCancun && !s.db.Type().Is(TypePBT) {
 		typ = StorageKeyPlain
 	}
 	return NewStateUpdate(typ, origin, root, blockNumber, deletes, updates, nodes), nil
@@ -1493,9 +1513,6 @@ func (s *StateDB) CommitWithUpdate(rules params.Rules, block uint64) (common.Has
 // - Add coinbase to access list (EIP-3651)
 // - Reset transient storage (EIP-1153)
 func (s *StateDB) Prepare(rules params.Rules, sender, coinbase common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
-	if rules.IsEIP2929 && rules.IsEIP4762 {
-		panic("eip2929 and eip4762 are both activated")
-	}
 	if rules.IsEIP2929 {
 		// Clear out any leftover from previous executions
 		al := newAccessList()
@@ -1571,18 +1588,20 @@ func (s *StateDB) markDelete(addr common.Address) {
 }
 
 func (s *StateDB) markUpdate(addr common.Address) {
-	if _, ok := s.mutations[addr]; !ok {
-		s.mutations[addr] = &mutation{}
+	op, ok := s.mutations[addr]
+	if !ok {
+		op = &mutation{}
+		s.mutations[addr] = op
 	}
-	s.mutations[addr].applied = false
-	s.mutations[addr].typ = update
+	// A deletion not yet applied to the tries is overwritten
+	if op.isDelete() && !op.applied {
+		op.wipe = true
+	}
+	op.applied = false
+	op.typ = update
 }
 
 // Witness retrieves the current state witness being collected.
 func (s *StateDB) Witness() *stateless.Witness {
 	return s.witness
-}
-
-func (s *StateDB) AccessEvents() *AccessEvents {
-	return s.accessEvents
 }

@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"maps"
 
 	"github.com/VictoriaMetrics/fastcache"
 	"github.com/ethereum/go-ethereum/common"
@@ -63,6 +62,25 @@ func newNodeSet(nodes map[common.Hash]map[string]*trienode.Node) *nodeSet {
 		}
 	}
 	s.computeSize()
+	return s
+}
+
+// newMergedNodeSet constructs the set with the trie nodes of the provided merged
+// set, taking the sizes tracked by the subsets instead of iterating the nodes.
+func newMergedNodeSet(merged *trienode.MergedNodeSet) *nodeSet {
+	s := &nodeSet{
+		accountNodes: make(map[string]*trienode.Node),
+		storageNodes: make(map[common.Hash]map[string]*trienode.Node, len(merged.Sets)),
+	}
+	for owner, subset := range merged.Sets {
+		s.size += uint64(subset.DataSize())
+		if owner == (common.Hash{}) {
+			s.accountNodes = subset.Nodes
+		} else {
+			s.storageNodes[owner] = subset.Nodes
+			s.size += uint64(common.HashLength * len(subset.Nodes))
+		}
+	}
 	return s
 }
 
@@ -107,54 +125,48 @@ func (s *nodeSet) node(owner common.Hash, path []byte) (*trienode.Node, bool) {
 	return n, ok
 }
 
-// merge integrates the provided dirty nodes into the set. The provided nodeset
-// will remain unchanged, as it may still be referenced by other layers.
-func (s *nodeSet) merge(set *nodeSet) {
+// mergeNodeSets aggregates the provided node sets (ordered from oldest to
+// newest) into a single set, with entries from the newer sets overwriting
+// the ones from the older sets. The returned set assumes the ownership of
+// the freshly allocated internal maps, leaving the source sets unmodified.
+func mergeNodeSets(sets []*nodeSet) *nodeSet {
 	var (
-		delta     int64   // size difference resulting from node merging
 		overwrite counter // counter of nodes being overwritten
+		accounts  int     // the upper bound of the account trie nodes
+		owners    int     // the upper bound of the storage tries
 	)
-
-	// Merge account nodes
-	for path, n := range set.accountNodes {
-		if orig, exist := s.accountNodes[path]; !exist {
-			delta += int64(len(n.Blob) + len(path))
-		} else {
-			delta += int64(len(n.Blob) - len(orig.Blob))
-			overwrite.add(len(orig.Blob) + len(path))
-		}
-		s.accountNodes[path] = n
+	for _, set := range sets {
+		accounts += len(set.accountNodes)
+		owners += len(set.storageNodes)
 	}
-
-	// Merge storage nodes
-	for owner, subset := range set.storageNodes {
-		current, exist := s.storageNodes[owner]
-		if !exist {
+	out := &nodeSet{
+		accountNodes: make(map[string]*trienode.Node, accounts),
+		storageNodes: make(map[common.Hash]map[string]*trienode.Node, owners),
+	}
+	for _, set := range sets {
+		for path, n := range set.accountNodes {
+			if orig, exist := out.accountNodes[path]; exist {
+				overwrite.add(len(orig.Blob) + len(path))
+			}
+			out.accountNodes[path] = n
+		}
+		for owner, subset := range set.storageNodes {
+			current, exist := out.storageNodes[owner]
+			if !exist {
+				current = make(map[string]*trienode.Node, len(subset))
+				out.storageNodes[owner] = current
+			}
 			for path, n := range subset {
-				delta += int64(common.HashLength + len(n.Blob) + len(path))
+				if orig, exist := current[path]; exist {
+					overwrite.add(common.HashLength + len(orig.Blob) + len(path))
+				}
+				current[path] = n
 			}
-			// Perform a shallow copy of the map for the subset instead of claiming it
-			// directly from the provided nodeset to avoid potential concurrent map
-			// read/write issues. The nodes belonging to the original diff layer remain
-			// accessible even after merging. Therefore, ownership of the nodes map
-			// should still belong to the original layer, and any modifications to it
-			// should be prevented.
-			s.storageNodes[owner] = maps.Clone(subset)
-			continue
 		}
-		for path, n := range subset {
-			if orig, exist := current[path]; !exist {
-				delta += int64(common.HashLength + len(n.Blob) + len(path))
-			} else {
-				delta += int64(len(n.Blob) - len(orig.Blob))
-				overwrite.add(common.HashLength + len(orig.Blob) + len(path))
-			}
-			current[path] = n
-		}
-		s.storageNodes[owner] = current
 	}
+	out.computeSize()
 	overwrite.report(gcTrieNodeMeter, gcTrieNodeBytesMeter)
-	s.updateSize(delta)
+	return out
 }
 
 // revertTo merges the provided trie nodes into the set. This should reverse the
@@ -289,13 +301,6 @@ func (s *nodeSet) write(batch ethdb.Batch, clean *fastcache.Cache) int {
 	return writeNodes(batch, nodes, clean)
 }
 
-// reset clears all cached trie node data.
-func (s *nodeSet) reset() {
-	s.accountNodes = make(map[string]*trienode.Node)
-	s.storageNodes = make(map[common.Hash]map[string]*trienode.Node)
-	s.size = 0
-}
-
 // dbsize returns the approximate size of db write.
 func (s *nodeSet) dbsize() int {
 	var m int
@@ -322,12 +327,17 @@ type nodeSetWithOrigin struct {
 
 // NewNodeSetWithOrigin constructs the state set with the provided data.
 func NewNodeSetWithOrigin(nodes map[common.Hash]map[string]*trienode.Node, origins map[common.Hash]map[string][]byte) *nodeSetWithOrigin {
+	return newNodeSetWithOrigin(newNodeSet(nodes), origins)
+}
+
+// newNodeSetWithOrigin wraps the node set with the provided original values.
+func newNodeSetWithOrigin(nodes *nodeSet, origins map[common.Hash]map[string][]byte) *nodeSetWithOrigin {
 	// Don't panic for the lazy callers, initialize the nil maps instead.
 	if origins == nil {
 		origins = make(map[common.Hash]map[string][]byte)
 	}
 	set := &nodeSetWithOrigin{
-		nodeSet:    newNodeSet(nodes),
+		nodeSet:    nodes,
 		nodeOrigin: origins,
 	}
 	set.computeSize()

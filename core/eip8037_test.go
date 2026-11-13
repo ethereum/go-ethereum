@@ -1007,7 +1007,7 @@ func TestParallelReservationOverflowRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	if _, err := NewStateProcessor(bc).Process(context.Background(), valid, statedb, nil, nil, vm.Config{}, nil); err != nil {
+	if _, err := NewStateProcessor(bc).Process(context.Background(), valid, statedb, nil, nil, vm.Config{}, nil, nil); err != nil {
 		t.Fatalf("valid block rejected by parallel processor: %v", err)
 	}
 
@@ -1022,7 +1022,7 @@ func TestParallelReservationOverflowRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	_, err = NewStateProcessor(bc).Process(context.Background(), invalid, statedb, nil, nil, vm.Config{}, nil)
+	_, err = NewStateProcessor(bc).Process(context.Background(), invalid, statedb, nil, nil, vm.Config{}, nil, nil)
 	if !errors.Is(err, ErrGasLimitReached) {
 		t.Fatalf("parallel processor accepted a reservation-overflow block (err = %v), want ErrGasLimitReached", err)
 	}
@@ -1073,7 +1073,7 @@ func TestParallelAbortsOnWorkerFailure(t *testing.T) {
 	}
 	failed := make(chan error, 1)
 	go func() {
-		_, err := NewStateProcessor(bc).Process(context.Background(), block, statedb, nil, nil, vm.Config{}, nil)
+		_, err := NewStateProcessor(bc).Process(context.Background(), block, statedb, nil, nil, vm.Config{}, nil, nil)
 		failed <- err
 	}()
 	select {

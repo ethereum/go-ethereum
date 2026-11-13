@@ -56,6 +56,8 @@ var (
 	fsHeaderSafetyNet = 2048            // Number of headers to discard in case a chain violation is detected
 	fsHeaderContCheck = 3 * time.Second // Time interval to check for header continuations during state download
 	fsMinFullBlocks   = 64              // Number of blocks to retrieve fully even in snap sync
+
+	snapPeerWarnInterval = 3 * time.Minute // Minimum spacing of warnings about having no usable snap peer
 )
 
 var (
@@ -126,7 +128,9 @@ type Downloader struct {
 	synchronising atomic.Bool
 	notified      atomic.Bool
 	committed     atomic.Bool
-	ancientLimit  uint64 // The maximum block number which can be regarded as ancient data.
+	snapPeers     atomic.Int32 // Snap peers registered with the active state syncer
+	snapPeerWarn  atomic.Int64 // Unix time of the last warning about having no usable snap peer
+	ancientLimit  uint64       // The maximum block number which can be regarded as ancient data.
 
 	// The cutoff block number and hash before which chain segments (bodies
 	// and receipts) are skipped during synchronization. 0 means the entire
@@ -209,6 +213,9 @@ type BlockChain interface {
 
 	// SnapSyncComplete directly commits the head block to a certain entity.
 	SnapSyncComplete(hash common.Hash, isSnapV2 bool) error
+
+	// Config retrieves the chain's fork configuration.
+	Config() *params.ChainConfig
 
 	// InsertHeadersBeforeCutoff inserts a batch of headers before the configured
 	// chain cutoff into the ancient store.
@@ -515,7 +522,7 @@ func (d *Downloader) syncToHead(beaconPing chan struct{}) (err error) {
 	// the frozen header instead of a fresh one.
 	if mode == ethconfig.SnapSync && pivot != nil {
 		if frozen := d.snapSyncer.FrozenPivot(); frozen != nil {
-			if rawdb.ReadCanonicalHash(d.stateDB, frozen.Number.Uint64()) == frozen.Hash() {
+			if d.isFrozenPivotCanonical(frozen) {
 				log.Info("Resuming snap sync against frozen pivot", "number", frozen.Number, "hash", frozen.Hash())
 				pivot = frozen
 			} else {
@@ -1121,6 +1128,28 @@ func (d *Downloader) movePivotIfStale() error {
 	return nil
 }
 
+// isFrozenPivotCanonical reports whether the pivot frozen by the snap syncer is
+// still part of the chain being synced.
+//
+// The pivot block is only committed into the local chain once its state is
+// complete, so while frozen it is normally tracked by the skeleton chain alone,
+// with the local canonical chain covering only the blocks below it.
+func (d *Downloader) isFrozenPivotCanonical(frozen *types.Header) bool {
+	head, tail, _, err := d.skeleton.Bounds()
+	if err != nil {
+		return false
+	}
+	number := frozen.Number.Uint64()
+	if number > head.Number.Uint64() {
+		return false
+	}
+	if number >= tail.Number.Uint64() {
+		header := d.skeleton.Header(number)
+		return header != nil && header.Hash() == frozen.Hash()
+	}
+	return rawdb.ReadCanonicalHash(d.stateDB, number) == frozen.Hash()
+}
+
 func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, before, after []*fetchResult) {
 	if len(results) == 0 {
 		return nil, nil, nil
@@ -1250,9 +1279,27 @@ func (d *Downloader) RegisterSnapPeer(p *snap.Peer) error {
 		// Surface it so an operator can tell a stalled sync from a quiet one.
 		snapPeerSkipMeter.Mark(1)
 		log.Debug("Skipping snap peer below syncer version", "peer", p.ID(), "version", p.Version(), "required", d.snapSyncer.Version())
+		d.warnNoSnapPeers()
 		return nil
 	}
-	return d.snapSyncer.Register(p)
+	if err := d.snapSyncer.Register(p); err != nil {
+		return err
+	}
+	d.snapPeers.Add(1)
+	return nil
+}
+
+// warnNoSnapPeers warns, at most once per snapPeerWarnInterval, that snap sync
+// is stalled because no connected snap peer speaks the active syncer's version.
+func (d *Downloader) warnNoSnapPeers() {
+	if d.ConfigSyncMode() != ethconfig.SnapSync || d.committed.Load() || d.snapPeers.Load() > 0 {
+		return
+	}
+	now := time.Now().Unix()
+	if last := d.snapPeerWarn.Load(); now-last < int64(snapPeerWarnInterval/time.Second) || !d.snapPeerWarn.CompareAndSwap(last, now) {
+		return
+	}
+	log.Warn("No snap peer speaks the state syncer's version, sync stalled", "required", d.snapSyncer.Version())
 }
 
 // SnapSyncVersion returns the snap protocol version of the active state syncer.
@@ -1268,7 +1315,11 @@ func (d *Downloader) UnregisterSnapPeer(p *snap.Peer) error {
 	if p.Version() < d.snapSyncer.Version() {
 		return nil
 	}
-	return d.snapSyncer.Unregister(p.ID())
+	if err := d.snapSyncer.Unregister(p.ID()); err != nil {
+		return err
+	}
+	d.snapPeers.Add(-1)
+	return nil
 }
 
 // readHeaderRange returns a list of headers, using the given last header as the base,

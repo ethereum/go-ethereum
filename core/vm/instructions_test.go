@@ -283,10 +283,9 @@ func TestJsonTestcases(t *testing.T) {
 
 func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	var (
-		evm      = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
-		stack    = newStackForTesting()
-		code     = []byte{}
-		opPush32 = makePush(32, 32)
+		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		stack = newStackForTesting()
+		code  = []byte{}
 	)
 	// convert args
 	intArgs := make([]*uint256.Int, len(args))
@@ -921,7 +920,7 @@ func TestOpMCopy(t *testing.T) {
 func TestPush(t *testing.T) {
 	code := common.FromHex("0011223344556677889900aabbccddeeff0102030405060708090a0b0c0d0e0ff1e1d1c1b1a19181716151413121")
 
-	push32 := makePush(32, 32)
+	push32 := opPush32
 
 	scope := &ScopeContext{
 		Memory: nil,
@@ -1142,8 +1141,7 @@ func TestEIP8024_Execution(t *testing.T) {
 				case PUSH1:
 					_, err = opPush1(&pc, evm, scope)
 				case DUP1:
-					dup1 := makeDup(1)
-					_, err = dup1(&pc, evm, scope)
+					_, err = opDup1(&pc, evm, scope)
 				case JUMP:
 					_, err = opJump(&pc, evm, scope)
 				case JUMPDEST:
@@ -1227,4 +1225,59 @@ func TestEIP8024_Execution(t *testing.T) {
 func ptrToByte(v byte) *byte {
 	b := v
 	return &b
+}
+
+// referenceImmediate reads the size-byte immediate that follows the opcode at pc the
+// long way round, one byte at a time, with anything past the end of the code reading
+// as zero.
+func referenceImmediate(code []byte, pc uint64, size int) *uint256.Int {
+	buf := make([]byte, size)
+	for i := range buf {
+		if p := pc + 1 + uint64(i); p < uint64(len(code)) {
+			buf[i] = code[p]
+		}
+	}
+	return new(uint256.Int).SetBytes(buf)
+}
+
+// TestPushHandlers checks every PUSH width against referenceImmediate at every
+// truncation point. opPush1 to opPush32 are thirty two near-identical functions, so
+// this is what catches one of them reaching for the wrong number of bytes, and it
+// fetches them through the jump table so a mis-wired entry fails here too.
+func TestPushHandlers(t *testing.T) {
+	tbl := newMergeInstructionSet()
+	body := make([]byte, 34)
+	for i := range body {
+		body[i] = byte(i + 1)
+	}
+	for size := 1; size <= 32; size++ {
+		op := OpCode(int(PUSH1) - 1 + size)
+		exec := tbl[op].execute
+		// Place the opcode at a couple of offsets, so an error in the immediate's
+		// start cannot hide behind a zero pc.
+		for _, at := range []uint64{0, 3} {
+			// Cut the code off everywhere from "no immediate at all" through "one
+			// byte to spare", so each width sees the whole immediate and every
+			// partial one.
+			for tail := 0; tail <= size+1; tail++ {
+				code := append(make([]byte, at), byte(op))
+				code = append(code, body[:tail]...)
+				scope := &ScopeContext{
+					Stack:    newStackForTesting(),
+					Contract: &Contract{Code: code},
+				}
+				pc := at
+				if _, err := exec(&pc, nil, scope); err != nil {
+					t.Fatalf("PUSH%d at %d tail %d: %v", size, at, tail, err)
+				}
+				if want := at + uint64(size); pc != want {
+					t.Fatalf("PUSH%d at %d tail %d: pc = %d, want %d", size, at, tail, pc, want)
+				}
+				want := referenceImmediate(code, at, size)
+				if got := scope.Stack.pop(); got.Cmp(want) != 0 {
+					t.Fatalf("PUSH%d at %d tail %d: got %#x, want %#x", size, at, tail, &got, want)
+				}
+			}
+		}
+	}
 }

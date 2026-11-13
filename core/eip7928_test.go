@@ -129,7 +129,7 @@ func assertParallelEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, 
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	parRes, err := NewStateProcessor(bc).Process(context.Background(), block, parState, nil, nil, vm.Config{}, nil)
+	parRes, err := NewStateProcessor(bc).Process(context.Background(), block, parState, nil, nil, vm.Config{}, nil, nil)
 	if err != nil {
 		t.Fatalf("parallel process: %v", err)
 	}
@@ -140,7 +140,7 @@ func assertParallelEquiv(t *testing.T, gspec *Genesis, engine consensus.Engine, 
 	if err != nil {
 		t.Fatalf("state: %v", err)
 	}
-	seqRes, err := NewStateProcessor(bc).Process(context.Background(), block, seqState, nil, nil, vm.Config{DisableParallelExecution: true}, nil)
+	seqRes, err := NewStateProcessor(bc).Process(context.Background(), block, seqState, nil, nil, vm.Config{DisableParallelExecution: true}, nil, nil)
 	if err != nil {
 		t.Fatalf("sequential process: %v", err)
 	}

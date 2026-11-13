@@ -338,8 +338,8 @@ func (c *BoundContract) createDynamicTx(opts *TransactOpts, contract *common.Add
 }
 
 func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Address, input []byte) (*types.Transaction, error) {
-	if opts.GasFeeCap != nil || opts.GasTipCap != nil || opts.AccessList != nil {
-		return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas or accessList specified but london is not active yet")
+	if opts.GasFeeCap != nil || opts.GasTipCap != nil {
+		return nil, errors.New("maxFeePerGas or maxPriorityFeePerGas specified but london is not active yet")
 	}
 	// Normalize value
 	value := opts.Value
@@ -368,6 +368,18 @@ func (c *BoundContract) createLegacyTx(opts *TransactOpts, contract *common.Addr
 	nonce, err := c.GetNonce(opts)
 	if err != nil {
 		return nil, err
+	}
+	// A gas price together with an access list is an EIP-2930 transaction.
+	if opts.AccessList != nil {
+		return types.NewTx(&types.AccessListTx{
+			To:         contract,
+			Nonce:      nonce,
+			GasPrice:   gasPrice,
+			Gas:        gasLimit,
+			Value:      value,
+			Data:       input,
+			AccessList: opts.AccessList,
+		}), nil
 	}
 	baseTx := &types.LegacyTx{
 		To:       contract,

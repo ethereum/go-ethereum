@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/protocols/snap"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -104,8 +105,13 @@ func newStateSync(d *Downloader, pivot *types.Header) *stateSync {
 // finish.
 func (s *stateSync) run() {
 	close(s.started)
+	defer close(s.done)
+
+	// snap/2 heals with block access lists, which only exist from Amsterdam on
+	if s.d.snapSyncer.Version() == snap.SNAP2 && !s.d.blockchain.Config().IsAmsterdam(s.pivot.Number, s.pivot.Time) {
+		log.Error("Snap/2 sync pivot predates Amsterdam, healing will lack block access lists", "pivot", s.pivot.Number)
+	}
 	s.err = s.d.snapSyncer.Sync(s.pivot, s.cancel)
-	close(s.done)
 }
 
 // Wait blocks until the sync is done or canceled.

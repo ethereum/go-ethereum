@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"testing"
@@ -74,6 +75,152 @@ func TestLoopInterrupt(t *testing.T) {
 				t.Errorf("test %d failure: %v", i, err)
 			}
 		}
+	}
+}
+
+func TestTracedStateGasCost(t *testing.T) {
+	storeCost := tracing.OpCost{
+		Execution: params.ColdStorageAccessAmsterdam + params.StorageWriteAmsterdam,
+		State:     stateGasNewSlot,
+	}
+	for _, tc := range []struct {
+		name      string
+		code      []byte
+		gas       GasBudget
+		wantCosts []tracing.OpCost
+		wantErr   error
+	}{
+		{
+			name:      "state charge out of gas",
+			code:      sstore(0, 1),
+			gas:       NewGasBudget(20_000, 0),
+			wantCosts: []tracing.OpCost{{}},
+			wantErr:   ErrOutOfGas,
+		},
+		{
+			name:      "partial state reservoir out of gas",
+			code:      sstore(0, 1),
+			gas:       NewGasBudget(20_000, 100),
+			wantCosts: []tracing.OpCost{{}},
+			wantErr:   ErrOutOfGas,
+		},
+		{
+			name: "state charge and refill",
+			code: append(sstore(0, 1), sstore(0, 0)...),
+			gas:  NewGasBudget(1_000_000, 0),
+			wantCosts: []tracing.OpCost{
+				storeCost,
+				{Execution: params.WarmStorageAccessAmsterdam, State: -stateGasNewSlot},
+			},
+		},
+		{
+			name:      "sentry failure before refill",
+			code:      append(sstore(0, 1), sstore(0, 0)...),
+			gas:       NewGasBudget(4*GasFastestStep+storeCost.Execution+params.SstoreSentryGasEIP2200, uint64(stateGasNewSlot)),
+			wantCosts: []tracing.OpCost{storeCost, {}},
+			wantErr:   ErrOutOfGas,
+		},
+		{
+			name:      "stack error after state charge",
+			code:      append(sstore(0, 1), byte(ADD)),
+			gas:       hugeBudget(),
+			wantCosts: []tracing.OpCost{storeCost, {}},
+			wantErr:   &ErrStackUnderflow{stackLen: 0, required: 2},
+		},
+		{
+			name:      "constant gas error after state charge",
+			code:      append(sstore(0, 1), byte(PUSH1), 0),
+			gas:       NewGasBudget(2*GasFastestStep+storeCost.Execution, uint64(stateGasNewSlot)),
+			wantCosts: []tracing.OpCost{storeCost, {}},
+			wantErr:   ErrOutOfGas,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			self := common.BytesToAddress([]byte("self"))
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			statedb.CreateAccount(self)
+			statedb.SetCode(self, tc.code, tracing.CodeChangeUnspecified)
+			statedb.Finalise(params.Rules{IsEIP158: true})
+
+			var (
+				costs   []tracing.OpCost
+				hookErr error
+			)
+			evm := amsterdam8037EVM(statedb)
+			evm.Config.Tracer = &tracing.Hooks{
+				OnOpcodeV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+					if OpCode(op) == SSTORE || err != nil {
+						costs = append(costs, cost)
+						hookErr = err
+					}
+				},
+				OnFaultV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
+					t.Errorf("unexpected fault event for %s: %v", OpCode(op), err)
+				},
+			}
+			_, _, err := evm.Call(common.Address{}, self, nil, tc.gas, new(uint256.Int))
+			for _, gotErr := range []error{err, hookErr} {
+				if (gotErr == nil) != (tc.wantErr == nil) || gotErr != nil && vmErrorCodeFromErr(gotErr) != vmErrorCodeFromErr(tc.wantErr) {
+					t.Errorf("error = %v, want %v", gotErr, tc.wantErr)
+				}
+			}
+			if len(costs) != len(tc.wantCosts) {
+				t.Fatalf("costs = %v, want %v", costs, tc.wantCosts)
+			}
+			for i, cost := range costs {
+				if cost != tc.wantCosts[i] {
+					t.Errorf("cost[%d] = %v, want %v", i, cost, tc.wantCosts[i])
+				}
+			}
+		})
+	}
+}
+
+func TestTracedFaultCost(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		code      []byte
+		wantState int64
+		wantErr   error
+	}{
+		{name: "invalid jump", code: []byte{byte(PUSH1), 0, byte(JUMP)}, wantErr: ErrInvalidJump},
+		{name: "create state out of gas", code: []byte{byte(PUSH0), byte(PUSH0), byte(PUSH0), byte(CREATE)}, wantState: stateGasNewAccount, wantErr: ErrOutOfGas},
+		{name: "create2 state out of gas", code: []byte{byte(PUSH0), byte(PUSH0), byte(PUSH0), byte(PUSH0), byte(CREATE2)}, wantState: stateGasNewAccount, wantErr: ErrOutOfGas},
+		{name: "revert", code: []byte{byte(PUSH1), 32, byte(PUSH0), byte(REVERT)}, wantErr: ErrExecutionReverted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			self := common.BytesToAddress([]byte("self"))
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			statedb.CreateAccount(self)
+			statedb.SetCode(self, tc.code, tracing.CodeChangeUnspecified)
+			statedb.Finalise(params.Rules{IsEIP158: true})
+			evm := amsterdam8037EVM(statedb)
+			var opcodes, faults int
+			evm.Config.Tracer = &tracing.Hooks{
+				OnOpcodeV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+					if pc != uint64(len(tc.code)-1) {
+						return
+					}
+					opcodes++
+					if err != nil || cost.Execution == 0 || cost.State != tc.wantState {
+						t.Errorf("pre-execution event: cost %v, error %v", cost, err)
+					}
+				},
+				OnFaultV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
+					faults++
+					if cost != (tracing.OpCost{}) || !errors.Is(err, tc.wantErr) {
+						t.Errorf("fault event: cost %v, error %v; want empty cost and %v", cost, err, tc.wantErr)
+					}
+				},
+			}
+			_, _, err := evm.Call(common.Address{}, self, nil, NewGasBudget(100_000, 0), new(uint256.Int))
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tc.wantErr)
+			}
+			if opcodes != 1 || faults != 1 {
+				t.Errorf("opcode/fault events = %d/%d, want 1/1", opcodes, faults)
+			}
+		})
 	}
 }
 

@@ -18,11 +18,9 @@ package vm
 
 import (
 	"fmt"
-	"math"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -38,7 +36,6 @@ var activators = map[int]func(*JumpTable){
 	1884: enable1884,
 	1344: enable1344,
 	1153: enable1153,
-	4762: enable4762,
 	7702: enable7702,
 	7939: enable7939,
 	8024: enable8024,
@@ -355,209 +352,6 @@ func enable8024(jt *JumpTable) {
 		constantGas: GasFastestStep,
 		minStack:    minStack(2, 0),
 		maxStack:    maxStack(0, 0),
-	}
-}
-
-func opExtCodeCopyEIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	var (
-		stack                            = scope.Stack
-		a, memOffset, codeOffset, length = stack.pop4()
-	)
-	uint64CodeOffset, overflow := codeOffset.Uint64WithOverflow()
-	if overflow {
-		uint64CodeOffset = math.MaxUint64
-	}
-	addr := common.Address(a.Bytes20())
-	code := evm.StateDB.GetCode(addr)
-	paddedCodeCopy, copyOffset, nonPaddedCopyLength := getDataAndAdjustedBounds(code, uint64CodeOffset, length.Uint64())
-	consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(addr, copyOffset, nonPaddedCopyLength, uint64(len(code)), false, scope.Contract.Gas.ExecutionGas)
-	scope.Contract.chargeExecution(consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
-	if consumed < wanted {
-		return nil, ErrOutOfGas
-	}
-	scope.Memory.Set(memOffset.Uint64(), length.Uint64(), paddedCodeCopy)
-
-	return nil, nil
-}
-
-// opPush1EIP4762 handles the special case of PUSH1 opcode for EIP-4762, which
-// need not worry about the adjusted bound logic when adding the PUSHDATA to
-// the list of access events.
-func opPush1EIP4762(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-	var (
-		codeLen = uint64(len(scope.Contract.Code))
-		elem    = scope.Stack.get()
-	)
-	*pc += 1
-	if *pc < codeLen {
-		elem.SetUint64(uint64(scope.Contract.Code[*pc]))
-
-		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall && *pc%31 == 0 {
-			// touch next chunk if PUSH1 is at the boundary. if so, *pc has
-			// advanced past this boundary.
-			contractAddr := scope.Contract.Address()
-			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, *pc+1, uint64(1), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas.ExecutionGas)
-			scope.Contract.chargeExecution(wanted, evm.Config.Tracer, tracing.GasChangeUnspecified)
-			if consumed < wanted {
-				return nil, ErrOutOfGas
-			}
-		}
-	} else {
-		elem.Clear()
-	}
-	return nil, nil
-}
-
-func makePushEIP4762(size uint64, pushByteSize int) executionFunc {
-	return func(pc *uint64, evm *EVM, scope *ScopeContext) ([]byte, error) {
-		var (
-			codeLen = len(scope.Contract.Code)
-			start   = min(codeLen, int(*pc+1))
-			end     = min(codeLen, start+pushByteSize)
-		)
-		scope.Stack.get().SetBytes(
-			common.RightPadBytes(
-				scope.Contract.Code[start:end],
-				pushByteSize,
-			))
-
-		if !scope.Contract.IsDeployment && !scope.Contract.IsSystemCall {
-			contractAddr := scope.Contract.Address()
-			consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(contractAddr, uint64(start), uint64(pushByteSize), uint64(len(scope.Contract.Code)), false, scope.Contract.Gas.ExecutionGas)
-			scope.Contract.chargeExecution(consumed, evm.Config.Tracer, tracing.GasChangeUnspecified)
-			if consumed < wanted {
-				return nil, ErrOutOfGas
-			}
-		}
-
-		*pc += size
-		return nil, nil
-	}
-}
-
-func enable4762(jt *JumpTable) {
-	jt[SSTORE] = &operation{
-		dynamicGas: gasSStore4762,
-		execute:    opSstore,
-		minStack:   minStack(2, 0),
-		maxStack:   maxStack(2, 0),
-	}
-	jt[SLOAD] = &operation{
-		dynamicGas: gasSLoad4762,
-		execute:    opSload,
-		minStack:   minStack(1, 1),
-		maxStack:   maxStack(1, 1),
-	}
-
-	jt[BALANCE] = &operation{
-		execute:    opBalance,
-		dynamicGas: gasBalance4762,
-		minStack:   minStack(1, 1),
-		maxStack:   maxStack(1, 1),
-	}
-
-	jt[EXTCODESIZE] = &operation{
-		execute:    opExtCodeSize,
-		dynamicGas: gasExtCodeSize4762,
-		minStack:   minStack(1, 1),
-		maxStack:   maxStack(1, 1),
-	}
-
-	jt[EXTCODEHASH] = &operation{
-		execute:    opExtCodeHash,
-		dynamicGas: gasExtCodeHash4762,
-		minStack:   minStack(1, 1),
-		maxStack:   maxStack(1, 1),
-	}
-
-	jt[EXTCODECOPY] = &operation{
-		execute:    opExtCodeCopyEIP4762,
-		dynamicGas: gasExtCodeCopyEIP4762,
-		minStack:   minStack(4, 0),
-		maxStack:   maxStack(4, 0),
-		memorySize: memoryExtCodeCopy,
-	}
-
-	jt[CODECOPY] = &operation{
-		execute:     opCodeCopy,
-		constantGas: GasFastestStep,
-		dynamicGas:  gasCodeCopyEip4762,
-		minStack:    minStack(3, 0),
-		maxStack:    maxStack(3, 0),
-		memorySize:  memoryCodeCopy,
-	}
-
-	jt[SELFDESTRUCT] = &operation{
-		execute:     opSelfdestruct6780,
-		dynamicGas:  gasSelfdestructEIP4762,
-		constantGas: params.SelfdestructGasEIP150,
-		minStack:    minStack(1, 0),
-		maxStack:    maxStack(1, 0),
-	}
-
-	jt[CREATE] = &operation{
-		execute:     opCreate,
-		constantGas: params.CreateNGasEip4762,
-		dynamicGas:  gasCreateEip3860,
-		minStack:    minStack(3, 1),
-		maxStack:    maxStack(3, 1),
-		memorySize:  memoryCreate,
-	}
-
-	jt[CREATE2] = &operation{
-		execute:     opCreate2,
-		constantGas: params.CreateNGasEip4762,
-		dynamicGas:  gasCreate2Eip3860,
-		minStack:    minStack(4, 1),
-		maxStack:    maxStack(4, 1),
-		memorySize:  memoryCreate2,
-	}
-
-	jt[CALL] = &operation{
-		execute:    opCall,
-		dynamicGas: gasCallEIP4762,
-		minStack:   minStack(7, 1),
-		maxStack:   maxStack(7, 1),
-		memorySize: memoryCall,
-	}
-
-	jt[CALLCODE] = &operation{
-		execute:    opCallCode,
-		dynamicGas: gasCallCodeEIP4762,
-		minStack:   minStack(7, 1),
-		maxStack:   maxStack(7, 1),
-		memorySize: memoryCall,
-	}
-
-	jt[STATICCALL] = &operation{
-		execute:    opStaticCall,
-		dynamicGas: gasStaticCallEIP4762,
-		minStack:   minStack(6, 1),
-		maxStack:   maxStack(6, 1),
-		memorySize: memoryStaticCall,
-	}
-
-	jt[DELEGATECALL] = &operation{
-		execute:    opDelegateCall,
-		dynamicGas: gasDelegateCallEIP4762,
-		minStack:   minStack(6, 1),
-		maxStack:   maxStack(6, 1),
-		memorySize: memoryDelegateCall,
-	}
-
-	jt[PUSH1] = &operation{
-		execute:     opPush1EIP4762,
-		constantGas: GasFastestStep,
-		minStack:    minStack(0, 1),
-		maxStack:    maxStack(0, 1),
-	}
-	for i := 1; i < 32; i++ {
-		jt[PUSH1+OpCode(i)] = &operation{
-			execute:     makePushEIP4762(uint64(i+1), i+1),
-			constantGas: GasFastestStep,
-			minStack:    minStack(0, 1),
-			maxStack:    maxStack(0, 1),
-		}
 	}
 }
 

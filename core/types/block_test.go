@@ -373,3 +373,65 @@ func TestRlpDecodeParentHash(t *testing.T) {
 		}
 	}
 }
+
+// TestBlockSize checks that Size matches the length of the block's RLP encoding.
+func TestBlockSize(t *testing.T) {
+	var (
+		key, _ = crypto.GenerateKey()
+		signer = LatestSignerForChainID(big.NewInt(1))
+		to     = common.Address{0x01}
+	)
+	// newTxs returns one transaction of each type. Their sizes are not cached yet.
+	newTxs := func(dataLen int) []*Transaction {
+		data := make([]byte, dataLen)
+		return []*Transaction{
+			MustSignNewTx(key, signer, &LegacyTx{GasPrice: big.NewInt(1), To: &to, Data: data}),
+			MustSignNewTx(key, signer, &AccessListTx{ChainID: big.NewInt(1), GasPrice: big.NewInt(1), To: &to, Data: data}),
+			MustSignNewTx(key, signer, &DynamicFeeTx{ChainID: big.NewInt(1), GasTipCap: big.NewInt(1), GasFeeCap: big.NewInt(1), To: &to, Data: data}),
+			MustSignNewTx(key, signer, &SetCodeTx{ChainID: uint256.NewInt(1), GasTipCap: uint256.NewInt(1), GasFeeCap: uint256.NewInt(1), To: to, Data: data, AuthList: []SetCodeAuthorization{{Address: to}}}),
+			createEmptyBlobTx(key, false),
+		}
+	}
+	// decoded returns copies of txs decoded from bytes, which cache their size
+	decoded := func(txs []*Transaction) []*Transaction {
+		out := make([]*Transaction, len(txs))
+		for i, tx := range txs {
+			enc, _ := tx.MarshalBinary()
+			out[i] = new(Transaction)
+			if err := out[i].UnmarshalBinary(enc); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return out
+	}
+	uncles := []*Header{{Number: big.NewInt(1), Difficulty: big.NewInt(1)}}
+	withdrawals := []*Withdrawal{{Index: 1, Validator: 2, Address: to, Amount: 3}}
+
+	// The length prefix of a typed transaction grows with its size, so small,
+	// medium and large transactions are all covered.
+	tests := []struct {
+		name string
+		body Body
+	}{
+		{"empty", Body{}},
+		{"small txs", Body{Transactions: newTxs(0)}},
+		{"medium txs", Body{Transactions: newTxs(300)}},
+		{"large txs", Body{Transactions: newTxs(70000)}},
+		{"decoded txs", Body{Transactions: decoded(newTxs(300))}},
+		{"blob tx with sidecar", Body{Transactions: []*Transaction{createEmptyBlobTx(key, true)}}},
+		{"uncles", Body{Uncles: uncles}},
+		{"empty withdrawals", Body{Withdrawals: []*Withdrawal{}}},
+		{"withdrawals", Body{Transactions: newTxs(0), Withdrawals: withdrawals}},
+	}
+	header := &Header{Number: big.NewInt(1), Difficulty: big.NewInt(0)}
+	for _, tt := range tests {
+		block := NewBlockWithHeader(header).WithBody(tt.body)
+		enc, err := rlp.EncodeToBytes(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if size := block.Size(); size != uint64(len(enc)) {
+			t.Errorf("%s: size %d, encoding is %d bytes", tt.name, size, len(enc))
+		}
+	}
+}

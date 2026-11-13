@@ -628,6 +628,10 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 	if msg.AccessList != nil && !rules.IsBerlin {
 		return fmt.Errorf("%w: access list tx (sender %v)", ErrTxTypeNotSupported, msg.From)
 	}
+	// Check that the blob fee cap is only present once EIP-4844 is active
+	if msg.BlobGasFeeCap != nil && !rules.IsCancun {
+		return fmt.Errorf("%w: blob tx (sender %v)", ErrTxTypeNotSupported, msg.From)
+	}
 	// Check the blob version validity
 	if msg.BlobHashes != nil {
 		if !rules.IsCancun {
@@ -752,15 +756,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		return nil, fmt.Errorf("%w: intrinsic cost %v, floor: %v", ErrFloorDataGas, intrinsicGas, floorDataGas)
 	}
 
-	// EIP-4762 setup
-	if rules.IsEIP4762 {
-		st.evm.AccessEvents.AddTxOrigin(msg.From)
-
-		if targetAddr := msg.To; targetAddr != nil {
-			st.evm.AccessEvents.AddTxDestination(*targetAddr, msg.Value.Sign() != 0, !st.state.Exist(*targetAddr))
-		}
-	}
-
 	// Top-call affordability, the sender must still be able to cover the value
 	// transfer of the top frame after gas pre-pay.
 	value := msg.Value
@@ -815,11 +810,6 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 	fee := new(uint256.Int).SetUint64(gasUsed)
 	fee.Mul(fee, effectiveTip)
 	st.state.AddBalance(st.evm.Context.Coinbase, fee, tracing.BalanceIncreaseRewardTransactionFee)
-
-	// add the coinbase to the witness iff the fee is greater than 0
-	if rules.IsEIP4762 && fee.Sign() != 0 {
-		st.evm.AccessEvents.AddAccount(st.evm.Context.Coinbase, true, math.MaxUint64)
-	}
 
 	return &ExecutionResult{
 		UsedGas:    gasUsed,

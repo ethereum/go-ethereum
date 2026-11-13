@@ -42,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/filtermaps"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -1612,7 +1613,7 @@ func TestSimulateV1(t *testing.T) {
 				}},
 			}},
 			want:      nil,
-			expectErr: &invalidTxError{Message: fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4712388)", randomAccounts[0].addr.String()), Code: errCodeInsufficientFunds},
+			expectErr: &invalidTxError{Message: fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4712388)", randomAccounts[0].addr.String()), Code: ErrCodeInsufficientFunds},
 		}, {
 			// EVM error
 			name: "evm-error",
@@ -1634,7 +1635,7 @@ func TestSimulateV1(t *testing.T) {
 				BaseFeePerGas: "0x0",
 				Calls: []callRes{{
 					ReturnValue: "0x",
-					Error:       callErr{Message: "stack underflow (0 <=> 2)", Code: errCodeVMError},
+					Error:       callErr{Message: "stack underflow (0 <=> 2)", Code: ErrCodeVMError},
 					GasUsed:     "0x47e7c4",
 					Logs:        []log{},
 					Status:      "0x0",
@@ -2078,7 +2079,7 @@ func TestSimulateV1(t *testing.T) {
 			}},
 			validation: &validation,
 			want:       nil,
-			expectErr:  &invalidTxError{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: errCodeNonceTooHigh},
+			expectErr:  &invalidTxError{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: ErrCodeNonceTooHigh},
 		},
 		// Contract sends tx in validation mode.
 		{
@@ -2843,6 +2844,55 @@ func TestSimulateV1WithdrawalsByFork(t *testing.T) {
 	t.Run("post-shanghai", func(t *testing.T) {
 		// MergedTestChainConfig has every fork active from genesis.
 		run(t, params.MergedTestChainConfig, nil, true)
+	})
+}
+
+func TestSimulateV1DifficultyOverride(t *testing.T) {
+	t.Parallel()
+
+	run := func(t *testing.T, cfg *params.ChainConfig, genesisDifficulty *big.Int, n int) ([]*simBlockResult, error) {
+		t.Helper()
+		gspec := &core.Genesis{Config: cfg, Difficulty: genesisDifficulty, Alloc: types.GenesisAlloc{}}
+		backend := newTestBackend(t, n, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+		stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+		if err != nil {
+			t.Fatalf("failed to get state and header: %v", err)
+		}
+		sim := &simulator{
+			b:           backend,
+			state:       stateDB,
+			base:        baseHeader,
+			chainConfig: backend.ChainConfig(),
+			budget:      newGasBudget(0),
+		}
+		block := simBlock{BlockOverrides: &override.BlockOverrides{Difficulty: (*hexutil.Big)(big.NewInt(1))}}
+		return sim.execute(context.Background(), []simBlock{block})
+	}
+
+	t.Run("pre-merge", func(t *testing.T) {
+		results, err := run(t, params.TestChainConfig, nil, 1)
+		if err != nil {
+			t.Fatalf("simulation execution failed: %v", err)
+		}
+		if diff := results[0].Block.Difficulty(); diff.Cmp(big.NewInt(1)) != 0 {
+			t.Fatalf("difficulty mismatch: have %v, want 1", diff)
+		}
+	})
+	t.Run("post-merge", func(t *testing.T) {
+		_, err := run(t, params.MergedTestChainConfig, nil, 1)
+		var paramsErr *invalidParamsError
+		if !errors.As(err, &paramsErr) {
+			t.Fatalf("expected invalid params error, have %v", err)
+		}
+	})
+	t.Run("zero-difficulty-base", func(t *testing.T) {
+		cfg := *params.TestChainConfig
+		cfg.TerminalTotalDifficulty = big.NewInt(1)
+		_, err := run(t, &cfg, common.Big0, 0)
+		var paramsErr *invalidParamsError
+		if !errors.As(err, &paramsErr) {
+			t.Fatalf("expected invalid params error, have %v", err)
+		}
 	})
 }
 
@@ -4191,7 +4241,7 @@ func TestCreateAccessListFeeDefaults(t *testing.T) {
 		},
 		{
 			name:    "explicit zero blob fee cap rejected",
-			args:    TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big)},
+			args:    TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big), BlobHashes: []common.Hash{{0x01}}},
 			wantErr: true,
 		},
 	}
@@ -4214,6 +4264,115 @@ func TestCreateAccessListFeeDefaults(t *testing.T) {
 				t.Fatalf("unexpected gasUsed (got %d want %d)", uint64(result.GasUsed), params.TxGas)
 			}
 		})
+	}
+}
+
+// TestCreateAccessListBlobFeeDefault tests that eth_createAccessList keeps the
+// default blob fee cap for a request with blob hashes, so BLOBBASEFEE reads the
+// block's blob base fee.
+func TestCreateAccessListBlobFeeDefault(t *testing.T) {
+	t.Parallel()
+	var (
+		funded = newAccounts(1)[0]
+		// BLOBBASEFEE SLOAD POP STOP
+		contract = common.Address{0xcc}
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				funded.addr: {Balance: big.NewInt(params.Ether)},
+				contract:    {Code: common.FromHex("0x4a545000")},
+			},
+		}
+	)
+	backend := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+		b.SetPoS()
+	})
+	api := NewBlockChainAPI(backend)
+	args := TransactionArgs{
+		From:       &funded.addr,
+		To:         &contract,
+		GasPrice:   (*hexutil.Big)(big.NewInt(params.GWei)),
+		BlobHashes: []common.Hash{{0x01}},
+	}
+	result, err := api.CreateAccessList(context.Background(), args, nil, nil)
+	if err != nil {
+		t.Fatalf("CreateAccessList failed: %v", err)
+	}
+	blobBaseFee := eip4844.CalcBlobFee(params.MergedTestChainConfig, backend.CurrentHeader())
+	want := types.AccessList{{Address: contract, StorageKeys: []common.Hash{common.BigToHash(blobBaseFee)}}}
+	if !reflect.DeepEqual(*result.Accesslist, want) {
+		t.Fatalf("unexpected access list: have %v, want %v", *result.Accesslist, want)
+	}
+}
+
+// TestBlobFeeCapWithoutHashes tests that eth_call, eth_estimateGas and
+// eth_createAccessList reject maxFeePerBlobGas without blob hashes, before and
+// after Cancun.
+func TestBlobFeeCapWithoutHashes(t *testing.T) {
+	t.Parallel()
+	funded := newAccounts(1)[0]
+	newAPI := func(config *params.ChainConfig, engine consensus.Engine, gen func(int, *core.BlockGen)) *BlockChainAPI {
+		genesis := &core.Genesis{
+			Config: config,
+			Alloc: types.GenesisAlloc{
+				funded.addr: {Balance: big.NewInt(params.Ether)},
+			},
+		}
+		return NewBlockChainAPI(newTestBackend(t, 1, genesis, engine, gen))
+	}
+	apis := map[string]*BlockChainAPI{
+		"before cancun": newAPI(params.TestChainConfig, ethash.NewFaker(), nil),
+		"cancun": newAPI(params.MergedTestChainConfig, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+			b.SetPoS()
+		}),
+	}
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+	to := common.Address{0xbb}
+	tests := []struct {
+		name string
+		args TransactionArgs
+	}{
+		{
+			name: "blob fee cap",
+			args: TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: (*hexutil.Big)(big.NewInt(1))},
+		},
+		{
+			name: "zero blob fee cap",
+			args: TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big)},
+		},
+		{
+			name: "blob fee cap with gas price",
+			args: TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: (*hexutil.Big)(big.NewInt(1)), GasPrice: (*hexutil.Big)(big.NewInt(params.GWei))},
+		},
+		{
+			name: "blob fee cap with empty blob hashes",
+			args: TransactionArgs{From: &funded.addr, To: &to, BlobFeeCap: (*hexutil.Big)(big.NewInt(1)), BlobHashes: []common.Hash{}},
+		},
+	}
+	for fork, api := range apis {
+		for _, tt := range tests {
+			t.Run(fork+"/"+tt.name, func(t *testing.T) {
+				_, callErr := api.Call(context.Background(), tt.args, &latest, nil, nil)
+				_, estimateErr := api.EstimateGas(context.Background(), tt.args, &latest, nil, nil)
+				_, accessListErr := api.CreateAccessList(context.Background(), tt.args, &latest, nil)
+				for _, err := range []error{callErr, estimateErr, accessListErr} {
+					if err == nil || err.Error() != "maxFeePerBlobGas specified without blobVersionedHashes" {
+						t.Fatalf("expected blob fee cap error, got %v", err)
+					}
+				}
+			})
+		}
+	}
+	// eth_simulateV1 is not covered by the rule. It accepts a lone cap from Cancun.
+	sim := simOpts{BlockStateCalls: []simBlock{{Calls: []TransactionArgs{
+		{From: &funded.addr, To: &to, BlobFeeCap: new(hexutil.Big)},
+	}}}}
+	if _, err := apis["cancun"].SimulateV1(context.Background(), sim, &latest); err != nil {
+		t.Fatalf("simulate with a lone blob fee cap after cancun failed: %v", err)
+	}
+	if _, err := apis["before cancun"].SimulateV1(context.Background(), sim, &latest); err == nil || !strings.Contains(err.Error(), core.ErrTxTypeNotSupported.Error()) {
+		t.Fatalf("expected %v for simulate before cancun, got %v", core.ErrTxTypeNotSupported, err)
 	}
 }
 
@@ -4681,8 +4840,8 @@ func TestSendRawTransactionSync_Timeout(t *testing.T) {
 	if !errors.As(err, &de) {
 		t.Fatalf("expected data error with code/data, got %T %v", err, err)
 	}
-	if de.ErrorCode() != errCodeTxSyncTimeout {
-		t.Fatalf("expected code %d, got %d", errCodeTxSyncTimeout, de.ErrorCode())
+	if de.ErrorCode() != ErrCodeTxSyncTimeout {
+		t.Fatalf("expected code %d, got %d", ErrCodeTxSyncTimeout, de.ErrorCode())
 	}
 	tx := new(types.Transaction)
 	if e := tx.UnmarshalBinary(raw); e != nil {
@@ -4913,5 +5072,40 @@ func TestCreateAccessListAuthorizationGas(t *testing.T) {
 			require.NoError(t, err)
 			require.Empty(t, result.Error)
 		})
+	}
+}
+
+// headerErrorBackend fails header lookups of the safe and finalized tags.
+type headerErrorBackend struct {
+	*testBackend
+	err error
+}
+
+func (b headerErrorBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Header, error) {
+	if number == rpc.SafeBlockNumber || number == rpc.FinalizedBlockNumber {
+		return nil, b.err
+	}
+	return b.testBackend.HeaderByNumber(ctx, number)
+}
+
+// A safe or finalized tag that cannot be resolved to a block yet is null, while
+// any other backend failure is still reported.
+func TestGetHeaderByNumberUnresolvedTag(t *testing.T) {
+	t.Parallel()
+
+	backend := newTestBackend(t, 0, &core.Genesis{Config: params.MergedTestChainConfig, Difficulty: common.Big0}, beacon.New(ethash.NewFaker()), nil)
+	failure := errors.New("database failure")
+	for number, notFound := range map[rpc.BlockNumber]error{
+		rpc.SafeBlockNumber:      ErrSafeBlockNotFound,
+		rpc.FinalizedBlockNumber: ErrFinalizedBlockNotFound,
+	} {
+		api := NewBlockChainAPI(headerErrorBackend{backend, notFound})
+		if header, err := api.GetHeaderByNumber(context.Background(), number); header != nil || err != nil {
+			t.Errorf("%v not found: have %v %v, want null", number, header, err)
+		}
+		api = NewBlockChainAPI(headerErrorBackend{backend, failure})
+		if _, err := api.GetHeaderByNumber(context.Background(), number); !errors.Is(err, failure) {
+			t.Errorf("%v failure: have %v, want %v", number, err, failure)
+		}
 	}
 }

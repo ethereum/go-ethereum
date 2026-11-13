@@ -75,10 +75,9 @@ type BlockContext struct {
 // All fields can change between transactions.
 type TxContext struct {
 	// Message information
-	Origin       common.Address      // Provides information for ORIGIN
-	GasPrice     *uint256.Int        // Provides information for GASPRICE (and is used to zero the basefee if NoBaseFee is set)
-	BlobHashes   []common.Hash       // Provides information for BLOBHASH
-	AccessEvents *state.AccessEvents // Capture all state accesses for this tx
+	Origin     common.Address // Provides information for ORIGIN
+	GasPrice   *uint256.Int   // Provides information for GASPRICE (and is used to zero the basefee if NoBaseFee is set)
+	BlobHashes []common.Hash  // Provides information for BLOBHASH
 }
 
 // EVM is the Ethereum Virtual Machine base object and provides
@@ -134,6 +133,11 @@ type EVM struct {
 	returnData []byte // Last CALL's return data for subsequent reuse
 
 	arena *stackArena
+
+	// forceTableLoop is a test-only switch. The differential test sets it so
+	// that Run uses the table loop (execTraced) for the whole call tree, which
+	// lets the test compare it against the generated dispatch.
+	forceTableLoop bool
 }
 
 // NewEVM constructs an EVM instance with the supplied block context, state
@@ -159,9 +163,6 @@ func NewEVM(blockCtx BlockContext, statedb StateDB, chainConfig *params.ChainCon
 		evm.table = &amsterdamInstructionSet
 	case evm.chainRules.IsOsaka:
 		evm.table = &osakaInstructionSet
-	case evm.chainRules.IsUBT:
-		// TODO replace with proper instruction set when fork is specified
-		evm.table = &verkleInstructionSet
 	case evm.chainRules.IsPrague:
 		evm.table = &pragueInstructionSet
 	case evm.chainRules.IsCancun:
@@ -239,9 +240,6 @@ func (evm *EVM) SetStateDB(statedb *state.StateDB) {
 // SetTxContext resets the EVM with a new transaction context.
 // This is not threadsafe and should only be done very cautiously.
 func (evm *EVM) SetTxContext(txCtx TxContext) {
-	if evm.chainRules.IsEIP4762 {
-		txCtx.AccessEvents = state.NewAccessEvents()
-	}
 	evm.TxContext = txCtx
 
 	// Reset the per-tx jumpdest map
@@ -296,21 +294,6 @@ func (evm *EVM) Call(caller common.Address, addr common.Address, input []byte, g
 	snapshot := evm.StateDB.Snapshot()
 	p, isPrecompile := evm.precompile(addr)
 	if !evm.StateDB.Exist(addr) {
-		if !isPrecompile && evm.chainRules.IsEIP4762 && !isSystemCall(caller) {
-			// Add proof of absence to witness
-			// At this point, the read costs have already been charged, either because this
-			// is a direct tx call, in which case it's covered by the intrinsic gas, or because
-			// of a CALL instruction, in which case BASIC_DATA has been added to the access
-			// list in write mode. If there is enough gas paying for the addition of the code
-			// hash leaf to the access list, then account creation will proceed unimpaired.
-			// Thus, only pay for the creation of the code hash leaf here.
-			wgas := evm.AccessEvents.CodeHashGas(addr, true, gas.ExecutionGas, false)
-			if _, ok := gas.ChargeExecution(wgas); !ok {
-				evm.StateDB.RevertToSnapshot(snapshot)
-				return nil, gas.ExitHalt(), ErrOutOfGas
-			}
-		}
-
 		if !isPrecompile && evm.chainRules.IsEIP158 && value.IsZero() {
 			// Calling a non-existing account, don't do anything.
 			return nil, gas, nil
@@ -512,6 +495,48 @@ func (evm *EVM) createFramePreCheck(caller common.Address, value *uint256.Int) e
 	return nil
 }
 
+// pendingAccountCreation returns the account-creation state gas the CREATE or
+// CREATE2 about to run will charge, for the opcode hook, which fires before the
+// opcode executes. The destination is read under the same conditions as in
+// opCreate*, after the opcode's gas is charged and the precheck passed, so the
+// block access list records the same access whether tracing or not.
+func (evm *EVM) pendingAccountCreation(op OpCode, scope *ScopeContext) uint64 {
+	if !evm.chainRules.IsAmsterdam {
+		return 0
+	}
+	var (
+		stack  = scope.Stack
+		caller = scope.Contract.Address()
+	)
+	if evm.createFramePreCheck(caller, stack.peek()) != nil {
+		return 0
+	}
+	var address common.Address
+	if op == CREATE {
+		address = crypto.CreateAddress(caller, evm.StateDB.GetNonce(caller))
+	} else {
+		// Memory is expanded after the hook, so the initcode may extend past
+		// it; the missing tail reads as zeros.
+		var (
+			offset, size = stack.back(1).Uint64(), stack.back(2).Uint64()
+			initcode     []byte
+		)
+		if end := offset + size; end <= uint64(scope.Memory.Len()) {
+			initcode = scope.Memory.GetPtr(offset, size)
+		} else {
+			initcode = make([]byte, size)
+			if offset < uint64(scope.Memory.Len()) {
+				copy(initcode, scope.Memory.GetPtr(offset, uint64(scope.Memory.Len())-offset))
+			}
+		}
+		address = crypto.CreateAddress2(caller, stack.back(3).Bytes32(), crypto.Keccak256(initcode))
+	}
+	if !evm.StateDB.Empty(address) {
+		return 0
+	}
+	return params.AccountCreationSize * evm.Context.CostPerStateByte
+}
+
 // chargeAccountCreation runs the create-frame precheck and charges the
 // account-creation state gas since Amsterdam, before the 63/64ths split.
 //
@@ -560,18 +585,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 	// Increment the caller's nonce after passing all validations
 	evm.StateDB.SetNonce(caller, evm.StateDB.GetNonce(caller)+1, tracing.NonceChangeContractCreator)
 
-	// Charge the contract creation init gas in verkle mode
-	if evm.chainRules.IsEIP4762 {
-		statelessGas := evm.AccessEvents.ContractCreatePreCheckGas(address, gas.ExecutionGas)
-		prior, ok := gas.Charge(GasCosts{ExecutionGas: statelessGas})
-		if !ok {
-			return nil, common.Address{}, gas.ExitHalt(), ErrOutOfGas
-		}
-		if evm.Config.Tracer.HasGasHook() {
-			evm.Config.Tracer.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractCollisionCheck)
-		}
-	}
-
 	// We add this to the access list _before_ taking a snapshot. Even if the
 	// creation fails, the access-list change should not be rolled back.
 	if evm.chainRules.IsEIP2929 {
@@ -607,17 +620,6 @@ func (evm *EVM) create(caller common.Address, code []byte, gas GasBudget, value 
 
 	if evm.chainRules.IsEIP158 {
 		evm.StateDB.SetNonce(address, 1, tracing.NonceChangeNewContract)
-	}
-	// Charge the contract creation init gas in verkle mode
-	if evm.chainRules.IsEIP4762 {
-		consumed, wanted := evm.AccessEvents.ContractCreateInitGas(address, gas.ExecutionGas)
-		if consumed < wanted {
-			return nil, common.Address{}, gas.ExitHalt(), ErrOutOfGas
-		}
-		prior, _ := gas.Charge(GasCosts{ExecutionGas: consumed})
-		if evm.Config.Tracer.HasGasHook() {
-			evm.Config.Tracer.EmitGasChange(prior.AsTracing(), gas.AsTracing(), tracing.GasChangeWitnessContractInit)
-		}
 	}
 	evm.Context.Transfer(evm.StateDB, caller, address, value, &evm.chainRules)
 
@@ -658,16 +660,7 @@ func (evm *EVM) initNewContract(contract *Contract, address common.Address) ([]b
 	if len(ret) >= 1 && ret[0] == 0xEF && evm.chainRules.IsLondon {
 		return ret, ErrInvalidCode
 	}
-	if evm.chainRules.IsEIP4762 {
-		consumed, wanted := evm.AccessEvents.CodeChunksRangeGas(address, 0, uint64(len(ret)), uint64(len(ret)), true, contract.Gas.ExecutionGas)
-		contract.chargeExecution(consumed, evm.Config.Tracer, tracing.GasChangeWitnessCodeChunk)
-		if len(ret) > 0 && (consumed < wanted) {
-			return ret, ErrCodeStoreOutOfGas
-		}
-		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
-			return ret, err
-		}
-	} else if evm.chainRules.IsAmsterdam {
+	if evm.chainRules.IsAmsterdam {
 		// Check max code size BEFORE charging gas so over-max code
 		// does not consume state gas (which would inflate tx_state).
 		if err := CheckMaxCodeSize(&evm.chainRules, uint64(len(ret))); err != nil {
@@ -784,6 +777,7 @@ func (evm *EVM) GetVMContext() *tracing.VMContext {
 		Time:        evm.Context.Time,
 		Random:      evm.Context.Random,
 		BaseFee:     evm.Context.BaseFee,
+		Rules:       evm.chainRules,
 		StateDB:     statedb,
 	}
 }

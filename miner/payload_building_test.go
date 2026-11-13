@@ -272,3 +272,42 @@ func TestPayloadId(t *testing.T) {
 		ids[id] = i
 	}
 }
+
+func TestReceiptBlockHash(t *testing.T) {
+	w, b := newTestWorker(t, params.TestChainConfig, ethash.NewFaker(), rawdb.NewMemoryDatabase(), 0)
+	defer b.chain.Stop()
+	defer b.txPool.Close()
+
+	// A contract creation whose init code emits a log: PUSH1 0, PUSH1 0, LOG0, STOP.
+	tx := types.MustSignNewTx(testBankKey, types.LatestSigner(params.TestChainConfig), &types.LegacyTx{
+		Nonce:    1,
+		Gas:      100_000,
+		GasPrice: big.NewInt(params.InitialBaseFee),
+		Data:     common.FromHex("0x60006000a000"),
+	})
+	head := b.chain.CurrentBlock()
+	res := w.generateWork(context.Background(), &generateParams{
+		timestamp:      head.Time + 1,
+		parentHash:     head.Hash(),
+		coinbase:       testUserAddress,
+		forceOverrides: true,
+		overrideTxs:    []*types.Transaction{pendingTxs[0], tx},
+	}, false)
+	if res.err != nil {
+		t.Fatalf("Failed to build block: %v", res.err)
+	}
+	if len(res.receipts) != 2 || len(res.receipts[1].Logs) != 1 {
+		t.Fatalf("Unexpected receipts: %d, want 2 with a log in the second", len(res.receipts))
+	}
+	hash := res.block.Hash()
+	for i, receipt := range res.receipts {
+		if receipt.BlockHash != hash {
+			t.Errorf("Receipt %d: block hash %x, want %x", i, receipt.BlockHash, hash)
+		}
+		for j, l := range receipt.Logs {
+			if l.BlockHash != hash {
+				t.Errorf("Receipt %d, log %d: block hash %x, want %x", i, j, l.BlockHash, hash)
+			}
+		}
+	}
+}

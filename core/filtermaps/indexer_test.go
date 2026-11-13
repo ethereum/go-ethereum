@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -347,6 +348,7 @@ type testSetup struct {
 	params               Params
 	dbHashes             map[string]common.Hash
 	testDisableSnapshots bool
+	historyCutoff        atomic.Uint64 // receipts before it are not available
 }
 
 func newTestSetup(t *testing.T) *testSetup {
@@ -372,7 +374,7 @@ func (ts *testSetup) setHistory(history uint64, noHistory bool) {
 		History:  history,
 		Disabled: noHistory,
 	}
-	ts.fm, _ = NewFilterMaps(ts.db, view, 0, 0, ts.params, config)
+	ts.fm, _ = NewFilterMaps(ts.db, view, ts.historyCutoff.Load(), 0, ts.params, config)
 	ts.fm.testDisableSnapshots = ts.testDisableSnapshots
 	ts.fm.Start()
 }
@@ -472,6 +474,8 @@ type testChain struct {
 	canonical []common.Hash
 	blocks    map[common.Hash]*types.Block
 	receipts  map[common.Hash]types.Receipts
+
+	receiptsHook func() // called by GetReceiptsByHash if set
 }
 
 func (ts *testSetup) newTestChain() *testChain {
@@ -514,16 +518,20 @@ func (tc *testChain) GetCanonicalHash(number uint64) common.Hash {
 
 func (tc *testChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	tc.lock.RLock()
-	defer tc.lock.RUnlock()
+	hook, block, receipts := tc.receiptsHook, tc.blocks[hash], tc.receipts[hash]
+	tc.lock.RUnlock()
 
-	return tc.receipts[hash]
+	if hook != nil {
+		hook()
+	}
+	if block == nil || block.NumberU64() < tc.ts.historyCutoff.Load() {
+		return nil
+	}
+	return receipts
 }
 
 func (tc *testChain) GetRawReceipts(hash common.Hash, number uint64) types.Receipts {
-	tc.lock.RLock()
-	defer tc.lock.RUnlock()
-
-	return tc.receipts[hash]
+	return tc.GetReceiptsByHash(hash)
 }
 
 func (tc *testChain) addBlocks(count, maxTxPerBlock, maxLogsPerReceipt, maxTopicsPerLog int, random bool) {
@@ -615,7 +623,7 @@ func (tc *testChain) setTargetHead() {
 	if tc.ts.fm != nil {
 		if !tc.ts.fm.disabled {
 			//tc.ts.fm.targetViewCh <- NewChainView(tc, head.Number.Uint64(), head.Hash())
-			tc.ts.fm.SetTarget(NewChainView(tc, head.Number.Uint64(), head.Hash()), 0, 0)
+			tc.ts.fm.SetTarget(NewChainView(tc, head.Number.Uint64(), head.Hash()), tc.ts.historyCutoff.Load(), 0)
 		}
 	}
 }

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 	"slices"
 	"strconv"
@@ -895,6 +896,17 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
 }
 
+// payloadToBlock builds the block of a payload. The senders are recovered in the
+// background while the block is hashed and checked, so execution finds them ready.
+func (api *ConsensusAPI) payloadToBlock(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
+	txs, err := engine.DecodeTransactions(params.Transactions)
+	if err != nil {
+		return nil, err
+	}
+	core.SenderCacher().Recover(types.MakeSigner(api.config(), new(big.Int).SetUint64(params.Number), params.Timestamp), txs)
+	return engine.ExecutableDataToBlockWithTxs(params, txs, versionedHashes, beaconRoot, requests)
+}
+
 func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (result engine.PayloadStatusV1, err error) {
 	// The locking here is, strictly, not required. Without these locks, this can happen:
 	//
@@ -919,8 +931,11 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	api.newPayloadLock.Lock()
 	defer api.newPayloadLock.Unlock()
 
+	// The slow block log reports the time from here to the start of the processing
+	ctx = core.WithPrepareStart(ctx, time.Now())
+
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
-	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
+	block, err := api.payloadToBlock(params, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		bgu := "nil"
 		if params.BlobGasUsed != nil {

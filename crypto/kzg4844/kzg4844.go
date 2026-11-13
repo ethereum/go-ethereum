@@ -114,20 +114,33 @@ var useCKZG atomic.Bool
 // library if for some reason the user wishes to do so (e.g. consensus bug in one
 // or the other).
 func UseCKZG(use bool) error {
+	if err := SelectCKZG(use); err != nil {
+		return err
+	}
+	// Initializing the library can take 2-4 seconds - and can potentially crash
+	// on CKZG and non-ADX CPUs - so might as well do it now and don't wait until
+	// a crypto operation is actually needed live.
+	Warmup()
+	return nil
+}
+
+// SelectCKZG is like UseCKZG, but leaves the selected library to initialize on
+// first use. Call Warmup to initialize it ahead of time.
+func SelectCKZG(use bool) error {
 	if use && !ckzgAvailable {
 		return errors.New("CKZG unavailable on your platform")
 	}
 	useCKZG.Store(use)
+	return nil
+}
 
-	// Initializing the library can take 2-4 seconds - and can potentially crash
-	// on CKZG and non-ADX CPUs - so might as well do it now and don't wait until
-	// a crypto operation is actually needed live.
-	if use {
+// Warmup initializes the selected KZG library now instead of on first use.
+func Warmup() {
+	if useCKZG.Load() {
 		ckzgIniter.Do(ckzgInit)
 	} else {
 		gokzgIniter.Do(gokzgInit)
 	}
-	return nil
 }
 
 // BlobToCommitment creates a small commitment out of a data blob.

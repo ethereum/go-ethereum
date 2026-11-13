@@ -207,27 +207,32 @@ func decodeGloasRequests(enc json.RawMessage) ([][]byte, error) {
 	if err := json.Unmarshal(enc, &builders); err != nil {
 		return nil, err
 	}
+	// The records of a request type are delivered as a single request entry:
+	// the request type byte followed by the concatenation of the SSZ
+	// serializations of the type's records.
+	var deposits []byte
 	for _, request := range builders.Deposits {
 		if len(request.Pubkey) != 48 || len(request.WithdrawalCredentials) != 32 || len(request.Signature) != 96 {
 			return nil, errors.New("invalid Gloas builder deposit request")
 		}
-		data := make([]byte, 1, 1+48+32+8+96)
-		data[0] = 0x03
-		data = append(data, request.Pubkey...)
-		data = append(data, request.WithdrawalCredentials...)
-		data = binary.LittleEndian.AppendUint64(data, uint64(request.Amount))
-		data = append(data, request.Signature...)
-		result = append(result, data)
+		deposits = append(deposits, request.Pubkey...)
+		deposits = append(deposits, request.WithdrawalCredentials...)
+		deposits = binary.LittleEndian.AppendUint64(deposits, uint64(request.Amount))
+		deposits = append(deposits, request.Signature...)
 	}
+	if len(deposits) != 0 {
+		result = append(result, append([]byte{0x03}, deposits...))
+	}
+	var exits []byte
 	for _, request := range builders.Exits {
 		if len(request.SourceAddress) != 20 || len(request.Pubkey) != 48 {
 			return nil, errors.New("invalid Gloas builder exit request")
 		}
-		data := make([]byte, 1, 1+20+48)
-		data[0] = 0x04
-		data = append(data, request.SourceAddress...)
-		data = append(data, request.Pubkey...)
-		result = append(result, data)
+		exits = append(exits, request.SourceAddress...)
+		exits = append(exits, request.Pubkey...)
+	}
+	if len(exits) != 0 {
+		result = append(result, append([]byte{0x04}, exits...))
 	}
 	return result, nil
 }

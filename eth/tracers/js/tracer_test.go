@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth/tracers"
@@ -64,9 +65,9 @@ func runTrace(tracer *tracers.Tracer, vmctx *vmContext, chaincfg *params.ChainCo
 	}
 
 	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{Gas: gasLimit, GasPrice: vmctx.txCtx.GasPrice.ToBig()}), contract.Caller())
-	tracer.OnEnter(0, byte(vm.CALL), contract.Caller(), contract.Address(), []byte{}, startGas, value.ToBig())
+	tracer.OnEnterV2(0, byte(vm.CALL), contract.Caller(), contract.Address(), []byte{}, tracing.Gas{Execution: startGas}, value.ToBig())
 	ret, err := evm.Run(contract, []byte{}, false)
-	tracer.OnExit(0, ret, startGas-contract.Gas.ExecutionGas, err, true)
+	tracer.OnExitV2(0, ret, tracing.Gas{Execution: contract.Gas.ExecutionGas}, err, true)
 	// Rest gas assumes no refund
 	tracer.OnTxEnd(&types.Receipt{GasUsed: gasLimit - contract.Gas.ExecutionGas}, nil)
 	if err != nil {
@@ -188,14 +189,40 @@ func TestHaltBetweenSteps(t *testing.T) {
 	evm := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, chainConfig, vm.Config{Tracer: tracer.Hooks})
 	evm.SetTxContext(vm.TxContext{GasPrice: uint256.NewInt(1)})
 	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
-	tracer.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, []byte{}, 0, big.NewInt(0))
-	tracer.OnOpcode(0, 0, 0, 0, scope, nil, 0, nil)
+	tracer.OnEnterV2(0, byte(vm.CALL), common.Address{}, common.Address{}, []byte{}, tracing.Gas{}, big.NewInt(0))
+	tracer.OnOpcodeV2(0, 0, tracing.Gas{}, tracing.OpCost{}, scope, nil, 0, nil)
 	timeout := errors.New("stahp")
 	tracer.Stop(timeout)
-	tracer.OnOpcode(0, 0, 0, 0, scope, nil, 0, nil)
+	tracer.OnOpcodeV2(0, 0, tracing.Gas{}, tracing.OpCost{}, scope, nil, 0, nil)
 
 	if _, err := tracer.GetResult(); !strings.Contains(err.Error(), timeout.Error()) {
 		t.Errorf("Expected timeout error, got %v", err)
+	}
+}
+
+func TestFaultCost(t *testing.T) {
+	tracer, err := newJsTracer(`{
+		costs: [],
+		step: function(log) { this.costs.push([log.getCost(), log.getStateGasCost()]); },
+		fault: function(log) { this.costs.push([log.getCost(), log.getStateGasCost()]); },
+		result: function() { return this.costs; }
+	}`, nil, nil, params.TestChainConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := &vm.ScopeContext{
+		Contract: vm.NewContract(common.Address{}, common.Address{}, new(uint256.Int), vm.GasBudget{}, nil),
+	}
+	evm := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, params.TestChainConfig, vm.Config{Tracer: tracer.Hooks})
+	tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
+	tracer.OnOpcodeV2(0, byte(vm.CREATE), tracing.Gas{}, tracing.OpCost{Execution: 32000, State: 183600}, scope, nil, 0, nil)
+	tracer.OnFaultV2(0, byte(vm.CREATE), tracing.Gas{}, tracing.OpCost{}, scope, 0, vm.ErrOutOfGas)
+	result, err := tracer.GetResult()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := string(result), `[[32000,183600],[0,0]]`; have != want {
+		t.Errorf("costs = %s, want %s", have, want)
 	}
 }
 
@@ -212,8 +239,8 @@ func TestNoStepExec(t *testing.T) {
 		evm := vm.NewEVM(vm.BlockContext{BlockNumber: big.NewInt(1)}, &dummyStatedb{}, chainConfig, vm.Config{Tracer: tracer.Hooks})
 		evm.SetTxContext(vm.TxContext{GasPrice: uint256.NewInt(100)})
 		tracer.OnTxStart(evm.GetVMContext(), types.NewTx(&types.LegacyTx{}), common.Address{})
-		tracer.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, []byte{}, 1000, big.NewInt(0))
-		tracer.OnExit(0, nil, 0, nil, false)
+		tracer.OnEnterV2(0, byte(vm.CALL), common.Address{}, common.Address{}, []byte{}, tracing.Gas{Execution: 1000}, big.NewInt(0))
+		tracer.OnExitV2(0, nil, tracing.Gas{Execution: 1000}, nil, false)
 		ret, err := tracer.GetResult()
 		if err != nil {
 			t.Fatal(err)
@@ -283,8 +310,8 @@ func TestEnterExit(t *testing.T) {
 	scope := &vm.ScopeContext{
 		Contract: vm.NewContract(common.Address{}, common.Address{}, uint256.NewInt(0), vm.GasBudget{}, nil),
 	}
-	tracer.OnEnter(1, byte(vm.CALL), scope.Contract.Caller(), scope.Contract.Address(), []byte{}, 1000, new(big.Int))
-	tracer.OnExit(1, []byte{}, 400, nil, false)
+	tracer.OnEnterV2(1, byte(vm.CALL), scope.Contract.Caller(), scope.Contract.Address(), []byte{}, tracing.Gas{Execution: 1000}, new(big.Int))
+	tracer.OnExitV2(1, []byte{}, tracing.Gas{Execution: 600}, nil, false)
 
 	have, err := tracer.GetResult()
 	if err != nil {

@@ -23,6 +23,7 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1
 	github.com/donovanhide/eventsource v0.0.0-20210830082556-c59027999da0
 	github.com/dop251/goja v0.0.0-20230605162241-28ee0ee714f3
+	github.com/dunglas/httpsfv v1.1.0
 	github.com/ethereum/c-kzg-4844/v2 v2.1.8
 	github.com/ethereum/go-bigmodexpfix v0.0.0-20250911101455-f9e208c548ab
 	github.com/ethereum/hid v1.0.1-0.20260421154323-c2ab8d9bf68a
@@ -54,6 +55,8 @@ require (
 	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7
 	github.com/pion/stun/v3 v3.1.7
 	github.com/protolambda/bls12-381-util v0.1.0
+	github.com/quic-go/quic-go v0.60.0
+	github.com/quic-go/webtransport-go v0.11.1
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 	github.com/status-im/keycard-go v0.2.0
@@ -61,6 +64,7 @@ require (
 	github.com/supranational/blst v0.3.16
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/urfave/cli/v2 v2.27.5
+	github.com/zeebo/blake3 v0.2.4
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.46.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.46.0
@@ -98,6 +102,7 @@ require (
 	github.com/pion/transport/v4 v4.1.0 // indirect
 	github.com/pk910/dynamic-ssz v1.4.0 // indirect
 	github.com/pk910/hashtree-bindings v0.2.6 // indirect
+	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/wlynxg/anet v0.0.5 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/metric v1.46.0 // indirect
@@ -145,7 +150,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
-	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
+	github.com/google/pprof v0.0.0-20230207041349-798e818bf904
 	github.com/grafana/pyroscope-go v1.2.7
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.9 // indirect
 	github.com/influxdata/line-protocol v0.0.0-20200327222509-2487e7298839 // indirect

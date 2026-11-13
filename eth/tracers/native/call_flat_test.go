@@ -49,7 +49,7 @@ func TestCallFlatStop(t *testing.T) {
 
 	tracer.OnTxStart(&tracing.VMContext{}, tx, common.Address{})
 
-	tracer.OnEnter(0, byte(vm.CALL), common.Address{}, common.Address{}, nil, 0, big.NewInt(0))
+	tracer.OnEnterV2(0, byte(vm.CALL), common.Address{}, common.Address{}, nil, tracing.Gas{}, big.NewInt(0))
 
 	// stop before the transaction is finished
 	tracer.Stop(stopError)

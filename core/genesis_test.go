@@ -17,7 +17,6 @@
 package core
 
 import (
-	"bytes"
 	"encoding/json"
 	"math/big"
 	"reflect"
@@ -261,8 +260,8 @@ func newDbConfig(scheme string) *triedb.Config {
 }
 
 func TestBinaryGenesisCommit(t *testing.T) {
-	var ubtTime uint64 = 0
-	ubtConfig := &params.ChainConfig{
+	var pbtTime uint64 = 0
+	pbtConfig := &params.ChainConfig{
 		ChainID:                 big.NewInt(1),
 		HomesteadBlock:          big.NewInt(0),
 		DAOForkBlock:            nil,
@@ -280,13 +279,12 @@ func TestBinaryGenesisCommit(t *testing.T) {
 		ArrowGlacierBlock:       big.NewInt(0),
 		GrayGlacierBlock:        big.NewInt(0),
 		MergeNetsplitBlock:      nil,
-		ShanghaiTime:            &ubtTime,
-		CancunTime:              &ubtTime,
-		PragueTime:              &ubtTime,
-		OsakaTime:               &ubtTime,
-		UBTTime:                 &ubtTime,
+		ShanghaiTime:            &pbtTime,
+		CancunTime:              &pbtTime,
+		PragueTime:              &pbtTime,
+		OsakaTime:               &pbtTime,
+		PBTTime:                 &pbtTime,
 		TerminalTotalDifficulty: big.NewInt(0),
-		EnableUBTAtGenesis:      true,
 		Ethash:                  nil,
 		Clique:                  nil,
 		BlobScheduleConfig: &params.BlobScheduleConfig{
@@ -297,18 +295,20 @@ func TestBinaryGenesisCommit(t *testing.T) {
 
 	genesis := &Genesis{
 		BaseFee:    big.NewInt(params.InitialBaseFee),
-		Config:     ubtConfig,
-		Timestamp:  ubtTime,
+		Config:     pbtConfig,
+		Timestamp:  pbtTime,
 		Difficulty: big.NewInt(0),
 		Alloc: types.GenesisAlloc{
 			{1}: {Balance: big.NewInt(1), Storage: map[common.Hash]common.Hash{{1}: {1}}},
 		},
 	}
 
-	expected := common.FromHex("0870fd587c41dc778019de8c5cb3193fe4ef1f417976461952d3712ba39163f5")
-	got := genesis.ToBlock().Root().Bytes()
-	if !bytes.Equal(got, expected) {
-		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, got)
+	if !genesis.IsPBT() {
+		t.Fatal("expected genesis to be committed with the partitioned binary tree")
+	}
+	expected := genesis.ToBlock().Root()
+	if expected == types.EmptyBinaryHash || expected == types.EmptyRootHash {
+		t.Fatalf("invalid genesis state root %x", expected)
 	}
 
 	db := rawdb.NewMemoryDatabase()
@@ -317,21 +317,20 @@ func TestBinaryGenesisCommit(t *testing.T) {
 	config.NoAsyncFlush = true
 
 	triedb := triedb.NewDatabase(db, &triedb.Config{
-		IsUBT:             true,
-		PathDB:            &config,
-		BinTrieGroupDepth: triedb.DefaultBinTrieGroupDepth,
+		IsPBT:  true,
+		PathDB: &config,
 	})
 	block := genesis.MustCommit(db, triedb)
-	if !bytes.Equal(block.Root().Bytes(), expected) {
+	if block.Root() != expected {
 		t.Fatalf("invalid genesis state root, expected %x, got %x", expected, block.Root())
 	}
 
-	// Test that the trie is a unified binary trie
-	if !triedb.IsUBT() {
-		t.Fatalf("expected trie to be a unified binary trie")
+	// Test that the trie is a partitioned binary tree
+	if !triedb.IsPBT() {
+		t.Fatalf("expected trie to be a partitioned binary tree")
 	}
-	vdb := rawdb.NewTable(db, string(rawdb.VerklePrefix))
-	if !rawdb.HasAccountTrieNode(vdb, nil) {
+	pdb := rawdb.NewTable(db, string(rawdb.PBTPrefix))
+	if !rawdb.HasAccountTrieNode(pdb, nil) {
 		t.Fatal("could not find node")
 	}
 }

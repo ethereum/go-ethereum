@@ -73,7 +73,7 @@ func TestKeccak256PreimageTracerCreation(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tracer)
 	require.NotNil(t, tracer.Hooks)
-	require.NotNil(t, tracer.Hooks.OnOpcode)
+	require.NotNil(t, tracer.Hooks.OnOpcodeV2)
 	require.NotNil(t, tracer.GetResult)
 }
 
@@ -111,7 +111,7 @@ func TestKeccak256PreimageTracerSingleKeccak(t *testing.T) {
 	}
 
 	// Call OnOpcode with KECCAK256
-	tracer.OnOpcode(0, byte(vm.KECCAK256), 0, 0, mockScope, nil, 0, nil)
+	tracer.OnOpcodeV2(0, byte(vm.KECCAK256), tracing.Gas{}, tracing.OpCost{}, mockScope, nil, 0, nil)
 
 	// Get result
 	result, err := tracer.GetResult()
@@ -165,7 +165,7 @@ func TestKeccak256PreimageTracerMultipleKeccak(t *testing.T) {
 			}
 
 			// Call OnOpcode with KECCAK256
-			tracer.OnOpcode(0, byte(vm.KECCAK256), 0, 0, mockScope, nil, 0, nil)
+			tracer.OnOpcodeV2(0, byte(vm.KECCAK256), tracing.Gas{}, tracing.OpCost{}, mockScope, nil, 0, nil)
 
 			expectedHash := crypto.Keccak256Hash(tc.data)
 			expectedHashes[expectedHash] = hexutil.Bytes(tc.data)
@@ -209,7 +209,7 @@ func TestKeccak256PreimageTracerNonKeccakOpcodes(t *testing.T) {
 	}
 
 	for _, opcode := range nonKeccakOpcodes {
-		tracer.OnOpcode(0, byte(opcode), 0, 0, mockScope, nil, 0, nil)
+		tracer.OnOpcodeV2(0, byte(opcode), tracing.Gas{}, tracing.OpCost{}, mockScope, nil, 0, nil)
 	}
 
 	// Get result - should be empty
@@ -245,7 +245,7 @@ func TestKeccak256PreimageTracerMemoryOffset(t *testing.T) {
 	}
 
 	// Call OnOpcode with KECCAK256
-	tracer.OnOpcode(0, byte(vm.KECCAK256), 0, 0, mockScope, nil, 0, nil)
+	tracer.OnOpcodeV2(0, byte(vm.KECCAK256), tracing.Gas{}, tracing.OpCost{}, mockScope, nil, 0, nil)
 
 	// Get result
 	result, err := tracer.GetResult()
@@ -284,7 +284,7 @@ func TestKeccak256PreimageTracerMemoryPadding(t *testing.T) {
 	}
 
 	// Call OnOpcode with KECCAK256
-	tracer.OnOpcode(0, byte(vm.KECCAK256), 0, 0, mockScope, nil, 0, nil)
+	tracer.OnOpcodeV2(0, byte(vm.KECCAK256), tracing.Gas{}, tracing.OpCost{}, mockScope, nil, 0, nil)
 
 	// Get result
 	result, err := tracer.GetResult()
@@ -325,7 +325,7 @@ func TestKeccak256PreimageTracerDuplicateHashes(t *testing.T) {
 
 	// Call OnOpcode with KECCAK256 multiple times with same data
 	for i := 0; i < 3; i++ {
-		tracer.OnOpcode(0, byte(vm.KECCAK256), 0, 0, mockScope, nil, 0, nil)
+		tracer.OnOpcodeV2(0, byte(vm.KECCAK256), tracing.Gas{}, tracing.OpCost{}, mockScope, nil, 0, nil)
 	}
 
 	// Get result
@@ -362,7 +362,7 @@ func TestKeccak256PreimageTracerWithExecutionError(t *testing.T) {
 	}
 
 	// Call OnOpcode with KECCAK256 and an execution error
-	tracer.OnOpcode(0, byte(vm.KECCAK256), 0, 0, mockScope, nil, 0, vm.ErrOutOfGas)
+	tracer.OnOpcodeV2(0, byte(vm.KECCAK256), tracing.Gas{}, tracing.OpCost{}, mockScope, nil, 0, vm.ErrOutOfGas)
 
 	// Get result - should still record the hash even with execution error
 	result, err := tracer.GetResult()
@@ -398,7 +398,7 @@ func TestKeccak256PreimageTracerInsufficientStack(t *testing.T) {
 	}
 
 	// This should not panic due to insufficient stack
-	tracer.OnOpcode(0, byte(vm.KECCAK256), 0, 0, mockScope, nil, 0, nil)
+	tracer.OnOpcodeV2(0, byte(vm.KECCAK256), tracing.Gas{}, tracing.OpCost{}, mockScope, nil, 0, nil)
 }
 
 func TestKeccak256PreimageTracerLargeData(t *testing.T) {
@@ -425,7 +425,7 @@ func TestKeccak256PreimageTracerLargeData(t *testing.T) {
 	}
 
 	// Call OnOpcode with KECCAK256
-	tracer.OnOpcode(0, byte(vm.KECCAK256), 0, 0, mockScope, nil, 0, nil)
+	tracer.OnOpcodeV2(0, byte(vm.KECCAK256), tracing.Gas{}, tracing.OpCost{}, mockScope, nil, 0, nil)
 
 	// Get result
 	result, err := tracer.GetResult()

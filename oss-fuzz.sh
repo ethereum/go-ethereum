@@ -164,6 +164,14 @@ compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/txfetcher \
   Fuzz fuzzTxfetcher \
   $repo/tests/fuzzers/txfetcher/txfetcher_test.go
 
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/evm \
+  FuzzCode fuzzEvmCode \
+  $repo/tests/fuzzers/evm/evm_test.go
+
+compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/evm \
+  FuzzDeepStack fuzzEvmDeepStack \
+  $repo/tests/fuzzers/evm/evm_test.go
+
 compile_fuzzer github.com/ethereum/go-ethereum/tests/fuzzers/bls12381 \
   FuzzG1Add fuzz_g1_add\
   $repo/tests/fuzzers/bls12381/bls12381_test.go

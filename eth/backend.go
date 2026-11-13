@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/gasprice"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
 	"github.com/ethereum/go-ethereum/eth/protocols/snap"
+	"github.com/ethereum/go-ethereum/eth/protocols/webtx"
 	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
@@ -246,7 +247,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			StateHistory:            config.StateHistory,
 			TrienodeHistory:         config.TrienodeHistory,
 			NodeFullValueCheckpoint: config.NodeFullValueCheckpoint,
-			BinTrieGroupDepth:       config.BinTrieGroupDepth,
 			StateScheme:             scheme,
 			HistoryPolicy:           histPolicy,
 			TxLookupLimit:           int64(min(config.TransactionHistory, math.MaxInt64)),
@@ -256,7 +256,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			// Enables file journaling for the trie database. The journal files will be stored
 			// within the data directory. The corresponding paths will be either:
 			// - DATADIR/triedb/merkle.journal
-			// - DATADIR/triedb/verkle.journal
+			// - DATADIR/triedb/pbt.journal
 			TrieJournalDirectory: stack.ResolvePath("triedb"),
 			SlowBlockThreshold:   config.SlowBlockThreshold,
 
@@ -288,9 +288,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 	if config.OverrideBPO2 != nil {
 		overrides.OverrideBPO2 = config.OverrideBPO2
-	}
-	if config.OverrideUBT != nil {
-		overrides.OverrideUBT = config.OverrideUBT
 	}
 	options.Overrides = &overrides
 
@@ -456,13 +453,18 @@ func (s *Ethereum) SetSynced()                         { s.handler.enableSyncedF
 func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 func (s *Ethereum) EngineMaxReorgDepth() uint64        { return s.config.EngineMaxReorgDepth }
 
-// Protocols returns all the currently configured
-// network protocols to start.
+// Protocols returns all the currently configured network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
 	protos := eth.MakeProtocols((*ethHandler)(s.handler), s.networkID, s.discmix)
 	if s.config.SnapshotCache > 0 {
-		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), s.config.SnapV2)...)
+		// SNAP/2 drops the trie node requests SNAP/1 healing needs, and peers
+		// negotiate the highest shared version, so a node syncing via SNAP/1
+		// must not advertise it. Every other node serves both versions.
+		dl := s.handler.downloader
+		advertiseV2 := dl.SnapSyncVersion() == snap.SNAP2 || dl.ConfigSyncMode() != ethconfig.SnapSync
+		protos = append(protos, snap.MakeProtocols((*snapHandler)(s.handler), advertiseV2)...)
 	}
+	protos = append(protos, webtx.NewProtocol(s.handler.txpool))
 	return protos
 }
 

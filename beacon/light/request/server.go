@@ -219,11 +219,12 @@ func (s *serverWithTimeout) startTimeout(reqData RequestResponse) {
 				childEventCb(Event{Type: EvFail, Data: reqData})
 			}
 		})
-		childEventCb := s.childEventCb
-		s.lock.Unlock()
-		if childEventCb != nil {
-			childEventCb(Event{Type: EvTimeout, Data: reqData})
+		// Emit EvTimeout under the lock so that it can't be overtaken by the
+		// final EvResponse/EvFail of the same request.
+		if s.childEventCb != nil {
+			s.childEventCb(Event{Type: EvTimeout, Data: reqData})
 		}
+		s.lock.Unlock()
 	})
 }
 

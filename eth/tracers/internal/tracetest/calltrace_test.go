@@ -419,8 +419,8 @@ func TestCallTracerGasDimensionsAmsterdam(t *testing.T) {
 		data []byte
 		want string
 	}{
-		{nil, `{"from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x40000","gasUsed":"0x31f38","to":"0x00000000000000000000000000000000000c0ffe","input":"0x","value":"0x1","regularGasUsed":"0x5208","stateGasUsed":"0x2cd30","gasRefund":"0x0","type":"CALL"}`},
-		{bytes.Repeat([]byte{0xff}, 64), `{"from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x40000","gasUsed":"0x32338","to":"0x00000000000000000000000000000000000c0ffe","input":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","value":"0x1","regularGasUsed":"0x6208","stateGasUsed":"0x2cd30","gasRefund":"0x0","type":"CALL"}`},
+		{nil, `{"from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x40000","gasUsed":"0x31f38","to":"0x00000000000000000000000000000000000c0ffe","input":"0x","value":"0x1","regularGasUsed":"0x5208","stateGasUsed":"0x2cd30","gasRefund":"0x0","stateGasReservoir":"0x0","type":"CALL"}`},
+		{bytes.Repeat([]byte{0xff}, 64), `{"from":"0x71562b71999873db5b286df957af199ec94617f7","gas":"0x40000","gasUsed":"0x32338","to":"0x00000000000000000000000000000000000c0ffe","input":"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","value":"0x1","regularGasUsed":"0x6208","stateGasUsed":"0x2cd30","gasRefund":"0x0","stateGasReservoir":"0x0","type":"CALL"}`},
 	} {
 		st := tests.MakePreState(rawdb.NewMemoryDatabase(), types.GenesisAlloc{origin: {Balance: big.NewInt(params.Ether)}}, false, rawdb.HashScheme)
 		tracer, err := tracers.DefaultDirectory.New("callTracer", new(tracers.Context), nil, &config)

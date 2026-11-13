@@ -19,6 +19,8 @@ package pathdb
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
@@ -36,6 +38,14 @@ type diffLayer struct {
 	block  uint64              // Associated block number
 	nodes  *nodeSetWithOrigin  // Cached trie nodes indexed by owner and path
 	states *StateSetWithOrigin // Associated state changes along with origin value
+
+	// Bloom keys of the trie nodes and states in partitions, along with the
+	// filter over them, derived in background. The filter is reused by the
+	// buffer set once persisted.
+	prepared sync.Once
+	keys     [][]uint64
+	bloom    atomic.Pointer[bloomFilter] // nil if not prepared yet
+	indexed  atomic.Pointer[layerIndex]  // Index holding the layer, nil if not indexed yet
 
 	parent layer        // Parent layer modified by this one, never nil, **can be changed**
 	lock   sync.RWMutex // Lock used to protect parent
@@ -55,6 +65,16 @@ func newDiffLayer(parent layer, root common.Hash, id uint64, block uint64, nodes
 	dirtyStateWriteMeter.Mark(int64(states.size))
 	log.Debug("Created new diff layer", "id", id, "block", block, "nodesize", common.StorageSize(nodes.size), "statesize", common.StorageSize(states.size))
 	return dl
+}
+
+// prepare derives the bloom keys of the layer along with the filter over them.
+func (dl *diffLayer) prepare() {
+	dl.prepared.Do(func() {
+		start := time.Now()
+		dl.keys = deriveBloomKeys(dl.nodes.nodeSet, dl.states.stateSet)
+		dl.bloom.Store(newSetBloom(dl.keys...))
+		layerBloomTimer.UpdateSince(start)
+	})
 }
 
 // rootHash implements the layer interface, returning the root hash of

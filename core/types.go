@@ -33,7 +33,8 @@ type Validator interface {
 	ValidateBody(block *types.Block) error
 
 	// ValidateState validates the given statedb and optionally the process result.
-	ValidateState(block *types.Block, state *state.StateDB, res *ProcessResult, stateless bool) error
+	// The time spent is recorded into the optional stats.
+	ValidateState(block *types.Block, state *state.StateDB, res *ProcessResult, stateless bool, stats *ValidateStats) error
 }
 
 // Prefetcher is an interface for pre-caching transaction signatures and state.
@@ -49,7 +50,8 @@ type Processor interface {
 	// Process processes the state changes according to the Ethereum rules by running
 	// the transaction messages using the statedb and applying any rewards to both
 	// the processor (coinbase) and any included uncles.
-	Process(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config, execIndex *atomic.Int64) (*ProcessResult, error)
+	// The time spent and the state reads are recorded into the optional stats.
+	Process(ctx context.Context, block *types.Block, statedb *state.StateDB, jumpDestCache vm.JumpDestCache, precompileCache *vm.PrecompileCache, cfg vm.Config, execIndex *atomic.Int64, stats *ProcessStats) (*ProcessResult, error)
 }
 
 // ProcessResult contains the values computed by Process.
