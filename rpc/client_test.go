@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"net/http"
@@ -960,6 +961,76 @@ func ipcTestClient(srv *Server, fl *flakeyListener) (*Client, net.Listener) {
 		panic(err)
 	}
 	return client, l
+}
+
+// readErrorCodec fails the read loop while a write is in progress. The write only
+// succeeds after the client has handled the read error and closed the codec.
+type readErrorCodec struct {
+	respond   bool // deliver the response before the read error
+	written   chan *jsonrpcMessage
+	done      chan interface{}
+	closeOnce sync.Once
+}
+
+func (c *readErrorCodec) peerInfo() PeerInfo { return PeerInfo{} }
+
+func (c *readErrorCodec) readBatch() ([]*jsonrpcMessage, bool, error) {
+	if msg := <-c.written; msg != nil && c.respond {
+		return []*jsonrpcMessage{{Version: vsn, ID: msg.ID, Result: json.RawMessage(`"ok"`)}}, false, nil
+	}
+	return nil, false, io.EOF
+}
+
+func (c *readErrorCodec) writeJSON(ctx context.Context, msg *jsonrpcMessage, isError bool) error {
+	c.written <- msg
+	close(c.written)
+	<-c.done
+	return nil
+}
+
+func (c *readErrorCodec) writeJSONBatch(ctx context.Context, msgs []*jsonrpcMessage, isError bool) error {
+	panic("not implemented")
+}
+
+func (c *readErrorCodec) close()                     { c.closeOnce.Do(func() { close(c.done) }) }
+func (c *readErrorCodec) closed() <-chan interface{} { return c.done }
+func (c *readErrorCodec) remoteAddr() string         { return "" }
+
+// This test checks that a call returns when the connection breaks after the request
+// was handed to the codec, but before the client learned that the write succeeded.
+func TestClientReadErrorDuringSend(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name    string
+		respond bool
+		wantErr error
+	}{
+		{"no response", false, io.EOF},
+		{"response before read error", true, nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			codec := &readErrorCodec{
+				respond: test.respond,
+				written: make(chan *jsonrpcMessage, 1),
+				done:    make(chan interface{}),
+			}
+			client := initClient(codec, new(serviceRegistry), new(clientConfig))
+			defer client.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+
+			var result string
+			err := client.CallContext(ctx, &result, "test_method")
+			if !errors.Is(err, test.wantErr) {
+				t.Fatalf("wrong error: got %v, want %v", err, test.wantErr)
+			}
+			if test.respond && result != "ok" {
+				t.Fatalf("wrong result: %q", result)
+			}
+		})
+	}
 }
 
 // flakeyListener kills accepted connections after a random timeout.
