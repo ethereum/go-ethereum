@@ -40,6 +40,10 @@ const (
 	// Any packet exceeding this limit must be rejected.
 	maxPacketSize = 10 * 1024 * 1024
 
+	// receiptsEnvelopeReserve is the space reserved from maxPacketSize for the
+	// receipts packet envelope.
+	receiptsEnvelopeReserve = 32
+
 	// maxHeadersServe is the maximum number of block headers to serve. This number
 	// is there to limit the number of disk lookups.
 	maxHeadersServe = 1024
