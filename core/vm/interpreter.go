@@ -137,8 +137,7 @@ func (evm *EVM) Run(contract *Contract, input []byte, readOnly bool) (ret []byte
 }
 
 // execTraced is the old table-walking interpreter loop. It dispatches every
-// opcode through the per-fork operation table and emits the tracing hooks
-// exactly as before. It stays hand-written so trace output does not change.
+// opcode through the per-fork operation table and emits the tracing hooks.
 //
 // The differential test also runs this loop without a tracer and compares it
 // against the generated execUntraced, which keeps the two from drifting
@@ -151,13 +150,11 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 		stack                  = scope.Stack
 		contract               = scope.Contract
 		callContext            = scope
+
 		// For optimisation reason we're using uint64 as the program counter.
 		// It's theoretically possible to go above 2^64. The YP defines the PC
 		// to be uint256. Practically much less so feasible.
 		pc = uint64(0) // program counter
-
-		execCost  uint64 // execution dimension of the current opcode's cost
-		stateCost uint64 // state dimension of the current opcode's cost
 
 		// copies used by tracer
 		pcCopy  uint64    // needed for the deferred EVMLogger
@@ -172,10 +169,10 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 				return
 			}
 			if !logged && evm.Config.Tracer.HasOpcodeHook() {
-				evm.Config.Tracer.EmitOpcode(pcCopy, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: execCost, State: stateCost}, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
+				evm.Config.Tracer.EmitOpcode(pcCopy, byte(op), gasCopy.AsTracing(), tracing.OpCost{}, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
 			}
 			if logged && evm.Config.Tracer.HasFaultHook() {
-				evm.Config.Tracer.EmitFault(pcCopy, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: execCost, State: stateCost}, callContext, evm.depth, VMErrorFromErr(err))
+				evm.Config.Tracer.EmitFault(pcCopy, byte(op), gasCopy.AsTracing(), tracing.OpCost{}, callContext, evm.depth, VMErrorFromErr(err))
 			}
 		}()
 	}
@@ -193,7 +190,8 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 		// enough stack items available to perform the operation.
 		op = contract.GetOp(pc)
 		operation := jumpTable[op]
-		execCost, stateCost = operation.constantGas, 0 // For tracing
+		execCost := operation.constantGas
+
 		// Validate stack
 		if sLen := stack.len(); sLen < operation.minStack {
 			return nil, &ErrStackUnderflow{stackLen: sLen, required: operation.minStack}
@@ -207,11 +205,11 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 
 		// All ops with a dynamic memory usage also has a dynamic gas cost. Size the
 		// memory and charge dynamic gas here.
-		var memorySize uint64
-		var dynamicCost GasCosts
+		var (
+			memorySize  uint64
+			dynamicCost GasCosts
+		)
 		memorySize, dynamicCost, err = contract.meterDynamicGas(operation, evm, stack, mem)
-		// cost is explicitly set so that the capture state defer method can get the proper cost
-		execCost, stateCost = execCost+dynamicCost.ExecutionGas, dynamicCost.StateGas
 		if err != nil {
 			return nil, err
 		}
@@ -226,15 +224,25 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 				)
 			}
 			if evm.Config.Tracer.HasOpcodeHook() {
-				evm.Config.Tracer.EmitOpcode(pc, byte(op), gasCopy.AsTracing(), tracing.Gas{Execution: execCost, State: stateCost}, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
+				// CREATE and CREATE2 charge account creation while executing,
+				// outside the dynamic gas cost, so it is looked ahead here.
+				cost := tracing.OpCost{
+					Execution: execCost + dynamicCost.ExecutionGas,
+					State:     int64(dynamicCost.StateGas) - int64(dynamicCost.StateGasRefill),
+				}
+				if op == CREATE || op == CREATE2 {
+					cost.State += int64(evm.pendingAccountCreation(op, callContext))
+				}
+				evm.Config.Tracer.EmitOpcode(pc, byte(op), gasCopy.AsTracing(), cost, callContext, evm.returnData, evm.depth, VMErrorFromErr(err))
 				logged = true
 			}
 		}
+		// Expand the memory if necessary
 		if memorySize > 0 {
 			mem.Resize(memorySize)
 		}
 
-		// execute the operation
+		// Execute the operation
 		res, err = operation.execute(&pc, evm, callContext)
 		if err != nil {
 			break
@@ -245,7 +253,6 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 	if err == errStopToken {
 		err = nil // clear stop token error
 	}
-
 	return res, err
 }
 

@@ -471,10 +471,14 @@ func makeCallVariantGasCallEIP7702(intrinsicFunc intrinsicGasFunc, coldCost uint
 func makeCallVariantGasCallEIP8037(executionFunc executionGasFunc, stateGasFunc stateGasFunc, coldCost uint64) gasFunc {
 	return func(evm *EVM, contract *Contract, stack *Stack, mem *Memory, memorySize uint64) (GasCosts, error) {
 		var (
+			gasCopy     = contract.Gas
 			eip2929Cost uint64
 			eip7702Cost uint64
 			addr        = common.Address(stack.back(1).Bytes20())
 		)
+		// Charges are temporary, for affordability checks and forwarding.
+		defer func() { contract.Gas = gasCopy }()
+
 		// EIP-2929 cold access check.
 		if !evm.StateDB.AddressInAccessList(addr) {
 			evm.StateDB.AddAddressToAccessList(addr)
@@ -531,14 +535,6 @@ func makeCallVariantGasCallEIP8037(executionFunc executionGasFunc, stateGasFunc 
 			return GasCosts{}, err
 		}
 
-		// The charges above use GasChangeIgnored: they sit inside the interpreter's
-		// opcode event, which reports the opcode's whole budget movement exactly once.
-
-		// Temporarily undo direct execution charges for tracer reporting.
-		// The interpreter will charge the returned totalCost.
-		contract.Gas.ExecutionGas += eip2929Cost + eip7702Cost + executionCost
-		contract.Gas.UsedExecutionGas -= eip2929Cost + eip7702Cost + executionCost
-
 		// Aggregate total cost.
 		var (
 			overflow  bool
@@ -553,6 +549,6 @@ func makeCallVariantGasCallEIP8037(executionFunc executionGasFunc, stateGasFunc 
 		if totalCost, overflow = math.SafeAdd(totalCost, evm.callGasTemp); overflow {
 			return GasCosts{}, ErrGasUintOverflow
 		}
-		return GasCosts{ExecutionGas: totalCost}, nil
+		return GasCosts{ExecutionGas: totalCost, StateGas: stateGas}, nil
 	}
 }

@@ -66,6 +66,9 @@ type VMContext struct {
 	Random      *common.Hash
 	BaseFee     *big.Int
 
+	// Rules are the chain rules in effect for the execution.
+	Rules params.Rules
+
 	// StateDB provides read access to the state being executed on.
 	StateDB StateDB
 }
@@ -175,18 +178,22 @@ type (
 	ExitHookV2 = func(depth int, output []byte, gasLeft Gas, err error, reverted bool)
 
 	// OpcodeHook is invoked just prior to the execution of an opcode.
+	// If err is non-nil, cost is zero.
 	OpcodeHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
 
 	// FaultHook is invoked when an error occurs during the execution of an opcode.
+	// Cost is zero; a preceding OpcodeHook may already have reported the computed cost.
 	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 
-	// OpcodeHookV2 is the multi-dimensional successor to OpcodeHook: gas and cost
-	// are vectors. If both hooks are set, only V2 is invoked; register at most one.
-	OpcodeHookV2 = func(pc uint64, op byte, gas, cost Gas, scope OpContext, rData []byte, depth int, err error)
+	// OpcodeHookV2 is the multi-dimensional successor to OpcodeHook: gas is the
+	// budget before the opcode and cost its two-dimensional cost. If both hooks
+	// are set, only V2 is invoked; register at most one.
+	// If err is non-nil, cost is empty, matching OpcodeHook's zero cost.
+	OpcodeHookV2 = func(pc uint64, op byte, gas Gas, cost OpCost, scope OpContext, rData []byte, depth int, err error)
 
 	// FaultHookV2 is the multi-dimensional successor to FaultHook. See OpcodeHookV2
-	// for how the two dimensions relate.
-	FaultHookV2 = func(pc uint64, op byte, gas, cost Gas, scope OpContext, depth int, err error)
+	// for how the two dimensions relate. Cost is always empty.
+	FaultHookV2 = func(pc uint64, op byte, gas Gas, cost OpCost, scope OpContext, depth int, err error)
 
 	// GasChangeHook reports changes to the execution gas. Tracers
 	// that don't need the EIP-8037 (Amsterdam) state-access dimension can
@@ -323,6 +330,28 @@ type Hooks struct {
 	OnBlockHashRead BlockHashReadHook
 }
 
+// EmitSystemCallStart dispatches a system call start, preferring the hook that
+// receives the VM context.
+func (h *Hooks) EmitSystemCallStart(vm *VMContext) {
+	if h == nil {
+		return
+	}
+	if h.OnSystemCallStartV2 != nil {
+		h.OnSystemCallStartV2(vm)
+		return
+	}
+	if h.OnSystemCallStart != nil {
+		h.OnSystemCallStart()
+	}
+}
+
+// EmitSystemCallEnd dispatches a system call end.
+func (h *Hooks) EmitSystemCallEnd() {
+	if h != nil && h.OnSystemCallEnd != nil {
+		h.OnSystemCallEnd()
+	}
+}
+
 // HasGasHook reports whether any gas-change hook is registered. Call sites
 // should use this to short-circuit before constructing the Gas / GasBudget
 // arguments to EmitGasChange when tracing is off — the dispatch is otherwise
@@ -393,7 +422,7 @@ func (h *Hooks) HasOpcodeHook() bool {
 }
 
 // EmitOpcode dispatches an opcode event.
-func (h *Hooks) EmitOpcode(pc uint64, op byte, gas, cost Gas, scope OpContext, rData []byte, depth int, err error) {
+func (h *Hooks) EmitOpcode(pc uint64, op byte, gas Gas, cost OpCost, scope OpContext, rData []byte, depth int, err error) {
 	if h == nil {
 		return
 	}
@@ -412,7 +441,7 @@ func (h *Hooks) HasFaultHook() bool {
 }
 
 // EmitFault dispatches an opcode fault event.
-func (h *Hooks) EmitFault(pc uint64, op byte, gas, cost Gas, scope OpContext, depth int, err error) {
+func (h *Hooks) EmitFault(pc uint64, op byte, gas Gas, cost OpCost, scope OpContext, depth int, err error) {
 	if h == nil {
 		return
 	}
@@ -504,6 +533,15 @@ const (
 type Gas struct {
 	Execution uint64 // Execution is the budget for ordinary execution gas.
 	State     uint64 // State is the budget dedicated to state-access gas (zero pre-Amsterdam).
+}
+
+// OpCost is the two-dimensional cost of a single opcode (EIP-8037). State is
+// the net state gas the opcode charges before any frame it creates is entered:
+// positive for a charge, negative when the opcode refills state gas, as an
+// SSTORE does when it clears a slot the transaction created.
+type OpCost struct {
+	Execution uint64
+	State     int64
 }
 
 // GasChangeReason is used to indicate the reason for a gas change, useful
