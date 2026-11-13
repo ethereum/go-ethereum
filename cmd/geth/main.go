@@ -77,6 +77,7 @@ var (
 		utils.BlobPoolPriceBumpFlag,
 		utils.BlobPoolFetchProbabilityFlag,
 		utils.SyncModeFlag,
+		utils.SnapExactPivotFlag,
 		utils.SyncTargetFlag,
 		utils.ExitWhenSyncedFlag,
 		utils.GCModeFlag,

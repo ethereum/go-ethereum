@@ -123,6 +123,7 @@ type handlerConfig struct {
 	BlobPool         blobPool               // Blob pool for cell-based blob data availability
 	Network          uint64                 // Network identifier to advertise
 	Sync             ethconfig.SyncMode     // Whether to snap or full sync
+	SnapExactPivot   bool                   // Pin the snap pivot to the exact head instead of head-fsMinFullBlocks
 	BloomCache       uint64                 // Megabytes to alloc for snap sync bloom
 	RequiredBlocks   map[uint64]common.Hash // Hard coded map of required block hashes for sync challenges
 	SnapV2           *bool                  // Snap/2 state syncer: on, off, or nil for automatic
@@ -211,6 +212,7 @@ func newHandler(config *handlerConfig) (*handler, error) {
 	// Construct the downloader (long sync)
 	snapV2 := resolveSnapV2(config.SnapV2, config.Chain.Config(), config.Database)
 	h.downloader = downloader.New(config.Database, config.Sync, h.chain, h.removePeer, h.enableSyncedFeatures, snapV2)
+	h.downloader.SetExactPivot(config.SnapExactPivot)
 	if h.downloader.ConfigSyncMode() == ethconfig.SnapSync {
 		log.Info("Selected snap sync state syncer", "version", h.downloader.SnapSyncVersion())
 	}
