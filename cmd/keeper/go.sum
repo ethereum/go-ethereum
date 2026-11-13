@@ -1,3 +1,5 @@
+github.com/0xPolygonHermez/zisk/ziskasm/lang/go v0.0.0-20261103142117-f557332704da h1:9Pree+vh/Iyw2hNM4uU1xyKHklDx/BNecITaUdVDisM=
+github.com/0xPolygonHermez/zisk/ziskasm/lang/go v0.0.0-20261103142117-f557332704da/go.mod h1:MkugAeT3E1UshcRX9u5F6/z5QLIZMZ+Z7FCTA6rhGCs=
 github.com/DataDog/zstd v1.5.7 h1:ybO8RBeh29qrxIhCA9E8gKY6xfONU9T6G6aP9DTKfLE=
 github.com/DataDog/zstd v1.5.7/go.mod h1:g4AWEaM3yOg3HYfnJ3YIawPnVdXJh9QME85blwSAmyw=
 github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 h1:1zYrtlhrZ6/b6SAjLSfKzWtdgqK0U+HtH/VcBWh1BaU=
