@@ -333,11 +333,13 @@ func (db *DB) expireNodes() {
 	var (
 		threshold    = time.Now().Add(-dbNodeExpiration).Unix()
 		youngestPong int64
+		youngestPing int64
 		atEnd        = false
 	)
 	for !atEnd {
 		id, ip, field := splitNodeItemKey(it.Key())
-		if field == dbNodePong {
+		switch field {
+		case dbNodePong:
 			time, _ := binary.Varint(it.Value())
 			if time > youngestPong {
 				youngestPong = time
@@ -346,16 +348,29 @@ func (db *DB) expireNodes() {
 				// Last pong from this IP older than threshold, remove fields belonging to it.
 				deleteRange(db.lvl, nodeItemKey(id, ip, ""))
 			}
+		case dbNodePing:
+			// Track ping times as well, so that nodes which never answered
+			// with a pong can be expired too.
+			if time, _ := binary.Varint(it.Value()); time > youngestPing {
+				youngestPing = time
+			}
 		}
 		atEnd = !it.Next()
 		nextID, _ := splitNodeKey(it.Key())
 		if atEnd || nextID != id {
 			// We've moved beyond the last entry of the current ID.
-			// Remove everything if there was no recent enough pong.
-			if youngestPong > 0 && youngestPong < threshold {
+			// Remove everything if there was no recent enough pong. Nodes which
+			// never sent a pong are expired based on their last ping instead.
+			// Without that fallback, any record created by inbound traffic alone
+			// (e.g. an unsolicited PING) would be kept forever.
+			seen := youngestPong
+			if seen == 0 {
+				seen = youngestPing
+			}
+			if seen < threshold {
 				deleteRange(db.lvl, nodeKey(id))
 			}
-			youngestPong = 0
+			youngestPong, youngestPing = 0, 0
 		}
 	}
 }

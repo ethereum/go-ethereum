@@ -419,6 +419,43 @@ var nodeDBExpirationNodes = []struct {
 	},
 }
 
+func TestDBExpirePingOnly(t *testing.T) {
+	db, _ := OpenDB("")
+	defer db.Close()
+
+	// Nodes which were only ever pinged, and never answered with a pong,
+	// must still be subject to expiration. Such entries are created by
+	// inbound PING packets in discovery v4.
+	oldNode := NewV4(
+		hexPubkey("3b73a9e5f4af6c4701c57c73cc8cfa0f4802840b24c11eba92aac3aef65644a3728b4b2aec8199f6d72bd66be2c65861c773129039bd47daa091ca90a6d4c857"),
+		net.IP{127, 0, 0, 9}, 30303, 30303,
+	)
+	recentNode := NewV4(
+		hexPubkey("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		net.IP{127, 0, 0, 10}, 30303, 30303,
+	)
+	old := time.Now().Add(-dbNodeExpiration - time.Minute)
+	recent := time.Now().Add(-dbNodeExpiration + time.Minute)
+
+	for _, n := range []struct {
+		node *Node
+		ping time.Time
+	}{{oldNode, old}, {recentNode, recent}} {
+		if err := db.UpdateLastPingReceived(n.node.ID(), n.node.IPAddr(), n.ping); err != nil {
+			t.Fatalf("failed to update ping time: %v", err)
+		}
+	}
+
+	db.expireNodes()
+
+	if db.LastPingReceived(oldNode.ID(), oldNode.IPAddr()).Unix() != 0 {
+		t.Errorf("ping-only entry older than %v should have been removed", dbNodeExpiration)
+	}
+	if db.LastPingReceived(recentNode.ID(), recentNode.IPAddr()).Unix() == 0 {
+		t.Errorf("recently pinged entry should not have been removed")
+	}
+}
+
 func TestDBExpiration(t *testing.T) {
 	db, _ := OpenDB("")
 	defer db.Close()
