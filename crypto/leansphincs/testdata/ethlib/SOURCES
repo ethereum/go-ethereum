@@ -1,0 +1,7 @@
+key_gen/, sign/, verify/, SHA256SUMS:
+  https://github.com/ethereum/EthLib tests/cryptography/sphincs
+  commit 03547dd83f298a63e6dcceff0a0b75f6142490aa
+
+leanvm_known_answer.hex (line 1 public key, line 2 signature of the same seed and message):
+  https://github.com/leanEthereum/leanVM crates/signatures/src/lean_sphincs/known_answer.hex
+  commit 5e3ade21d339a45e1b3b0dba97ad9300ab50e49b
