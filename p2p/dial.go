@@ -602,14 +602,31 @@ func (t *dialTask) run(d *dialScheduler) {
 
 	err := t.dial(d, t.dest())
 	if err != nil {
-		// For static nodes, resolve one more time if dialing fails.
 		var dialErr *dialError
-		if errors.As(err, &dialErr) && t.isStatic() {
+		if !errors.As(err, &dialErr) {
+			return
+		}
+		// If the record also advertises the other IP family, try that
+		// endpoint before giving up.
+		if alt, ok := t.dest().WithAlternateFamily(); ok && d.endpointAllowed(alt) {
+			d.log.Trace("Dialing alternate address family", "id", alt.ID(), "endpoint", nodeEndpointForLog(alt))
+			err = t.dial(d, alt)
+			if err == nil || !errors.As(err, &dialErr) {
+				return
+			}
+		}
+		// For static nodes, resolve one more time if dialing fails.
+		if t.isStatic() {
 			if t.resolve(d) {
 				t.dial(d, t.dest())
 			}
 		}
 	}
+}
+
+// endpointAllowed reports whether the node's endpoint passes the netrestrict list.
+func (d *dialScheduler) endpointAllowed(n *enode.Node) bool {
+	return d.netRestrict == nil || d.netRestrict.ContainsAddr(n.IPAddr())
 }
 
 func (t *dialTask) isStatic() bool {
