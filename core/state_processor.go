@@ -322,6 +322,7 @@ func makeReceipt(evm *vm.EVM, result *ExecutionResult, statedb *state.StateDB, b
 	// GasUsed = max(tx_gas_used - gas_refund, calldata_floor_gas_cost), unchanged
 	// in the Amsterdam fork.
 	receipt.GasUsed = result.UsedGas
+	receipt.EffectiveGasPrice = evm.TxContext.GasPrice.ToBig()
 
 	if tx.Type() == types.BlobTxType {
 		receipt.BlobGasUsed = uint64(len(tx.BlobHashes()) * params.BlobTxBlobGasPerBlob)
