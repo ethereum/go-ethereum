@@ -169,8 +169,12 @@ func (fm *FilterMapsMatcherBackend) synced() {
 }
 
 // SyncLogIndex ensures that the log index is consistent with the current state
-// of the chain and is synced up to the current head. It blocks until this state
-// is achieved or the context is cancelled.
+// of the chain. It blocks until the indexer has processed the request or the
+// context is cancelled.
+// Note that the returned indexed range is not guaranteed to reach the current
+// head. While rendered maps are being written to the database, the section
+// that is being rewritten is temporarily excluded from the indexed range and
+// the caller is expected to search it in unindexed mode.
 // If successful, it returns a SyncRange that contains the latest chain head,
 // the indexed range that is currently consistent with the chain and the valid
 // range that has not been changed and has been consistent with all states of the
