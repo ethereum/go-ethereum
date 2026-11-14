@@ -136,3 +136,35 @@ func TestLocalNodeEndpoint(t *testing.T) {
 	assert.Equal(t, fallback.Port, ln.Node().UDP())
 	assert.Equal(t, initialSeq+3, ln.Node().Seq())
 }
+
+// This test checks that an unspecified static IP removes the address family from
+// the record and keeps prediction from adding it back.
+func TestLocalNodeStaticUnspecified(t *testing.T) {
+	var (
+		rng       = rand.New(rand.NewSource(5))
+		predicted = &net.UDPAddr{IP: net.IP{127, 0, 1, 2}, Port: 81}
+		static6   = net.ParseIP("2001:db8::1")
+	)
+	ln, db := newLocalNodeForTesting()
+	defer db.Close()
+
+	ln.SetFallbackUDP(30303)
+	ln.SetStaticIP(net.IPv4zero)
+	ln.SetStaticIP(static6)
+
+	var ip4 enr.IPv4
+	assert.Error(t, ln.Node().Load(&ip4), "ip should not be present")
+	var ip6 enr.IPv6
+	assert.NoError(t, ln.Node().Load(&ip6))
+	assert.Equal(t, static6, net.IP(ip6))
+	assert.Equal(t, 30303, ln.Node().UDP())
+
+	// Endpoint statements for IPv4 must not bring the address back.
+	for i := 0; i < iptrackMinStatements; i++ {
+		from := netip.AddrPortFrom(netutil.RandomAddr(rng, true), 9000)
+		endpoint := netip.AddrPortFrom(netutil.IPToAddr(predicted.IP), uint16(predicted.Port))
+		ln.UDPEndpointStatement(from, endpoint)
+	}
+	assert.Error(t, ln.Node().Load(&ip4), "ip should still be absent after statements")
+	assert.Equal(t, netutil.IPToAddr(static6), ln.Node().IPAddr())
+}

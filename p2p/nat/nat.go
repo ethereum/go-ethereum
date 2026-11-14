@@ -55,6 +55,9 @@ type Interface interface {
 //
 //	"" or "none"         return nil
 //	"extip:77.12.33.4"   will assume the local machine is reachable on the given IP
+//	"extip:77.12.33.4,2001:db8::1"  pins the IPv4 and IPv6 address separately; an
+//	                     unspecified address (0.0.0.0 or ::) means that family
+//	                     is not advertised
 //	"any"                uses the first auto-detected mechanism
 //	"upnp"               uses the Universal Plug and Play protocol
 //	"pmp"                uses NAT-PMP with an auto-detected gateway address
@@ -67,6 +70,9 @@ func Parse(spec string) (Interface, error) {
 		mech                 = strings.ToLower(before)
 		ip                   net.IP
 	)
+	if (mech == "extip" || mech == "ip") && strings.Contains(after, ",") {
+		return parseExtIPs(after)
+	}
 	// stun is not a valid ip
 	if found && mech != "stun" {
 		ip = net.ParseIP(after)
@@ -148,6 +154,65 @@ func (ExtIP) AddMapping(protocol string, extport, intport int, name string, life
 	return uint16(extport), nil
 }
 func (ExtIP) DeleteMapping(string, int, int) error { return nil }
+
+// ExtIPs assumes that the local machine is reachable on the given external IPv4 and
+// IPv6 addresses, and that any required ports were mapped manually. An unspecified
+// address (0.0.0.0 or ::) pins that family to "not advertised". Mapping operations
+// will not return an error but won't actually do anything.
+type ExtIPs struct {
+	IPv4, IPv6 net.IP
+}
+
+// parseExtIPs parses the "extip:<IPv4>,<IPv6>" form. The two addresses may be
+// given in either order.
+func parseExtIPs(spec string) (Interface, error) {
+	var n ExtIPs
+	for _, s := range strings.Split(spec, ",") {
+		ip := net.ParseIP(strings.TrimSpace(s))
+		if ip == nil {
+			return nil, errors.New("invalid IP address")
+		}
+		if ip4 := ip.To4(); ip4 != nil {
+			if n.IPv4 != nil {
+				return nil, errors.New("more than one IPv4 address")
+			}
+			n.IPv4 = ip4
+		} else {
+			if n.IPv6 != nil {
+				return nil, errors.New("more than one IPv6 address")
+			}
+			n.IPv6 = ip
+		}
+	}
+	if n.IPv4 == nil || n.IPv6 == nil {
+		return nil, errors.New("need one IPv4 and one IPv6 address")
+	}
+	if n.IPv4.IsUnspecified() && n.IPv6.IsUnspecified() {
+		return nil, errors.New("at least one address must be specified")
+	}
+	return n, nil
+}
+
+// ExternalIP returns the pinned IPv6 address, or the IPv4 address when IPv6 is
+// unspecified.
+func (n ExtIPs) ExternalIP() (net.IP, error) {
+	if !n.IPv6.IsUnspecified() {
+		return n.IPv6, nil
+	}
+	return n.IPv4, nil
+}
+
+func (n ExtIPs) String() string { return fmt.Sprintf("ExtIP(%v,%v)", n.IPv4, n.IPv6) }
+func (n ExtIPs) MarshalText() ([]byte, error) {
+	return fmt.Appendf(nil, "extip:%v,%v", n.IPv4, n.IPv6), nil
+}
+
+// These do nothing.
+
+func (ExtIPs) AddMapping(protocol string, extport, intport int, name string, lifetime time.Duration) (uint16, error) {
+	return uint16(extport), nil
+}
+func (ExtIPs) DeleteMapping(string, int, int) error { return nil }
 
 // Any returns a port mapper that tries to discover any supported
 // mechanism on the local network.
