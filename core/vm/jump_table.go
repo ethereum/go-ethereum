@@ -93,6 +93,7 @@ func validate(jt JumpTable) JumpTable {
 
 func newBogotaInstructionSet() JumpTable {
 	instructionSet := newAmsterdamInstructionSet()
+	enable7709(&instructionSet)
 	return validate(instructionSet)
 }
 
