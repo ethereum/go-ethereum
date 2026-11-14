@@ -392,9 +392,16 @@ func (wc *websocketCodec) pingLoop() {
 		case <-pingTimer.C:
 			wc.jsonCodec.encMu.Lock()
 			wc.conn.SetWriteDeadline(time.Now().Add(wsPingWriteTimeout))
-			wc.conn.WriteMessage(websocket.PingMessage, nil)
-			wc.conn.SetReadDeadline(time.Now().Add(wsPongTimeout))
+			err := wc.conn.WriteMessage(websocket.PingMessage, nil)
+			if err == nil {
+				wc.conn.SetReadDeadline(time.Now().Add(wsPongTimeout))
+			}
 			wc.jsonCodec.encMu.Unlock()
+			if err != nil {
+				log.Trace("Failed to write websocket ping", "err", err)
+				wc.jsonCodec.close()
+				return
+			}
 			pingTimer.Reset(wsPingInterval)
 
 		case <-wc.pongReceived:
