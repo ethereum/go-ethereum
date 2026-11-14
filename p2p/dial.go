@@ -428,7 +428,7 @@ func (d *dialScheduler) checkDial(n *enode.Node) error {
 	if _, ok := d.pendingInbound[n.ID()]; ok {
 		return errPendingInbound
 	}
-	if d.netRestrict != nil && !d.netRestrict.ContainsAddr(n.IPAddr()) {
+	if d.netRestrict != nil && n.IPAddr().IsValid() && !d.netRestrict.ContainsAddr(n.IPAddr()) {
 		return errNetRestrict
 	}
 	if d.history.contains(string(n.ID().Bytes())) {
