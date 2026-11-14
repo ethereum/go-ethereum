@@ -92,9 +92,12 @@ var (
 			if err != nil {
 			    return common.Address{}, nil, nil, err
 			}
-			ctx, _ := context.WithTimeout(context.Background(), 5 * time.Second)
-			if err := bind.WaitAccepted(ctx, backend, tx); err != nil {
-			    return common.Address{}, nil, nil, err
+			{
+			    ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
+			    defer cancel()
+			    if err := bind.WaitAccepted(ctx, backend, tx); err != nil {
+			        return common.Address{}, nil, nil, err
+			    }
 			}
 			// The pool's pending nonce may not include the library tx yet.
 			auth.Nonce = new(big.Int).SetUint64(tx.Nonce() + 1)

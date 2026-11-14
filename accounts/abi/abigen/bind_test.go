@@ -1422,6 +1422,63 @@ var bindTests = []struct {
 		},
 		nil,
 		[]string{"UseLibrary", "Math"},
+	},
+	// Tests that a contract linking several libraries gets a compilable deployer
+	{
+		`UseTwoLibs`,
+		`
+		library LibA { function one() public pure returns (uint) { return 1; } }
+		library LibB { function two() public pure returns (uint) { return 2; } }
+		contract UseTwoLibs {
+			function sum() public pure returns (uint) { return LibA.one() + LibB.two(); }
+		}
+		`,
+		[]string{
+			`608060405234801561001057600080fd5b50610146806100206000396000f3fe608060405234801561001057600080fd5b506004361061002b5760003560e01c8063853255cc14610030575b600080fd5b61003861004a565b60408051918252519081900360200190f35b600073__$54b41d6012f0e6e35dc6aeaabdff052479$__635fdf05d76040518163ffffffff1660e01b815260040160206040518083038186803b15801561009057600080fd5b505af41580156100a4573d6000803e3d6000fd5b505050506040513d60208110156100ba57600080fd5b50516040805163901717d160e01b8152905173__$27eea5059b8a8a39dcbfb86f93b4c5d285$__9163901717d1916004808301926020929190829003018186803b15801561010757600080fd5b505af415801561011b573d6000803e3d6000fd5b505050506040513d602081101561013157600080fd5b50510190509056fea164736f6c634300060c000a`,
+			`6062610024600b82828239805160001a607314601757fe5b30600052607381538281f3fe730000000000000000000000000000000000000000301460806040526004361060335760003560e01c8063901717d1146038575b600080fd5b603e6050565b60408051918252519081900360200190f35b60019056fea164736f6c634300060c000a`,
+			`6062610024600b82828239805160001a607314601757fe5b30600052607381538281f3fe730000000000000000000000000000000000000000301460806040526004361060335760003560e01c80635fdf05d7146038575b600080fd5b603e6050565b60408051918252519081900360200190f35b60029056fea164736f6c634300060c000a`,
+		},
+		[]string{
+			`[{"inputs":[],"name":"sum","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}]`,
+			`[{"inputs":[],"name":"one","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}]`,
+			`[{"inputs":[],"name":"two","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}]`,
+		},
+		`
+			"math/big"
+
+			"github.com/ethereum/go-ethereum/accounts/abi/bind"
+			"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
+			"github.com/ethereum/go-ethereum/core/types"
+			"github.com/ethereum/go-ethereum/crypto"
+		`,
+		`
+			key, _ := crypto.GenerateKey()
+			auth, _ := bind.NewKeyedTransactorWithChainID(key, big.NewInt(1337))
+
+			sim := backends.NewSimulatedBackend(types.GenesisAlloc{auth.From: {Balance: big.NewInt(10000000000000000)}}, 10000000)
+			defer sim.Close()
+
+			_, _, c, err := DeployUseTwoLibs(auth, sim)
+			if err != nil {
+				t.Fatalf("Failed to deploy test contract: %v", err)
+			}
+			sim.Commit()
+
+			res, err := c.Sum(&bind.CallOpts{From: auth.From})
+			if err != nil {
+				t.Fatalf("Failed to call linked contract: %v", err)
+			}
+			if res.Cmp(big.NewInt(3)) != 0 {
+				t.Fatalf("Sum did not return the correct result: %d != 3", res)
+			}
+		`,
+		nil,
+		map[string]string{
+			"27eea5059b8a8a39dcbfb86f93b4c5d285": "LibA",
+			"54b41d6012f0e6e35dc6aeaabdff052479": "LibB",
+		},
+		nil,
+		[]string{"UseTwoLibs", "LibA", "LibB"},
 	}, {
 		"Overload",
 		`
