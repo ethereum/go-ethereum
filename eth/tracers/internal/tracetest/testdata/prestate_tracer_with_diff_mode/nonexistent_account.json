@@ -1,0 +1,87 @@
+{
+  "genesis": {
+    "blobGasUsed": "0",
+    "difficulty": "0",
+    "excessBlobGas": "0",
+    "extraData": "0x",
+    "gasLimit": "30000000",
+    "hash": "0x686301466ce37351e375f40c78af88595e9fb9ac07ecfaf42f2bb0c4eed93305",
+    "miner": "0x71562b71999873db5b286df957af199ec94617f7",
+    "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "nonce": "0x0000000000000000",
+    "number": "0",
+    "parentBeaconBlockRoot": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "stateRoot": "0x3780e8ba7fd2e977df4cdb64c53360611fe8bbc4ab8e8c53a22801c1014cd826",
+    "timestamp": "1775654796",
+    "alloc": {
+      "0x71562b71999873db5b286df957af199ec94617f7": {
+        "balance": "0x56bc75e2d63100000",
+        "nonce": "1"
+      },
+      "0x1111111111111111111111111111111111111111": {
+        "balance": "0x0",
+        "code": "0x7322222222222222222222222222222222222222223b00",
+        "codeHash": "0x512349c50f89ca79e652fc06e19aee7161adf1a9a9459ce9b2ff3237e34f9b77",
+        "nonce": "1"
+      }
+    },
+    "config": {
+      "chainId": 1337,
+      "homesteadBlock": 0,
+      "eip150Block": 0,
+      "eip155Block": 0,
+      "eip158Block": 0,
+      "byzantiumBlock": 0,
+      "constantinopleBlock": 0,
+      "petersburgBlock": 0,
+      "istanbulBlock": 0,
+      "muirGlacierBlock": 0,
+      "berlinBlock": 0,
+      "londonBlock": 0,
+      "arrowGlacierBlock": 0,
+      "grayGlacierBlock": 0,
+      "shanghaiTime": 0,
+      "cancunTime": 0,
+      "pragueTime": 0,
+      "terminalTotalDifficulty": 0,
+      "blobSchedule": {
+        "cancun": {
+          "target": 3,
+          "max": 6,
+          "baseFeeUpdateFraction": 3338477
+        },
+        "prague": {
+          "target": 6,
+          "max": 9,
+          "baseFeeUpdateFraction": 5007716
+        }
+      }
+    }
+  },
+  "context": {
+    "number": "1",
+    "difficulty": "0",
+    "timestamp": "1775654808",
+    "gasLimit": "30000000",
+    "miner": "0x71562b71999873db5b286df957af199ec94617f7",
+    "baseFeePerGas": "875000000"
+  },
+  "input": "0x02f86d82053901843b9aca008477359400830186a09411111111111111111111111111111111111111118080c080a0da167a1ece208090933ad86acc98d8880142d8c8bc08e20a68acbbb3e2d152f6a03e7a26589ce8d4487e9b1163bc8e458c653b36a0659518597fb3e928f9a46a8a",
+  "tracerConfig": {
+    "diffMode": true
+  },
+  "result": {
+    "post": {
+      "0x71562b71999873db5b286df957af199ec94617f7": {
+        "balance": "0x56bc74b64d2af89c0",
+        "nonce": 2
+      }
+    },
+    "pre": {
+      "0x71562b71999873db5b286df957af199ec94617f7": {
+        "balance": "0x56bc75e2d63100000",
+        "nonce": 1
+      }
+    }
+  }
+}
