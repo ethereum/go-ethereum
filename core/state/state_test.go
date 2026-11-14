@@ -23,9 +23,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/triedb"
 	"github.com/holiman/uint256"
 )
@@ -204,5 +206,63 @@ func TestCreateObjectRevert(t *testing.T) {
 	state.RevertToSnapshot(snap)
 	if state.Exist(addr) {
 		t.Error("Unexpected account after revert")
+	}
+}
+
+// TestDumpIteratorError checks that DumpToCollector reports a trie node failing
+// to resolve mid-iteration, instead of returning the truncated dump as complete.
+func TestDumpIteratorError(t *testing.T) {
+	t.Run("account", func(t *testing.T) { testDumpIteratorError(t, false) })
+	t.Run("storage", func(t *testing.T) { testDumpIteratorError(t, true) })
+}
+
+func testDumpIteratorError(t *testing.T, storage bool) {
+	db := rawdb.NewMemoryDatabase()
+	tdb := triedb.NewDatabase(db, &triedb.Config{Preimages: true})
+	sdb, _ := New(types.EmptyRootHash, NewDatabase(tdb, nil))
+
+	contract := common.Address{0xff}
+	for i := range 64 {
+		sdb.SetBalance(common.Address{byte(i)}, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+		sdb.SetState(contract, common.Hash{byte(i)}, common.Hash{0x01})
+	}
+	root, err := sdb.Commit(params.Rules{}, 0)
+	if err != nil {
+		t.Fatalf("failed to commit state: %v", err)
+	}
+	if err := tdb.Commit(root, false); err != nil {
+		t.Fatalf("failed to commit trie database: %v", err)
+	}
+	// Delete the last hashed non-root node of the iterated trie, so that the
+	// iteration fails after some items were already collected.
+	id := trie.StateTrieID(root)
+	if storage {
+		sdb, _ = New(root, NewDatabase(tdb, nil))
+		id = trie.StorageTrieID(root, crypto.Keccak256Hash(contract.Bytes()), sdb.GetStorageRoot(contract))
+	}
+	tr, err := trie.New(id, tdb)
+	if err != nil {
+		t.Fatalf("failed to open trie: %v", err)
+	}
+	it, err := tr.NodeIterator(nil)
+	if err != nil {
+		t.Fatalf("failed to open node iterator: %v", err)
+	}
+	var victim common.Hash
+	for it.Next(true) {
+		if it.Hash() != (common.Hash{}) && len(it.Path()) > 0 {
+			victim = it.Hash()
+		}
+	}
+	if victim == (common.Hash{}) {
+		t.Fatal("no non-root trie node found")
+	}
+	rawdb.DeleteLegacyTrieNode(db, victim)
+
+	// Reopen the state without any cached trie nodes and dump it
+	sdb, _ = New(root, NewDatabase(triedb.NewDatabase(db, &triedb.Config{Preimages: true}), nil))
+	dump := Dump{Accounts: make(map[string]DumpAccount)}
+	if _, err := sdb.DumpToCollector(&dump, nil); err == nil {
+		t.Fatalf("expected trie error, got a complete dump of %d accounts", len(dump.Accounts))
 	}
 }
