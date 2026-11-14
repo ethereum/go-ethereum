@@ -45,6 +45,7 @@ var (
 	errUnexpectedVersion = errors.New("unexpected journal version")
 	errMissDiskRoot      = errors.New("disk layer root not found")
 	errUnmatchedJournal  = errors.New("unmatched journal")
+	errUnmatchedHistory  = errors.New("unmatched history")
 )
 
 // journalVersion ensures that an incompatible journal is detected and discarded.
@@ -208,6 +209,29 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	stored := rawdb.ReadPersistentStateID(db.diskdb)
 	if stored > id {
 		return nil, fmt.Errorf("invalid state id: stored %d resolved %d", stored, id)
+	}
+	// A buffered disk layer must match the state history of its id, written as
+	// it reached the disk layer: a rollback below it or a reactivation can
+	// remove or replace that history while the persistent root stays the same.
+	// A trienode history must reach it too, unless its head is zero:
+	// repairHistory starts it there.
+	if id > stored && db.stateFreezer != nil {
+		m, err := readStateHistoryMeta(db.stateFreezer, id)
+		if err != nil {
+			return nil, fmt.Errorf("%w: disk layer #%d: %v", errUnmatchedHistory, id, err)
+		}
+		if m.root != root {
+			return nil, fmt.Errorf("%w: disk layer #%d want %x got %x", errUnmatchedHistory, id, root, m.root)
+		}
+		if db.trienodeFreezer != nil {
+			head, err := db.trienodeFreezer.Ancients()
+			if err != nil {
+				return nil, err
+			}
+			if head != 0 && head < id {
+				return nil, fmt.Errorf("%w: disk layer #%d above the trienode history #%d", errUnmatchedHistory, id, head)
+			}
+		}
 	}
 	// Resolve nodes cached in aggregated buffer
 	var nodes nodeSet
