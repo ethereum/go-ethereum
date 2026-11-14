@@ -30,6 +30,13 @@ const (
 	// for a single freezer table batch.
 	freezerBatchBufferLimit = 2 * 1024 * 1024
 
+	// freezerWritebackThreshold is the amount of data written to a table since
+	// the last writeback was initiated, beyond which the kernel is asked to
+	// start writing it out. Smaller amounts are left for the next commit to
+	// pick up, or for the eventual fsync: initiating the writeback of a few
+	// KB is not worth the separate IO nor the rewrite of the partial last page.
+	freezerWritebackThreshold = 1024 * 1024
+
 	// freezerTableFlushThreshold defines the threshold for triggering a freezer
 	// table sync operation. If the number of accumulated uncommitted items exceeds
 	// this value, a sync will be scheduled.
@@ -104,11 +111,15 @@ type freezerTableBatch struct {
 	indexBuffer []byte
 	curItem     uint64 // expected index of next append
 	totalBytes  int64  // counts written bytes since reset
+
+	// writebackFrom is the offset in the head file from which the written data
+	// has not been handed to the kernel for writeback yet, -1 if none.
+	writebackFrom int64
 }
 
 // newBatch creates a new batch for the freezer table.
 func (t *freezerTable) newBatch() *freezerTableBatch {
-	batch := &freezerTableBatch{t: t}
+	batch := &freezerTableBatch{t: t, writebackFrom: -1}
 	if !t.config.noSnappy {
 		batch.sb = new(snappyBuffer)
 	}
@@ -122,6 +133,7 @@ func (batch *freezerTableBatch) reset() {
 	batch.indexBuffer = batch.indexBuffer[:0]
 	batch.curItem = batch.t.items.Load()
 	batch.totalBytes = 0
+	batch.writebackFrom = -1
 }
 
 // Append rlp-encodes and adds data at the end of the freezer table. The item number is a
@@ -172,6 +184,7 @@ func (batch *freezerTableBatch) appendItem(data []byte) error {
 			return err
 		}
 		itemOffset = 0
+		batch.writebackFrom = -1 // The tail of the old file is left to the fsync
 	}
 
 	// Put data to buffer.
@@ -204,6 +217,16 @@ func (batch *freezerTableBatch) commit() error {
 	}
 	dataSize := int64(len(batch.dataBuffer))
 	batch.dataBuffer = batch.dataBuffer[:0]
+
+	// Start writing the data out to disk as it accumulates, so that the
+	// periodic sync of the table finds little left to flush
+	if batch.writebackFrom < 0 {
+		batch.writebackFrom = batch.t.headBytes
+	}
+	if end := batch.t.headBytes + dataSize; end-batch.writebackFrom >= freezerWritebackThreshold {
+		writeback(batch.t.head, batch.writebackFrom, end-batch.writebackFrom)
+		batch.writebackFrom = -1
+	}
 
 	_, err = batch.t.index.Write(batch.indexBuffer)
 	if err != nil {
