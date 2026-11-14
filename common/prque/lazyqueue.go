@@ -75,6 +75,7 @@ func NewLazyQueue[P cmp.Ordered, V any](setIndex SetIndexCallback[V], priority P
 func (q *LazyQueue[P, V]) Reset() {
 	q.queue[0] = newSstack[P, V](q.setIndex0)
 	q.queue[1] = newSstack[P, V](q.setIndex1)
+	q.indexOffset = 0
 }
 
 // Refresh performs queue re-evaluation if necessary
