@@ -169,6 +169,7 @@ func (c *twistPoint) Add(a, b *twistPoint, pool *bnPool) {
 	t6.Put(pool)
 }
 
+// Double sets c to 2a. c may alias a.
 func (c *twistPoint) Double(a *twistPoint, pool *bnPool) {
 	// See http://hyperelliptic.org/EFD/g1p/auto-code/shortw/jacobian-0/doubling/dbl-2009-l.op3
 	A := newGFp2(pool).Square(a.x, pool)
@@ -187,15 +188,17 @@ func (c *twistPoint) Double(a *twistPoint, pool *bnPool) {
 	t.Add(d, d)
 	c.x.Sub(f, t)
 
+	// z3 = 2*y1*z1 is the last use of a.y, so it has to be computed before
+	// c.y is overwritten below: c is allowed to alias a.
+	t.Mul(a.y, a.z, pool)
+	c.z.Add(t, t)
+
 	t.Add(C_, C_)
 	t2.Add(t, t)
 	t.Add(t2, t2)
 	c.y.Sub(d, c.x)
 	t2.Mul(e, c.y, pool)
 	c.y.Sub(t2, t)
-
-	t.Mul(a.y, a.z, pool)
-	c.z.Add(t, t)
 
 	A.Put(pool)
 	B.Put(pool)
@@ -258,8 +261,7 @@ func (c *twistPoint) MakeAffine(pool *bnPool) *twistPoint {
 
 func (c *twistPoint) Negative(a *twistPoint, pool *bnPool) {
 	c.x.Set(a.x)
-	c.y.SetZero()
-	c.y.Sub(c.y, a.y)
+	c.y.Negative(a.y)
 	c.z.Set(a.z)
 	c.t.SetZero()
 }
