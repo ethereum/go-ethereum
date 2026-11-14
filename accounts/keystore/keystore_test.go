@@ -19,12 +19,14 @@ package keystore
 import (
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts"
@@ -341,6 +343,53 @@ func TestWalletNotifications(t *testing.T) {
 	}
 	checkAccounts(t, live, ks.Wallets())
 	checkEvents(t, wantEvents, events)
+}
+
+// TestWalletNotificationOrder checks that concurrent wallet refreshes deliver
+// their events in the order they computed them.
+func TestWalletNotificationOrder(t *testing.T) {
+	t.Parallel()
+	// The keystore is made outside the bubble, so that its directory watcher,
+	// which waits in system calls, isn't part of it.
+	dir, ks := tmpKeyStore(t)
+
+	synctest.Test(t, func(t *testing.T) {
+		// Subscribe to the feed directly: ks.Subscribe would start the updater,
+		// which refreshes on its own.
+		updates := make(chan accounts.WalletEvent)
+		sub := ks.updateFeed.Subscribe(updates)
+		defer sub.Unsubscribe()
+
+		a1 := accounts.Account{Address: common.Address{1}, URL: accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(dir, "a1")}}
+		a2 := accounts.Account{Address: common.Address{2}, URL: accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(dir, "a2")}}
+
+		// The first refresh computes two arrivals and blocks sending them.
+		ks.cache.add(a1)
+		ks.cache.add(a2)
+		go ks.refreshWallets()
+		synctest.Wait()
+
+		// A refresh with nothing new doesn't wait for them.
+		if n := len(ks.Wallets()); n != 2 {
+			t.Fatalf("wallet count mismatch: have %d, want 2", n)
+		}
+
+		// The second refresh computes the drop of a1, which must come last.
+		ks.cache.delete(a1)
+		go ks.refreshWallets()
+		synctest.Wait()
+
+		var events []walletEvent
+		for range 3 {
+			ev := <-updates
+			events = append(events, walletEvent{ev, ev.Wallet.Accounts()[0]})
+		}
+		checkEvents(t, []walletEvent{
+			{accounts.WalletEvent{Kind: accounts.WalletArrived}, a1},
+			{accounts.WalletEvent{Kind: accounts.WalletArrived}, a2},
+			{accounts.WalletEvent{Kind: accounts.WalletDropped}, a1},
+		}, events)
+	})
 }
 
 // TestImportECDSA tests the import functionality of a keystore.
