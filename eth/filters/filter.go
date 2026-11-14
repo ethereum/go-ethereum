@@ -145,9 +145,6 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	if err != nil {
 		return nil, err
 	}
-	if f.rangeLimit != 0 && (end-begin) > f.rangeLimit {
-		return nil, invalidParamsErr("exceed maximum block range %d", f.rangeLimit)
-	}
 	return f.rangeLogs(ctx, begin, end)
 }
 
@@ -231,6 +228,9 @@ func (s *searchSession) updateChainView() error {
 	}
 	if lastBlock > head {
 		return errBlockRangeIntoFuture
+	}
+	if s.filter.rangeLimit != 0 && lastBlock-firstBlock > s.filter.rangeLimit {
+		return invalidParamsErr("exceed maximum block range %d", s.filter.rangeLimit)
 	}
 	s.searchRange = common.NewRange(firstBlock, lastBlock+1-firstBlock)
 
