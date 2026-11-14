@@ -41,6 +41,7 @@ func NewEnv(cfg *Config) *vm.EVM {
 		BaseFee:          cfg.BaseFee,
 		BlobBaseFee:      cfg.BlobBaseFee,
 		Random:           cfg.Random,
+		SlotNum:          cfg.SlotNum,
 		CostPerStateByte: params.CostPerStateByte,
 	}
 
