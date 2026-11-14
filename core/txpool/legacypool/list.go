@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/holiman/uint256"
 )
@@ -58,7 +59,8 @@ type SortedMap struct {
 	items   map[uint64]*types.Transaction // Hash map storing the transaction data
 	index   *nonceHeap                    // Heap of nonces of all the stored transactions (non-strict mode)
 	cache   types.Transactions            // Cache of the transactions already sorted
-	cacheMu sync.Mutex                    // Mutex covering the cache
+	lazy    *lazyList                     // Cache of the sorted transactions as Pending serves them
+	cacheMu sync.Mutex                    // Mutex covering the caches
 }
 
 // NewSortedMap creates a new nonce-sorted transaction map.
@@ -82,7 +84,7 @@ func (m *SortedMap) Put(tx *types.Transaction) {
 		heap.Push(m.index, nonce)
 	}
 	m.cacheMu.Lock()
-	m.items[nonce], m.cache = tx, nil
+	m.items[nonce], m.cache, m.lazy = tx, nil, nil
 	m.cacheMu.Unlock()
 }
 
@@ -99,11 +101,16 @@ func (m *SortedMap) Forward(threshold uint64) types.Transactions {
 		delete(m.items, nonce)
 	}
 	// If we had a cached order, shift the front
-	m.cacheMu.Lock()
-	if m.cache != nil {
-		m.cache = m.cache[len(removed):]
+	if len(removed) > 0 {
+		m.cacheMu.Lock()
+		if m.cache != nil {
+			m.cache = m.cache[len(removed):]
+		}
+		if m.lazy != nil {
+			m.lazy = m.lazy.slice(len(removed), len(m.lazy.txs))
+		}
+		m.cacheMu.Unlock()
 	}
-	m.cacheMu.Unlock()
 	return removed
 }
 
@@ -128,7 +135,7 @@ func (m *SortedMap) reheap() {
 	}
 	heap.Init(m.index)
 	m.cacheMu.Lock()
-	m.cache = nil
+	m.cache, m.lazy = nil, nil
 	m.cacheMu.Unlock()
 }
 
@@ -146,7 +153,7 @@ func (m *SortedMap) filter(filter func(*types.Transaction) bool) types.Transacti
 	}
 	if len(removed) > 0 {
 		m.cacheMu.Lock()
-		m.cache = nil
+		m.cache, m.lazy = nil, nil
 		m.cacheMu.Unlock()
 	}
 	return removed
@@ -175,6 +182,9 @@ func (m *SortedMap) Cap(threshold int) types.Transactions {
 	if m.cache != nil {
 		m.cache = m.cache[:len(m.cache)-len(drops)]
 	}
+	if m.lazy != nil {
+		m.lazy = m.lazy.slice(0, len(m.lazy.txs)-len(drops))
+	}
 	m.cacheMu.Unlock()
 	return drops
 }
@@ -196,7 +206,7 @@ func (m *SortedMap) Remove(nonce uint64) bool {
 	}
 	delete(m.items, nonce)
 	m.cacheMu.Lock()
-	m.cache = nil
+	m.cache, m.lazy = nil, nil
 	m.cacheMu.Unlock()
 
 	return true
@@ -222,7 +232,7 @@ func (m *SortedMap) Ready(start uint64) types.Transactions {
 		heap.Pop(m.index)
 	}
 	m.cacheMu.Lock()
-	m.cache = nil
+	m.cache, m.lazy = nil, nil
 	m.cacheMu.Unlock()
 
 	return ready
@@ -236,6 +246,11 @@ func (m *SortedMap) Len() int {
 func (m *SortedMap) flatten() types.Transactions {
 	m.cacheMu.Lock()
 	defer m.cacheMu.Unlock()
+	return m.flattenLocked()
+}
+
+// flattenLocked is flatten with cacheMu held.
+func (m *SortedMap) flattenLocked() types.Transactions {
 	// If the sorting was not cached yet, create and cache it
 	if m.cache == nil {
 		m.cache = make(types.Transactions, 0, len(m.items))
@@ -258,6 +273,53 @@ func (m *SortedMap) Flatten() types.Transactions {
 	return txs
 }
 
+// lazyPending returns the leading transactions that pass filter. It caches the
+// lazy list only when the filter passes all of it: a sender can change its
+// rejected transactions for free, so a list the filter rejects or cuts short
+// gets lazy transactions only up to those returned, again on every read.
+func (m *SortedMap) lazyPending(pool txpool.LazyResolver, filter txpool.PendingFilter) []*txpool.LazyTransaction {
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	if m.lazy != nil {
+		n := m.lazy.pending(filter)
+		return m.lazy.txs[:n:n]
+	}
+	txs := m.flattenLocked()
+	n := 0
+	for n < len(txs) {
+		if f := feesOf(txs[n]); !f.passes(filter) {
+			break
+		}
+		n++
+	}
+	switch {
+	case n == 0:
+		return nil
+	case n < len(txs):
+		return newLazyList(pool, txs[:n]).txs
+	}
+	m.lazy = newLazyList(pool, txs)
+	return m.lazy.txs
+}
+
+// lazies returns the nonce-sorted transactions as Pending serves them,
+// resolvable through pool. The result is cached until the contents change, and
+// shared: callers must not modify it.
+func (m *SortedMap) lazies(pool txpool.LazyResolver) *lazyList {
+	m.cacheMu.Lock()
+	defer m.cacheMu.Unlock()
+	if m.lazy == nil {
+		m.lazy = newLazyList(pool, m.flattenLocked())
+	}
+	return m.lazy
+}
+
+// first returns the transaction with the lowest nonce; the map must not be
+// empty.
+func (m *SortedMap) first() *types.Transaction {
+	return m.items[(*m.index)[0]]
+}
+
 // LastElement returns the last element of a flattened list, thus, the
 // transaction with the highest nonce
 func (m *SortedMap) LastElement() *types.Transaction {
@@ -276,6 +338,9 @@ type list struct {
 	costcap   *uint256.Int // Price of the highest costing transaction (reset only if exceeds balance)
 	gascap    uint64       // Gas limit of the highest spending transaction (reset only if exceeds block limit)
 	totalcost *uint256.Int // Total cost of all transactions in the list
+
+	heads *headIndex     // Index of the pending accounts' first transactions (pending lists only)
+	addr  common.Address // Account of the list, in heads
 }
 
 // newList creates a new transaction list for maintaining nonce-indexable fast,
@@ -286,6 +351,21 @@ func newList(strict bool) *list {
 		txs:       NewSortedMap(),
 		costcap:   new(uint256.Int),
 		totalcost: new(uint256.Int),
+	}
+}
+
+// newPendingList creates the pending list of addr, which keeps addr's entry in
+// heads up to date.
+func newPendingList(addr common.Address, heads *headIndex) *list {
+	l := newList(true)
+	l.heads, l.addr = heads, addr
+	return l
+}
+
+// changed updates the list's account in the index of first transactions.
+func (l *list) changed() {
+	if l.heads != nil {
+		l.heads.update(l.addr, l)
 	}
 }
 
@@ -340,13 +420,18 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 		l.subTotalCost([]*types.Transaction{old})
 	}
 
-	// Otherwise overwrite the old transaction with the current one
+	// Otherwise overwrite the old transaction with the current one. Only one at
+	// or below the first nonce can change the list's first transaction.
+	head := l.txs.index.Len() == 0 || tx.Nonce() <= (*l.txs.index)[0]
 	l.txs.Put(tx)
 	if l.costcap.Cmp(cost) < 0 {
 		l.costcap = cost
 	}
 	if gas := tx.Gas(); l.gascap < gas {
 		l.gascap = gas
+	}
+	if head {
+		l.changed()
 	}
 	return true, old
 }
@@ -357,6 +442,9 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 func (l *list) Forward(threshold uint64) types.Transactions {
 	txs := l.txs.Forward(threshold)
 	l.subTotalCost(txs)
+	if len(txs) > 0 {
+		l.changed()
+	}
 	return txs
 }
 
@@ -400,6 +488,7 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 	l.subTotalCost(removed)
 	l.subTotalCost(invalids)
 	l.txs.reheap()
+	l.changed()
 	return removed, invalids
 }
 
@@ -408,6 +497,9 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 func (l *list) Cap(threshold int) types.Transactions {
 	txs := l.txs.Cap(threshold)
 	l.subTotalCost(txs)
+	if len(txs) > 0 {
+		l.changed()
+	}
 	return txs
 }
 
@@ -421,6 +513,7 @@ func (l *list) Remove(tx *types.Transaction) (bool, types.Transactions) {
 		return false, nil
 	}
 	l.subTotalCost([]*types.Transaction{tx})
+	defer l.changed()
 	// In strict mode, filter out non-executable transactions
 	if l.strict {
 		txs := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > nonce })
@@ -440,6 +533,9 @@ func (l *list) Remove(tx *types.Transaction) (bool, types.Transactions) {
 func (l *list) Ready(start uint64) types.Transactions {
 	txs := l.txs.Ready(start)
 	l.subTotalCost(txs)
+	if len(txs) > 0 {
+		l.changed()
+	}
 	return txs
 }
 

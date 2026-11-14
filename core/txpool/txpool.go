@@ -371,6 +371,9 @@ func (p *TxPool) Add(txs []*types.Transaction, sync bool) []error {
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
+//
+// The lists, and the transactions and fee values in them, may be shared with
+// the subpools: callers must not modify them.
 func (p *TxPool) Pending(filter PendingFilter) (map[common.Address][]*LazyTransaction, int) {
 	var count int
 	txs := make(map[common.Address][]*LazyTransaction)
