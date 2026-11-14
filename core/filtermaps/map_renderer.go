@@ -237,6 +237,9 @@ func (f *FilterMaps) loadHeadSnapshot() error {
 		}
 		firstBlock = prevLastBlock + 1
 	}
+	if firstBlock > lastBlock+1 {
+		return fmt.Errorf("head snapshot range underflow: firstBlock %d lastBlock %d", firstBlock, lastBlock)
+	}
 	lvPtrs := make([]uint64, lastBlock+1-firstBlock)
 	for i := range lvPtrs {
 		lvPtrs[i], err = f.getBlockLvPointer(firstBlock + uint64(i))
