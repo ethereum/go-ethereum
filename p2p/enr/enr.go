@@ -47,6 +47,7 @@ const SizeLimit = 300 // maximum encoded size of a node record in bytes
 
 var (
 	ErrInvalidSig     = errors.New("invalid signature on node record")
+	ErrUnknownScheme  = errors.New("unknown identity scheme")
 	errNotSorted      = errors.New("record key/value pairs are not sorted by key")
 	errDuplicateKey   = errors.New("record contains duplicate key")
 	errIncompletePair = errors.New("record contains incomplete k/v pair")
@@ -69,7 +70,7 @@ type SchemeMap map[string]IdentityScheme
 func (m SchemeMap) Verify(r *Record, sig []byte) error {
 	s := m[r.IdentityScheme()]
 	if s == nil {
-		return ErrInvalidSig
+		return ErrUnknownScheme
 	}
 	return s.Verify(r, sig)
 }
