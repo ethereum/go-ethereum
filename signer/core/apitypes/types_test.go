@@ -17,12 +17,16 @@
 package apitypes
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/json"
+	"math/big"
+	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/holiman/uint256"
@@ -96,6 +100,75 @@ func TestTxArgs(t *testing.T) {
 		if have, want := tx1.Hash(), tx2.Hash(); have != want {
 			t.Errorf("test %d: have %v, want %v", i, have, want)
 		}
+	}
+}
+
+func TestSetCodeTxArgs(t *testing.T) {
+	to := common.HexToAddress("0x1000000000000000000000000000000000000001")
+	from := common.NewMixedcaseAddress(common.HexToAddress("0x9000000000000000000000000000000000000009"))
+	mixedTo := common.NewMixedcaseAddress(to)
+	input := hexutil.Bytes{0x01, 0x02}
+	chainID := hexutil.Big(*big.NewInt(5))
+	maxFee := hexutil.Big(*big.NewInt(30))
+	maxTip := hexutil.Big(*big.NewInt(3))
+	value := hexutil.Big(*big.NewInt(7))
+	accessList := types.AccessList{{
+		Address:     common.HexToAddress("0x2000000000000000000000000000000000000002"),
+		StorageKeys: []common.Hash{common.HexToHash("0x01")},
+	}}
+	auth := types.SetCodeAuthorization{
+		ChainID: *uint256.NewInt(5),
+		Address: common.HexToAddress("0x3000000000000000000000000000000000000003"),
+		Nonce:   9,
+		V:       1,
+		R:       *uint256.NewInt(10),
+		S:       *uint256.NewInt(11),
+	}
+	args := SendTxArgs{
+		From:                 from,
+		To:                   &mixedTo,
+		Gas:                  21000,
+		MaxFeePerGas:         &maxFee,
+		MaxPriorityFeePerGas: &maxTip,
+		Value:                value,
+		Nonce:                4,
+		Input:                &input,
+		AccessList:           &accessList,
+		ChainID:              &chainID,
+		AuthorizationList:    []types.SetCodeAuthorization{auth},
+	}
+	blob, err := json.Marshal(args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(blob, []byte(`"authorizationList"`)) {
+		t.Fatalf("marshaled args missing authorizationList: %s", blob)
+	}
+	var decoded SendTxArgs
+	if err := json.Unmarshal(blob, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := decoded.ToTransaction()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, want := tx.Type(), uint8(types.SetCodeTxType); have != want {
+		t.Fatalf("have tx type %d, want %d", have, want)
+	}
+	if have := tx.To(); have == nil || *have != to {
+		t.Fatalf("have to %v, want %v", have, to)
+	}
+	if have, want := tx.ChainId(), big.NewInt(5); have.Cmp(want) != 0 {
+		t.Fatalf("have chain id %v, want %v", have, want)
+	}
+	if !bytes.Equal(tx.Data(), input) {
+		t.Fatalf("have input %x, want %x", tx.Data(), input)
+	}
+	if !reflect.DeepEqual(tx.AccessList(), accessList) {
+		t.Fatalf("have access list %#v, want %#v", tx.AccessList(), accessList)
+	}
+	if !reflect.DeepEqual(tx.SetCodeAuthorizations(), []types.SetCodeAuthorization{auth}) {
+		t.Fatalf("have auth list %#v, want %#v", tx.SetCodeAuthorizations(), []types.SetCodeAuthorization{auth})
 	}
 }
 
