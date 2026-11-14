@@ -558,13 +558,22 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 }
 
 // revert applies the given state history and return a reverted disk layer.
-func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
+// The history spans the given number of state transitions: one, or several
+// merged by readMergedStateHistory, which can only be reverted from the
+// persistent state.
+func (dl *diskLayer) revert(h *stateHistory, count uint64) (*diskLayer, error) {
 	start := time.Now()
 	if h.meta.root != dl.rootHash() {
 		return nil, errUnexpectedHistory
 	}
 	if dl.id == 0 {
 		return nil, fmt.Errorf("%w: zero state id", errStateUnrecoverable)
+	}
+	if count == 0 || count > dl.id {
+		return nil, fmt.Errorf("%w: reverting %d transitions from state id %d", errStateUnrecoverable, count, dl.id)
+	}
+	if count > 1 && !dl.buffer.empty() {
+		return nil, fmt.Errorf("merged history reverted with %d transitions in the write buffer", dl.buffer.layers())
 	}
 	// Apply the reverse state changes upon the current state. This must
 	// be done before holding the lock in order to access state in "this"
@@ -583,15 +592,17 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 
 	dl.stale = true
 
-	// Unindex the corresponding history
-	if dl.db.stateIndexer != nil {
-		if err := dl.db.stateIndexer.shorten(dl.id); err != nil {
-			return nil, err
+	// Unindex the corresponding histories, the latest first
+	for id := dl.id; id > dl.id-count; id-- {
+		if dl.db.stateIndexer != nil {
+			if err := dl.db.stateIndexer.shorten(id); err != nil {
+				return nil, err
+			}
 		}
-	}
-	if dl.db.trienodeIndexer != nil {
-		if err := dl.db.trienodeIndexer.shorten(dl.id); err != nil {
-			return nil, err
+		if dl.db.trienodeIndexer != nil {
+			if err := dl.db.trienodeIndexer.shorten(id); err != nil {
+				return nil, err
+			}
 		}
 	}
 	// State change may be applied to node buffer, or the persistent
@@ -604,7 +615,7 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 		if err != nil {
 			return nil, err
 		}
-		ndl := newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.nodes, dl.states, dl.buffer, dl.frozen)
+		ndl := newDiskLayer(h.meta.parent, dl.id-count, dl.db, dl.nodes, dl.states, dl.buffer, dl.frozen)
 
 		// Link the generator if it exists
 		if dl.generator != nil {
@@ -636,19 +647,19 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 
 	// Provide the original values of modified accounts and storages for revert
 	writeStates(batch, progress, accounts, storages, dl.states)
-	rawdb.WritePersistentStateID(batch, dl.id-1)
+	rawdb.WritePersistentStateID(batch, dl.id-count)
 	rawdb.WriteSnapshotRoot(batch, h.meta.parent)
 	if err := batch.Write(); err != nil {
 		log.Crit("Failed to write states", "err", err)
 	}
 	// Link the generator and resume generation if the snapshot is not yet
 	// fully completed.
-	ndl := newDiskLayer(h.meta.parent, dl.id-1, dl.db, dl.nodes, dl.states, dl.buffer, dl.frozen)
+	ndl := newDiskLayer(h.meta.parent, dl.id-count, dl.db, dl.nodes, dl.states, dl.buffer, dl.frozen)
 	if dl.generator != nil && !dl.generator.completed() {
 		ndl.generator = dl.generator
 		ndl.generator.run(h.meta.parent)
 	}
-	log.Debug("Reverted data in persistent state", "oldroot", h.meta.root, "newroot", h.meta.parent, "elapsed", common.PrettyDuration(time.Since(start)))
+	log.Debug("Reverted data in persistent state", "oldroot", h.meta.root, "newroot", h.meta.parent, "transitions", count, "elapsed", common.PrettyDuration(time.Since(start)))
 	return ndl, nil
 }
 
