@@ -491,6 +491,9 @@ func (pool *LegacyPool) ContentFrom(addr common.Address) ([]*types.Transaction, 
 //
 // The transactions can also be pre-filtered by the dynamic fee components to
 // reduce allocations and load on downstream subsystems.
+//
+// The returned lists and transactions are shared with the pool's cache and
+// must not be modified.
 func (pool *LegacyPool) Pending(filter txpool.PendingFilter) (map[common.Address][]*txpool.LazyTransaction, int) {
 	// If only blob transactions are requested, this pool is unsuitable as it
 	// contains none, don't even bother.
@@ -503,41 +506,9 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) (map[common.Address
 	var count int
 	pending := make(map[common.Address][]*txpool.LazyTransaction, len(pool.pending))
 	for addr, list := range pool.pending {
-		txs := list.Flatten()
-
-		// If the miner requests tip enforcement, cap the lists now
-		if filter.MinTip != nil || filter.GasLimitCap != 0 {
-			for i, tx := range txs {
-				if filter.MinTip != nil {
-					if tx.EffectiveGasTipIntCmp(filter.MinTip, filter.BaseFee) < 0 {
-						txs = txs[:i]
-						break
-					}
-				}
-				if filter.GasLimitCap != 0 {
-					if tx.Gas() > filter.GasLimitCap {
-						txs = txs[:i]
-						break
-					}
-				}
-			}
-		}
-		if len(txs) > 0 {
-			lazies := make([]*txpool.LazyTransaction, len(txs))
-			for i := 0; i < len(txs); i++ {
-				lazies[i] = &txpool.LazyTransaction{
-					Pool:      pool,
-					Hash:      txs[i].Hash(),
-					Tx:        txs[i],
-					Time:      txs[i].Time(),
-					GasFeeCap: uint256.MustFromBig(txs[i].GasFeeCap()),
-					GasTipCap: uint256.MustFromBig(txs[i].GasTipCap()),
-					Gas:       txs[i].Gas(),
-					BlobGas:   txs[i].BlobGas(),
-				}
-			}
-			pending[addr] = lazies
-			count += len(lazies)
+		if txs := list.txs.lazyPending(pool, filter); len(txs) > 0 {
+			pending[addr] = txs
+			count += len(txs)
 		}
 	}
 	return pending, count
