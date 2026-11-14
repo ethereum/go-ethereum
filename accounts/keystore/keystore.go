@@ -232,6 +232,8 @@ func (ks *KeyStore) Accounts() []accounts.Account {
 // Delete deletes the key matched by account if the passphrase is correct.
 // If the account contains no filename, the address must match a unique key.
 func (ks *KeyStore) Delete(a accounts.Account, passphrase string) error {
+	ks.cache.fileC.mu.Lock()
+	defer ks.cache.fileC.mu.Unlock()
 	// Decrypting the key isn't really necessary, but we do
 	// it anyway to check the password and zero out the key
 	// immediately afterwards.
