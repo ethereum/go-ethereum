@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
+	"github.com/ethereum/go-ethereum/crypto/leansphincs"
 	"github.com/ethereum/go-ethereum/crypto/secp256r1"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -48,9 +49,10 @@ var (
 
 // Signature schemes (EIP-8141).
 const (
-	FrameTxSchemeArbitrary uint64 = 0x0
-	FrameTxSchemeSecp256k1 uint64 = 0x1
-	FrameTxSchemeP256      uint64 = 0x2
+	FrameTxSchemeArbitrary   uint64 = 0x0
+	FrameTxSchemeSecp256k1   uint64 = 0x1
+	FrameTxSchemeP256        uint64 = 0x2
+	FrameTxSchemeLeanSphincs uint64 = 0x3
 )
 
 // FrameTx represents an EIP-8141 frame transaction with the EIP-8250 keyed
@@ -134,6 +136,10 @@ func (tx *FrameTx) ValidateStatic() error {
 		case FrameTxSchemeArbitrary:
 			if len(sig.Signer) != 0 {
 				return fmt.Errorf("%w: arbitrary signature signer must be empty", ErrFrameTxInvalidFormat)
+			}
+		case FrameTxSchemeLeanSphincs:
+			if len(sig.Signer) != leansphincs.PublicKeySize {
+				return fmt.Errorf("%w: leanSPHINCS signer must be 32 bytes", ErrFrameTxInvalidFormat)
 			}
 		default:
 			return fmt.Errorf("%w: unknown signature scheme", ErrFrameTxInvalidFormat)
@@ -550,7 +556,7 @@ type SignatureList []SignatureEntry
 // SignatureEntry is the element type of a signature list.
 type SignatureEntry struct {
 	Scheme    uint64
-	Signer    []byte // 20-byte address for SECP256K1 and P256, empty for ARBITRARY
+	Signer    []byte // 20-byte address for SECP256K1 and P256, 32-byte public key for leanSPHINCS, empty for ARBITRARY
 	Msg       []byte // empty (canonical signature hash) or an explicit 32-byte digest
 	Signature []byte
 }
@@ -584,9 +590,14 @@ func (s *SignatureEntry) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// ResolvedSigner returns the signer address of a protocol-validated
-// signature entry, resolving an empty signer to the transaction sender.
+// ResolvedSigner returns the signer address of a secp256k1 or P-256 entry,
+// resolving an empty signer to the transaction sender. A leanSPHINCS entry
+// has no signer address: its signer is the public key itself, read through
+// Signer, so the zero address is returned rather than a truncated key.
 func (s *SignatureEntry) ResolvedSigner(sender common.Address) common.Address {
+	if s.Scheme == FrameTxSchemeLeanSphincs {
+		return common.Address{}
+	}
 	if len(s.Signer) == 0 {
 		return sender
 	}
@@ -608,6 +619,8 @@ func FrameTxSignatureGas(sig *SignatureEntry) uint64 {
 		return params.FrameTxSecp256k1SigGas
 	case FrameTxSchemeP256:
 		return params.FrameTxP256SigGas
+	case FrameTxSchemeLeanSphincs:
+		return params.FrameTxLeanSphincsSigGas
 	default:
 		return params.FrameTxArbitrarySigGas
 	}
@@ -890,6 +903,12 @@ func validateFrameTxSignature(sig *SignatureEntry, sender common.Address, sigHas
 			return ErrFrameTxSignerMismatch
 		}
 		if !secp256r1.Verify(msg[:], r, s, x, y) {
+			return ErrFrameTxInvalidSignature
+		}
+		return nil
+
+	case FrameTxSchemeLeanSphincs:
+		if !leansphincs.Verify(sig.Signer, msg[:], sig.Signature) {
 			return ErrFrameTxInvalidSignature
 		}
 		return nil
