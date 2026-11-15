@@ -36,7 +36,7 @@ const (
 	FrameTxMaxFrames                = 64    // Maximum number of frames in an EIP-8141 frame transaction.
 	FrameTxSecp256k1SigGas   uint64 = 2800  // Gas charged for validating a secp256k1 signature entry (EIP-8141).
 	FrameTxP256SigGas        uint64 = 6700  // Gas charged for validating a P-256 signature entry (EIP-8141).
-	FrameTxLeanSphincsSigGas uint64 = 12600 // Gas charged for validating a leanSPHINCS signature entry (EIP-8141 via EIPs PR 12616, provisional).
+	FrameTxLeanSphincsSigGas uint64 = 12600 // Gas charged for validating a leanSPHINCS signature entry (EIPs PR 12616, provisional).
 	FrameTxArbitrarySigGas   uint64 = 100   // Gas charged per ARBITRARY signature entry (EIP-8141).
 	FrameTxExpiryDataLen            = 8     // Required calldata length of an expiry verifier frame (EIP-8141).
 	FrameTxMaxNonceKeys             = 16    // Maximum number of nonce keys a frame transaction may select (EIP-8250).
