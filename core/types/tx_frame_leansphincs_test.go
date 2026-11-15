@@ -73,6 +73,10 @@ func TestFrameTxLeanSphincs(t *testing.T) {
 			t.Fatalf("accepted %d-byte signer", size)
 		}
 	}
+	// The key must never be truncated into an address.
+	if got := entry.ResolvedSigner(common.Address{0xaa}); got != (common.Address{}) {
+		t.Fatalf("ResolvedSigner of a leanSPHINCS entry: got %x, want the zero address", got)
+	}
 	if got := FrameTxSignatureGas(&entry); got != params.FrameTxLeanSphincsSigGas {
 		t.Fatalf("verification gas: got %d", got)
 	}

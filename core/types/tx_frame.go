@@ -591,8 +591,13 @@ func (s *SignatureEntry) UnmarshalJSON(input []byte) error {
 }
 
 // ResolvedSigner returns the signer address of a secp256k1 or P-256 entry,
-// resolving an empty signer to the transaction sender.
+// resolving an empty signer to the transaction sender. A leanSPHINCS entry
+// has no signer address: its signer is the public key itself, read through
+// Signer, so the zero address is returned rather than a truncated key.
 func (s *SignatureEntry) ResolvedSigner(sender common.Address) common.Address {
+	if s.Scheme == FrameTxSchemeLeanSphincs {
+		return common.Address{}
+	}
 	if len(s.Signer) == 0 {
 		return sender
 	}
