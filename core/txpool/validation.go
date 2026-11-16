@@ -182,7 +182,14 @@ func validateBlobSidecar(tx *types.Transaction, head *types.Header, opts *Valida
 	if sidecar == nil {
 		return errors.New("missing sidecar in blob transaction")
 	}
+	// Reject a blob transaction without any blob versioned hashes. It carries no
+	// data at all, and all the consistency checks below would pass vacuously.
+	// Note the blobs themselves are not checked here, they are not relayed on
+	// eth/72 and only the commitments are guaranteed to be present.
 	hashes := tx.BlobHashes()
+	if len(hashes) == 0 {
+		return errors.New("blobless blob transaction")
+	}
 	if err := sidecar.ValidateBlobCommitmentHashes(hashes); err != nil {
 		return err
 	}
