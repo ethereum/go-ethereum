@@ -5109,3 +5109,33 @@ func TestGetHeaderByNumberUnresolvedTag(t *testing.T) {
 		}
 	}
 }
+
+// emptyFeeHistoryBackend reports what the gas price oracle returns when there
+// are no blocks in the requested fee history range.
+type emptyFeeHistoryBackend struct {
+	*testBackend
+}
+
+func (emptyFeeHistoryBackend) FeeHistory(ctx context.Context, blockCount uint64, lastBlock rpc.BlockNumber, rewardPercentiles []float64) (*big.Int, [][]*big.Int, []*big.Int, []float64, []*big.Int, []float64, error) {
+	return common.Big0, nil, nil, nil, nil, nil, nil
+}
+
+// TestFeeHistoryEmpty checks that an empty fee history still contains the
+// baseFeePerGas and gasUsedRatio arrays.
+func TestFeeHistoryEmpty(t *testing.T) {
+	t.Parallel()
+
+	api := NewEthereumAPI(emptyFeeHistoryBackend{new(testBackend)})
+	result, err := api.FeeHistory(context.Background(), 0, rpc.LatestBlockNumber, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	have, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"oldestBlock":"0x0","baseFeePerGas":[],"gasUsedRatio":[]}`
+	if string(have) != want {
+		t.Errorf("have %s, want %s", have, want)
+	}
+}
