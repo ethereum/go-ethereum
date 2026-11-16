@@ -114,6 +114,14 @@ func TestCheckInclusionList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A self-transfer without value needs the smallest gas a transaction can have.
+	smallest := types.MustSignNewTx(bobKey, signer, &types.DynamicFeeTx{
+		ChainID:   signer.ChainID(),
+		GasTipCap: common.Big0,
+		GasFeeCap: feeCap,
+		Gas:       params.TxBaseCost2780,
+		To:        &bob,
+	})
 	tests := []struct {
 		name              string
 		list              [][]byte
@@ -131,6 +139,10 @@ func TestCheckInclusionList(t *testing.T) {
 		// Each gas dimension has its own room. The execution reservation is
 		// capped at MaxTxGas, so 30M gas fits after 40M of a 60M block.
 		{name: "room in both dimensions", list: encodeInclusionList(t, signInclusionListTx(t, signer, bobKey, 0, 30_000_000, feeCap, 1)), gasExec: 40_000_000, gasState: 10_000_000, want: false},
+
+		// The list is only skipped once there's no gas for even the smallest transaction.
+		{name: "last gas fits", list: encodeInclusionList(t, smallest), gasExec: header.GasLimit - params.TxBaseCost2780, want: false},
+		{name: "no gas left", list: encodeInclusionList(t, smallest), gasExec: header.GasLimit - params.TxBaseCost2780 + 1, want: true},
 
 		// The first transaction buys gas before failing the intrinsic gas
 		// check. The second one needs all of dave's balance, so it only

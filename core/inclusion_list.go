@@ -94,9 +94,17 @@ func (bc *BlockChain) CheckInclusionList(block *types.Block, gasExecution, gasSt
 // after the block's last transaction, and the gas pool holds the gas used by
 // the transactions.
 func checkInclusionList(config *params.ChainConfig, chain ChainContext, header *types.Header, txs types.Transactions, statedb *state.StateDB, gp *GasPool, inclusionList [][]byte) bool {
+	rules := config.Rules(header.Number, true, header.Time)
+	minTxGas := params.TxGas
+	if rules.IsAmsterdam {
+		minTxGas = params.TxBaseCost2780
+	}
+	// If the block has no gas left for any transaction, nothing could be appended.
+	if gp.Available(rules.IsAmsterdam) < minTxGas {
+		return true
+	}
 	var (
 		signer   = types.MakeSigner(config, header.Number, header.Time)
-		rules    = config.Rules(header.Number, true, header.Time)
 		evm      = vm.NewEVM(NewEVMBlockContext(header, chain, nil), statedb, config, vm.Config{})
 		included = make(map[common.Hash]struct{}, len(txs))
 		pending  = make([]*types.Transaction, 0, len(inclusionList))
