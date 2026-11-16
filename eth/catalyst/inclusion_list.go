@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
@@ -101,16 +102,23 @@ func (api *ConsensusAPI) checkInclusionList(hash common.Hash, txs [][]byte) (boo
 // list (EIP-7805). It takes the next transaction of each account that can pay
 // the next block's base fee, longest waiting first, up to the size limit. A later
 // transaction of the same account can only be included after the next one, so
-// it would take up room without adding anything.
+// it would take up room without adding anything. Only transactions seen before
+// the head block are taken, so a builder already had the chance to include
+// them. Picking by age and not by fee keeps a censoring builder from filling
+// the list with fresh transactions it can invalidate later.
 func (api *ConsensusAPI) GetInclusionListV1() ([]hexutil.Bytes, error) {
 	// Blob transactions can't go on an inclusion list, the pool leaves them out
 	// by default.
 	var (
 		baseFee    = api.eth.APIBackend.BaseFee(context.Background())
+		head       = time.Unix(int64(api.eth.BlockChain().CurrentBlock().Time), 0)
 		pending, _ = api.eth.TxPool().Pending(txpool.PendingFilter{})
 		next       = make([]*txpool.LazyTransaction, 0, len(pending))
 	)
 	for _, txs := range pending {
+		if !txs[0].Time.Before(head) {
+			continue
+		}
 		if baseFee != nil && txs[0].GasFeeCap.CmpBig(baseFee) < 0 {
 			continue
 		}

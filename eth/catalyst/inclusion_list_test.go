@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
@@ -213,10 +214,11 @@ func TestForkchoiceUpdatedV5BuildsInclusionList(t *testing.T) {
 }
 
 // TestGetInclusionListV1 checks that the inclusion list stays within the size
-// limit and leaves out transactions that can't pay the next block's base fee.
+// limit and leaves out transactions that can't pay the next block's base fee or
+// were only seen at the head.
 func TestGetInclusionListV1(t *testing.T) {
 	genesis, _ := generateMergeChain(0, true)
-	keys := make([]*ecdsa.PrivateKey, 13)
+	keys := make([]*ecdsa.PrivateKey, 14)
 	for i := range keys {
 		keys[i], _ = crypto.GenerateKey()
 		genesis.Alloc[crypto.PubkeyToAddress(keys[i].PublicKey)] = types.Account{Balance: big.NewInt(params.Ether)}
@@ -226,23 +228,32 @@ func TestGetInclusionListV1(t *testing.T) {
 	api := newConsensusAPIWithoutHeartbeat(ethservice)
 
 	signer := types.LatestSigner(genesis.Config)
-	sign := func(key *ecdsa.PrivateKey, feeCap int64) *types.Transaction {
+	sign := func(key *ecdsa.PrivateKey, feeCap int64, data int) *types.Transaction {
 		return types.MustSignNewTx(key, signer, &types.DynamicFeeTx{
 			ChainID:   genesis.Config.ChainID,
 			GasTipCap: big.NewInt(params.GWei / 1000),
 			GasFeeCap: big.NewInt(feeCap),
 			Gas:       200_000,
 			To:        &common.Address{0xaa},
-			Data:      bytes.Repeat([]byte{0xff}, 1000),
+			Data:      bytes.Repeat([]byte{0xff}, data),
 		})
 	}
 	// The oldest transaction can't pay the base fee, the others take up more
-	// room together than the list has.
-	underpriced := sign(keys[0], params.GWei/100)
+	// room together than the list has. The last one would fit in the room left,
+	// but it was only seen at the head, so no builder has passed it over yet.
+	head := time.Unix(int64(ethservice.BlockChain().CurrentBlock().Time), 0)
+	underpriced := sign(keys[0], params.GWei/100, 1000)
 	txs := []*types.Transaction{underpriced}
-	for _, key := range keys[1:] {
-		txs = append(txs, sign(key, 2*params.GWei))
+	for _, key := range keys[1 : len(keys)-1] {
+		txs = append(txs, sign(key, 2*params.GWei, 1000))
 	}
+	for i, tx := range txs {
+		tx.SetTime(head.Add(time.Duration(i-len(txs)) * time.Second))
+	}
+	fresh := sign(keys[len(keys)-1], 2*params.GWei, 0)
+	fresh.SetTime(head)
+	txs = append(txs, fresh)
+
 	for i, err := range ethservice.TxPool().Add(txs, true) {
 		if err != nil {
 			t.Fatalf("tx %d: %v", i, err)
@@ -258,8 +269,11 @@ func TestGetInclusionListV1(t *testing.T) {
 		if err := tx.UnmarshalBinary(enc); err != nil {
 			t.Fatal(err)
 		}
-		if tx.Hash() == underpriced.Hash() {
+		switch tx.Hash() {
+		case underpriced.Hash():
 			t.Error("underpriced transaction on the list")
+		case fresh.Hash():
+			t.Error("transaction seen at the head on the list")
 		}
 		size += len(enc)
 	}
