@@ -239,7 +239,18 @@ func TestBuildPayloadInclusionList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to build payload %v", err)
 	}
-	txs := payload.ResolveEmpty().ExecutionPayload.Transactions
+	// The full payload starts with the pool's transaction from the same
+	// account, and still appends the second one. It's resolved first, so it
+	// waits while the empty payload takes in the list.
+	txs := payload.ResolveFull().ExecutionPayload.Transactions
+	var last types.Transaction
+	if err := last.UnmarshalBinary(txs[len(txs)-1]); err != nil {
+		t.Fatal(err)
+	}
+	if len(txs) != 2 || last.Hash() != second.Hash() {
+		t.Errorf("full payload has %d transactions ending in %x, want 2 ending in %x", len(txs), last.Hash(), second.Hash())
+	}
+	txs = payload.ResolveEmpty().ExecutionPayload.Transactions
 	if len(txs) != 2 {
 		t.Fatalf("empty payload has %d transactions, want 2", len(txs))
 	}
@@ -251,16 +262,6 @@ func TestBuildPayloadInclusionList(t *testing.T) {
 		if tx.Hash() != want.Hash() {
 			t.Errorf("transaction %d is %x, want %x", i, tx.Hash(), want.Hash())
 		}
-	}
-	// The full payload starts with the pool's transaction from the same
-	// account, and still appends the second one.
-	txs = payload.ResolveFull().ExecutionPayload.Transactions
-	var last types.Transaction
-	if err := last.UnmarshalBinary(txs[len(txs)-1]); err != nil {
-		t.Fatal(err)
-	}
-	if len(txs) != 2 || last.Hash() != second.Hash() {
-		t.Errorf("full payload has %d transactions ending in %x, want 2 ending in %x", len(txs), last.Hash(), second.Hash())
 	}
 }
 
