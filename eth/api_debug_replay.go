@@ -137,25 +137,31 @@ func (api *DebugAPI) replayBuild(ctx context.Context, block *types.Block, stated
 	}
 
 	// applyReverted executes a tx that was reverted during building.
-	applyReverted := func(tx *types.Transaction) {
+	applyReverted := func(tx *types.Transaction) error {
 		msg, err := core.TransactionToMessage(tx, signer, header.BaseFee)
 		if err != nil {
-			return
+			return nil
 		}
 		statedb.SetTxContext(tx.Hash(), tcount, uint32(tcount+1))
 		snap, gpSnap := statedb.Snapshot(), gp.Snapshot()
 		_, _, err = core.ApplyTransactionWithEVM(ctx, msg, gp, statedb, header.Number, blockHash, header.Time, tx, evm)
 		if err == nil {
+			// The transaction has been finalised into the state, which also
+			// clears the journal, so it can't be reverted anymore.
 			txRLP, _ := rlp.EncodeToBytes(tx)
 			log.Warn("Expect the transaction to be failed", "index", tcount, "hash", tx.Hash(), "rlp", txRLP)
+			return fmt.Errorf("reverted tx %d [%v] succeeded on replay", tcount, tx.Hash().Hex())
 		}
 		statedb.RevertToSnapshot(snap)
 		gp.Set(gpSnap)
+		return nil
 	}
 
 	for k := 0; k <= len(committed); k++ {
 		for _, tx := range revBySlot[k] {
-			applyReverted(tx)
+			if err := applyReverted(tx); err != nil {
+				return nil, nil, 0, common.Hash{}, err
+			}
 		}
 		if k == len(committed) {
 			break
