@@ -64,6 +64,10 @@ type callFrame struct {
 	// nil if there are non-empty elements after in the struct.
 	Value            *big.Int `json:"value,omitempty" rlp:"optional"`
 	revertedSnapshot bool
+
+	// StateGasReservoir is the EIP-8037 state gas reservoir the frame was
+	// entered with, set from Amsterdam on. Not part of the RLP encoding.
+	StateGasReservoir *uint64 `json:"stateGasReservoir,omitempty" rlp:"-"`
 }
 
 func (f callFrame) TypeString() string {
@@ -103,21 +107,23 @@ func (f *callFrame) processOutput(output []byte, err error, reverted bool) {
 }
 
 type callFrameMarshaling struct {
-	TypeString string `json:"type"`
-	Gas        hexutil.Uint64
-	GasUsed    hexutil.Uint64
-	Value      *hexutil.Big
-	Input      hexutil.Bytes
-	Output     hexutil.Bytes
+	TypeString        string `json:"type"`
+	Gas               hexutil.Uint64
+	GasUsed           hexutil.Uint64
+	Value             *hexutil.Big
+	Input             hexutil.Bytes
+	Output            hexutil.Bytes
+	StateGasReservoir *hexutil.Uint64
 }
 
 type callTracer struct {
-	callstack []callFrame
-	config    callTracerConfig
-	gasLimit  uint64
-	depth     int
-	interrupt atomic.Bool           // Atomic flag to signal execution interruption
-	reason    atomic.Pointer[error] // Reason for the interruption, populated by Stop
+	callstack   []callFrame
+	config      callTracerConfig
+	gasLimit    uint64
+	isAmsterdam bool // whether frames carry an EIP-8037 state gas reservoir
+	depth       int
+	interrupt   atomic.Bool           // Atomic flag to signal execution interruption
+	reason      atomic.Pointer[error] // Reason for the interruption, populated by Stop
 }
 
 type callTracerConfig struct {
@@ -136,8 +142,8 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *param
 		Hooks: &tracing.Hooks{
 			OnTxStart: t.OnTxStart,
 			OnTxEnd:   t.OnTxEnd,
-			OnEnter:   t.OnEnter,
-			OnExit:    t.OnExit,
+			OnEnterV2: t.OnEnter,
+			OnExitV2:  t.OnExit,
 			OnLog:     t.OnLog,
 		},
 		GetResult: t.GetResult,
@@ -156,7 +162,7 @@ func newCallTracerObject(ctx *tracers.Context, cfg json.RawMessage) (*callTracer
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
 	t.depth = depth
 	if t.config.OnlyTopCall && depth > 0 {
 		return
@@ -172,20 +178,24 @@ func (t *callTracer) OnEnter(depth int, typ byte, from common.Address, to common
 		From:  from,
 		To:    &toCopy,
 		Input: common.CopyBytes(input),
-		Gas:   gas,
+		Gas:   gas.Execution,
 		Value: value,
 	}
 	if depth == 0 {
 		call.Gas = t.gasLimit
+	}
+	if t.isAmsterdam {
+		reservoir := gas.State
+		call.StateGasReservoir = &reservoir
 	}
 	t.callstack = append(t.callstack, call)
 }
 
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *callTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *callTracer) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
 	if depth == 0 {
-		t.captureEnd(output, gasUsed, err, reverted)
+		t.captureEnd(output, err, reverted)
 		return
 	}
 
@@ -203,13 +213,22 @@ func (t *callTracer) OnExit(depth int, output []byte, gasUsed uint64, err error,
 	t.callstack = t.callstack[:size-1]
 	size -= 1
 
-	call.GasUsed = gasUsed
+	call.GasUsed = gasUsed(call.Gas, gasLeft)
 	call.processOutput(output, err, reverted)
 	// Nest call into parent.
 	t.callstack[size-1].Calls = append(t.callstack[size-1].Calls, call)
 }
 
-func (t *callTracer) captureEnd(output []byte, gasUsed uint64, err error, reverted bool) {
+// gasUsed returns the gas a frame consumed: the gas it was entered with minus
+// the gas left that is returned to the caller.
+func gasUsed(gas uint64, gasLeft tracing.Gas) uint64 {
+	if gas < gasLeft.Execution {
+		return 0
+	}
+	return gas - gasLeft.Execution
+}
+
+func (t *callTracer) captureEnd(output []byte, err error, reverted bool) {
 	if len(t.callstack) != 1 {
 		return
 	}
@@ -218,6 +237,7 @@ func (t *callTracer) captureEnd(output []byte, gasUsed uint64, err error, revert
 
 func (t *callTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	t.gasLimit = tx.Gas()
+	t.isAmsterdam = env.Rules.IsAmsterdam
 }
 
 func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {

@@ -70,21 +70,36 @@ type SlimAccount struct {
 
 // SlimAccountRLP encodes the state account in 'slim RLP' format.
 func SlimAccountRLP(account StateAccount) []byte {
-	slim := SlimAccount{
-		Nonce:   account.Nonce,
-		Balance: account.Balance,
+	buf := rlp.NewEncoderBuffer(nil)
+	defer buf.Flush()
+
+	return SlimAccountRLPInto(&buf, account)
+}
+
+// SlimAccountRLPInto encodes the state account in 'slim RLP' format into the
+// given buffer, returning the encoded bytes.
+func SlimAccountRLPInto(w *rlp.EncoderBuffer, account StateAccount) []byte {
+	w.Reset(nil)
+
+	list := w.List()
+	w.WriteUint64(account.Nonce)
+	if account.Balance != nil {
+		w.WriteUint256(account.Balance)
+	} else {
+		w.WriteUint64(0)
 	}
 	if account.Root != EmptyRootHash {
-		slim.Root = account.Root[:]
+		w.WriteBytes(account.Root[:])
+	} else {
+		w.WriteBytes(nil)
 	}
 	if !bytes.Equal(account.CodeHash, EmptyCodeHash[:]) {
-		slim.CodeHash = account.CodeHash
+		w.WriteBytes(account.CodeHash)
+	} else {
+		w.WriteBytes(nil)
 	}
-	data, err := rlp.EncodeToBytes(slim)
-	if err != nil {
-		panic(err)
-	}
-	return data
+	w.ListEnd(list)
+	return w.ToBytes()
 }
 
 // FullAccount decodes the data on the 'slim RLP' format and returns

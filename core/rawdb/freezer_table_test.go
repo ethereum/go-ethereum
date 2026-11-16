@@ -1683,3 +1683,63 @@ func TestTruncateOverHead(t *testing.T) {
 		t.Fatalf("Unexpected bytes, want: %v, got: %v", data, got[0])
 	}
 }
+
+// TestFreezerMetadataUpgrade checks that a table opens with metadata an earlier
+// version wrote, shorter than the fixed size, keeps its items, and writes the
+// metadata at the fixed size from then on.
+func TestFreezerMetadataUpgrade(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name string
+		meta []byte
+	}{
+		// [1, 0]: the flush offset is taken from the index.
+		{"v1", []byte{0xc2, 0x01, 0x80}},
+		// [2, 0, 1566]: 260 items, synced.
+		{"v2", []byte{0xc5, 0x02, 0x80, 0x82, 0x06, 0x1e}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
+			dir := t.TempDir()
+			open := func() *freezerTable {
+				t.Helper()
+				f, err := newTable(dir, "test", rm, wm, sg, 50, freezerTableConfig{noSnappy: true}, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return f
+			}
+			f := open()
+			writeChunks(t, f, 260, 15)
+			f.Close()
+			meta := filepath.Join(dir, "test.meta")
+			if err := os.WriteFile(meta, tt.meta, 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			// Open it and add an item, which rewrites the metadata at close.
+			f = open()
+			if items := f.items.Load(); items != 260 {
+				t.Fatalf("Items %d, want 260", items)
+			}
+			batch := f.newBatch()
+			require.NoError(t, batch.AppendRaw(260, getChunk(15, 260)))
+			require.NoError(t, batch.commit())
+			f.Close()
+
+			stat, err := os.Stat(meta)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if stat.Size() != freezerMetaSize {
+				t.Fatalf("Metadata file size %d, want %d", stat.Size(), freezerMetaSize)
+			}
+			f = open()
+			defer f.Close()
+			if items := f.items.Load(); items != 261 {
+				t.Fatalf("Items %d, want 261", items)
+			}
+			checkRetrieve(t, f, map[uint64][]byte{0: getChunk(15, 0), 259: getChunk(15, 259), 260: getChunk(15, 260)})
+		})
+	}
+}

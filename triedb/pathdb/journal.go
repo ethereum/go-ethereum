@@ -17,6 +17,7 @@
 package pathdb
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -33,6 +34,10 @@ import (
 )
 
 const tempJournalSuffix = ".tmp"
+
+// journalWriteBuffer is the size of the buffer that gathers the RLP encoder's
+// many small writes to the journal file.
+const journalWriteBuffer = 256 * 1024
 
 var (
 	errMissJournal       = errors.New("journal not found")
@@ -165,15 +170,8 @@ func (db *Database) loadLayers() layer {
 		root common.Hash
 		err  error
 	)
-	if db.isUBT {
-		root = rawdb.ReadSnapshotRoot(db.diskdb)
-		if root == (common.Hash{}) {
-			root = types.EmptyBinaryHash
-		}
-	} else {
-		blob := rawdb.ReadAccountTrieNode(db.diskdb, nil)
-		root, err = db.hasher(blob)
-	}
+	blob := rawdb.ReadAccountTrieNode(db.diskdb, nil)
+	root, err = db.hasher(blob)
 	if err != nil {
 		log.Crit("Failed to compute node hash", "err", err)
 	}
@@ -215,6 +213,11 @@ func (db *Database) loadDiskLayer(r *rlp.Stream) (layer, error) {
 	var nodes nodeSet
 	if err := nodes.decode(r); err != nil {
 		return nil, err
+	}
+	// Skip the raw storage key flag, which is never used in the disk layer
+	var rawStorageKey bool
+	if err := r.Decode(&rawStorageKey); err != nil {
+		return nil, fmt.Errorf("load raw storage key flag: %v", err)
 	}
 	// Resolve flat state sets in aggregated buffer
 	var states stateSet
@@ -271,12 +274,20 @@ func (dl *diskLayer) journal(w io.Writer) error {
 	if err := rlp.Encode(w, dl.id); err != nil {
 		return err
 	}
-	// Step three, write the accumulated trie nodes into the journal
-	if err := dl.buffer.nodes.encode(w); err != nil {
+	// Step three, collapse the aggregated sets in the buffer into a single
+	// one for journaling.
+	nodes, states := dl.buffer.flatten()
+
+	// Step four, write the accumulated trie nodes into the journal
+	if err := nodes.encode(w); err != nil {
 		return err
 	}
-	// Step four, write the accumulated flat states into the journal
-	if err := dl.buffer.states.encode(w); err != nil {
+	// Step five, write the accumulated flat states into the journal, with a
+	// placeholder for the raw storage key flag unused in the disk layer
+	if err := rlp.Encode(w, false); err != nil {
+		return err
+	}
+	if err := states.encode(w); err != nil {
 		return err
 	}
 	log.Debug("Journaled pathdb disk layer", "root", dl.root, "id", dl.id)
@@ -326,9 +337,9 @@ func (db *Database) Journal(root common.Hash) error {
 	}
 	disk := db.tree.bottom()
 	if l, ok := l.(*diffLayer); ok {
-		log.Info("Persisting dirty state", "head", l.block, "root", root, "layers", l.id-disk.id+disk.buffer.layers)
+		log.Info("Persisting dirty state", "head", l.block, "root", root, "layers", l.id-disk.id+disk.buffer.layers())
 	} else { // disk layer only on noop runs (likely) or deep reorgs (unlikely)
-		log.Info("Persisting dirty state", "root", root, "layers", disk.buffer.layers)
+		log.Info("Persisting dirty state", "root", root, "layers", disk.buffer.layers())
 	}
 	// Block until the background flushing is finished and terminate
 	// the potential active state generator.
@@ -350,12 +361,13 @@ func (db *Database) Journal(root common.Hash) error {
 	// but the ancient store is not properly closed, resulting in recent writes
 	// being lost. After a restart, the ancient store would then be misaligned
 	// with the disk layer, causing data corruption.
-	if err := syncHistory(db.stateFreezer, db.trienodeFreezer); err != nil {
+	if err := db.persistHistory(); err != nil {
 		return err
 	}
 	// Store the journal into the database and return
 	var (
 		file        *os.File
+		buffered    *bufio.Writer
 		journal     io.Writer
 		journalPath = db.journalPath()
 	)
@@ -377,7 +389,8 @@ func (db *Database) Journal(root common.Hash) error {
 				log.Warn("Removed leftover temporary journal file", "path", tmp)
 			}
 		}()
-		journal = file
+		buffered = bufio.NewWriterSize(file, journalWriteBuffer)
+		journal = buffered
 	} else {
 		journal = new(bytes.Buffer)
 	}
@@ -407,6 +420,9 @@ func (db *Database) Journal(root common.Hash) error {
 		rawdb.WriteTrieJournal(db.diskdb, data.Bytes())
 		log.Info("Persisted dirty state to disk", "size", common.StorageSize(size), "elapsed", common.PrettyDuration(time.Since(start)))
 	} else {
+		if err := buffered.Flush(); err != nil {
+			return fmt.Errorf("failed to flush the journal: %w", err)
+		}
 		stat, err := file.Stat()
 		if err != nil {
 			return err

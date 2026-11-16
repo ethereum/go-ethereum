@@ -247,3 +247,51 @@ func (d *hashToHumanReadable) Update(i []byte, i2 []byte) error {
 func (d *hashToHumanReadable) Hash() common.Hash {
 	return common.Hash{}
 }
+
+// TestListHashStream checks that a list fed to the hasher one element at a time
+// ends up with the hash DeriveSha computes for it in one pass.
+func TestListHashStream(t *testing.T) {
+	for _, n := range []int{0, 1, 2, 126, 127, 128, 129, 130, 256, 300} {
+		var (
+			receipts = makeStreamReceipts(n)
+			stream   = types.NewListHashStream(trie.NewStackTrie(nil))
+			fed      = make(types.Receipts, 0, n)
+		)
+		for _, receipt := range receipts {
+			fed = append(fed, receipt)
+			stream.Update(fed)
+		}
+		want := types.DeriveSha(receipts, trie.NewStackTrie(nil))
+		if have := stream.Hash(); have != want {
+			t.Errorf("%d receipts: streamed hash %x, want %x", n, have, want)
+		}
+	}
+}
+
+// makeStreamReceipts builds n receipts of mixed type, some without logs, some
+// with a few, so that the encoding of every receipt differs.
+func makeStreamReceipts(n int) types.Receipts {
+	txTypes := []uint8{types.LegacyTxType, types.AccessListTxType, types.DynamicFeeTxType, types.BlobTxType, types.SetCodeTxType}
+
+	receipts := make(types.Receipts, 0, n)
+	for i := range n {
+		receipt := &types.Receipt{
+			Type:              txTypes[i%len(txTypes)],
+			Status:            uint64(i % 2),
+			CumulativeGasUsed: uint64(i) * 21000,
+		}
+		for j := range i % 4 {
+			log := &types.Log{
+				Address: common.BytesToAddress(crypto.Keccak256([]byte{byte(i), byte(j)})),
+				Data:    crypto.Keccak256([]byte{byte(j)}),
+			}
+			for k := range j {
+				log.Topics = append(log.Topics, crypto.Keccak256Hash([]byte{byte(i), byte(j), byte(k)}))
+			}
+			receipt.Logs = append(receipt.Logs, log)
+		}
+		receipt.Bloom = types.CreateBloom(receipt)
+		receipts = append(receipts, receipt)
+	}
+	return receipts
+}

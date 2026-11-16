@@ -19,6 +19,7 @@ package simulated
 import (
 	"errors"
 	"maps"
+	"math"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -95,6 +96,9 @@ func NewBackend(alloc types.GenesisAlloc, options ...func(nodeConf *node.Config,
 	ethConf.TxPool.NoLocals = true
 	// Disable log indexing to force unindexed log search
 	ethConf.LogNoHistory = true
+	// Commit should seal every pending transaction, so don't let the miner stop
+	// filling the block on a slow machine
+	ethConf.Miner.Recommit = time.Duration(math.MaxInt64)
 
 	for _, option := range options {
 		option(&nodeConf, &ethConf)

@@ -447,6 +447,9 @@ func (r *mapRenderer) writeFinishedMaps(pauseCb func() bool) error {
 				rows = append(rows, nil)
 			}
 		}
+		if len(mapIndices) == 0 {
+			continue
+		}
 		if err := r.f.storeFilterMapRows(batch, mapIndices, rowIndex, rows); err != nil {
 			return fmt.Errorf("failed to store filter maps %v row %d: %v", mapIndices, rowIndex, err)
 		}
@@ -737,6 +740,16 @@ func (f *FilterMaps) newLogIteratorFromMapBoundary(mapIndex uint32, startBlock, 
 // previous view at the current position. Returns true if successful.
 func (l *logIterator) updateChainView(cv *ChainView) bool {
 	if !matchViews(cv, l.chainView, l.blockNumber) {
+		return false
+	}
+	// The delimiter flag was derived from the previous view's head number by
+	// enforceValidState and means that next() will step onto blockNumber+1.
+	// matchViews also accepts a view whose head is exactly blockNumber, so a
+	// reorg that shortens the chain down to the current block would leave the
+	// iterator expecting a block past the new head, making next() ask the view
+	// for a block number it does not have. Report a chain update instead so
+	// that the renderer restarts from a consistent snapshot.
+	if l.delimiter && l.blockNumber >= cv.HeadNumber() {
 		return false
 	}
 	l.chainView = cv

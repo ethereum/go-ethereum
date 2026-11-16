@@ -457,9 +457,9 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		stateIndex    stat
 		trienodeIndex stat
 
-		// Verkle statistics
-		verkleTries        stat
-		verkleStateLookups stat
+		// Partitioned binary tree statistics
+		pbtTries        stat
+		pbtStateLookups stat
 
 		// Meta- and unaccounted data
 		metadata    stat
@@ -567,14 +567,14 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 			case bytes.HasPrefix(key, TrienodeHistoryBlockPrefix) && len(key) >= len(TrienodeHistoryBlockPrefix)+common.HashLength+4:
 				trienodeIndex.add(size)
 
-			// Verkle trie data is detected, determine the sub-category
-			case bytes.HasPrefix(key, VerklePrefix):
-				remain := key[len(VerklePrefix):]
+			// Partitioned binary tree data is detected, determine the sub-category
+			case bytes.HasPrefix(key, PBTPrefix):
+				remain := key[len(PBTPrefix):]
 				switch {
 				case IsAccountTrieNode(remain):
-					verkleTries.add(size)
+					pbtTries.add(size)
 				case bytes.HasPrefix(remain, stateIDPrefix) && len(remain) == len(stateIDPrefix)+common.HashLength:
-					verkleStateLookups.add(size)
+					pbtStateLookups.add(size)
 				case bytes.Equal(remain, persistentStateIDKey):
 					metadata.add(size)
 				case bytes.Equal(remain, trieJournalKey):
@@ -663,8 +663,8 @@ func InspectDatabase(db ethdb.Database, keyPrefix, keyStart []byte) error {
 		{"Key-Value store", "Path trie state lookups", stateLookups.sizeString(), stateLookups.countString()},
 		{"Key-Value store", "Path trie account nodes", accountTries.sizeString(), accountTries.countString()},
 		{"Key-Value store", "Path trie storage nodes", storageTries.sizeString(), storageTries.countString()},
-		{"Key-Value store", "Verkle trie nodes", verkleTries.sizeString(), verkleTries.countString()},
-		{"Key-Value store", "Verkle trie state lookups", verkleStateLookups.sizeString(), verkleStateLookups.countString()},
+		{"Key-Value store", "PBT trie nodes", pbtTries.sizeString(), pbtTries.countString()},
+		{"Key-Value store", "PBT trie state lookups", pbtStateLookups.sizeString(), pbtStateLookups.countString()},
 		{"Key-Value store", "Trie preimages", preimages.sizeString(), preimages.countString()},
 		{"Key-Value store", "Account snapshot", accountSnaps.sizeString(), accountSnaps.countString()},
 		{"Key-Value store", "Storage snapshot", storageSnaps.sizeString(), storageSnaps.countString()},
@@ -714,7 +714,7 @@ var knownMetadataKeys = [][]byte{
 	snapshotGeneratorKey, snapshotRecoveryKey, txIndexTailKey, fastTxLookupLimitKey,
 	uncleanShutdownKey, badBlockKey, transitionStatusKey, skeletonSyncStatusKey,
 	persistentStateIDKey, trieJournalKey, snapshotSyncStatusKey, snapSyncStatusFlagKey,
-	filterMapsRangeKey, headStateHistoryIndexKey, headTrienodeHistoryIndexKey, VerkleTransitionStatePrefix,
+	filterMapsRangeKey, headStateHistoryIndexKey, headTrienodeHistoryIndexKey,
 }
 
 // printChainMetadata prints out chain metadata to stderr.

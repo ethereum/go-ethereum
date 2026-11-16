@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/internal/testrand"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -143,11 +144,13 @@ type testerConfig struct {
 	layers       int    // Number of state transitions to generate for
 	enableIndex  bool   // Enable state history indexing or not
 	journalDir   string // Directory path for persisting journal files
-	isUBT        bool   // Enables Verkle trie mode if true
 
 	writeBuffer *int // Optional, the size of memory allocated for write buffer
 	trieCache   *int // Optional, the size of memory allocated for trie cache
 	stateCache  *int // Optional, the size of memory allocated for state cache
+
+	kvdb    ethdb.KeyValueStore // Optional, the key-value store (default: a fresh in-memory one)
+	ancient string              // Optional, the directory of the ancient store (default: a temporary one)
 }
 
 func (c *testerConfig) trieCacheSize() int {
@@ -172,8 +175,15 @@ func (c *testerConfig) writeBufferSize() int {
 }
 
 func newTester(t *testing.T, config *testerConfig) *tester {
+	kvdb, ancient := config.kvdb, config.ancient
+	if kvdb == nil {
+		kvdb = rawdb.NewMemoryDatabase()
+	}
+	if ancient == "" {
+		ancient = t.TempDir()
+	}
 	var (
-		disk, _ = rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{Ancient: t.TempDir()})
+		disk, _ = rawdb.Open(kvdb, rawdb.OpenOptions{Ancient: ancient})
 		db      = New(disk, &Config{
 			StateHistory:        config.stateHistory,
 			EnableStateIndexing: config.enableIndex,
@@ -183,7 +193,7 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 			NoAsyncFlush:        true,
 			JournalDirectory:    config.journalDir,
 			NoHistoryIndexDelay: true,
-		}, config.isUBT)
+		})
 
 		obj = &tester{
 			db:           db,
@@ -208,6 +218,10 @@ func newTester(t *testing.T, config *testerConfig) *tester {
 		obj.roots = append(obj.roots, root)
 		obj.nodes = append(obj.nodes, nodes)
 		obj.states = append(obj.states, states)
+	}
+	// Wait for the histories written in background
+	if err := db.waitWrites(); err != nil {
+		panic(fmt.Errorf("failed to write histories, err: %w", err))
 	}
 	return obj
 }
@@ -858,6 +872,140 @@ func TestAdoptSyncedState(t *testing.T) {
 	}
 }
 
+// syncTracker is an in-memory key-value store that remembers its content as of
+// the last SyncKeyValue: what a crash leaves behind when writes are not synced,
+// as with Pebble in geth. The freezers write their files directly.
+type syncTracker struct {
+	ethdb.KeyValueStore
+	synced map[string][]byte
+}
+
+func newSyncTracker() *syncTracker {
+	return &syncTracker{
+		KeyValueStore: memorydb.New(),
+		synced:        make(map[string][]byte),
+	}
+}
+
+func (s *syncTracker) SyncKeyValue() error {
+	s.synced = make(map[string][]byte)
+
+	it := s.NewIterator(nil, nil)
+	defer it.Release()
+
+	for it.Next() {
+		s.synced[string(it.Key())] = common.CopyBytes(it.Value())
+	}
+	return it.Error()
+}
+
+// crash returns a key-value store holding the content as of the last sync.
+func (s *syncTracker) crash() ethdb.KeyValueStore {
+	db := memorydb.New()
+	for k, v := range s.synced {
+		db.Put([]byte(k), v)
+	}
+	return db
+}
+
+// crashOnReset takes the crash state of the key-value store when the freezer is
+// reset. The reset can survive a crash that loses the unsynced key-value writes:
+// a crash right after it keeps the reset, and of the key-value writes only those
+// synced before it.
+type crashOnReset struct {
+	ethdb.ResettableAncientStore
+	crash func()
+}
+
+func (f *crashOnReset) Reset() error {
+	f.crash()
+	return f.ResettableAncientStore.Reset()
+}
+
+// TestReactivationCrash checks that the database can be opened after a crash
+// right after its reactivation at the end of a state sync purged the state
+// histories: the persistent state id reset and the removal of the history index
+// must reach the disk before the freezer is reset.
+func TestReactivationCrash(t *testing.T) {
+	maxDiffLayers = 4
+	defer func() {
+		maxDiffLayers = 128
+	}()
+
+	var (
+		kvdb    = newSyncTracker()
+		ancient = t.TempDir()
+		tester  = newTester(t, &testerConfig{layers: 12, kvdb: kvdb, ancient: ancient})
+
+		released bool
+		addr     = common.Hash{0xaa}
+		slot     = common.Hash{0xbb}
+	)
+	defer func() {
+		if !released {
+			tester.release()
+		}
+	}()
+	// Persist everything: a state id above zero, state histories and an index
+	// over them, all on disk.
+	if err := tester.db.Commit(tester.lastHash(), false); err != nil {
+		t.Fatalf("Failed to commit, err: %v", err)
+	}
+	storeIndexMetadata(kvdb, typeStateHistory, rawdb.ReadPersistentStateID(kvdb))
+	rawdb.WriteAccountHistoryIndex(kvdb, addr, []byte{1})
+	rawdb.WriteAccountHistoryIndexBlock(kvdb, addr, 0, []byte{1})
+	rawdb.WriteStorageHistoryIndex(kvdb, addr, slot, []byte{1})
+	rawdb.WriteStorageHistoryIndexBlock(kvdb, addr, slot, 0, []byte{1})
+	if err := kvdb.SyncKeyValue(); err != nil {
+		t.Fatalf("Failed to sync, err: %v", err)
+	}
+	if rawdb.ReadPersistentStateID(kvdb) == 0 {
+		t.Fatal("Persistent state id should be above zero")
+	}
+	stored := crypto.Keccak256Hash(rawdb.ReadAccountTrieNode(tester.db.diskdb, nil))
+
+	// A state sync ends with the reactivation, and the machine crashes right
+	// after the freezer reset: only the key-value writes synced before it
+	// survive, the freezers keep their files.
+	var crashed ethdb.KeyValueStore
+	tester.db.stateFreezer = &crashOnReset{
+		tester.db.stateFreezer,
+		func() { crashed = kvdb.crash() },
+	}
+	if err := tester.db.Disable(); err != nil {
+		t.Fatalf("Failed to disable database: %v", err)
+	}
+	if err := tester.db.Enable(stored); err != nil {
+		t.Fatalf("Failed to enable database: %v", err)
+	}
+	if crashed == nil {
+		t.Fatal("The state histories weren't purged")
+	}
+	tester.release()
+	released = true
+
+	disk, err := rawdb.Open(crashed, rawdb.OpenOptions{Ancient: ancient})
+	if err != nil {
+		t.Fatalf("Failed to reopen database: %v", err)
+	}
+	defer disk.Close()
+
+	// No index of the purged histories may be left to be taken for new ones.
+	if loadIndexMetadata(disk, typeStateHistory) != nil {
+		t.Error("Index metadata of the purged state histories survived the crash")
+	}
+	if rawdb.ReadAccountHistoryIndex(disk, addr) != nil || rawdb.ReadAccountHistoryIndexBlock(disk, addr, 0) != nil ||
+		rawdb.ReadStorageHistoryIndex(disk, addr, slot) != nil || rawdb.ReadStorageHistoryIndexBlock(disk, addr, slot, 0) != nil {
+		t.Error("Index entries of the purged state histories survived the crash")
+	}
+	// The history repair at startup must accept the persisted state id.
+	states, _, err := repairHistory(disk, false, rawdb.ReadPersistentStateID(disk), false)
+	if err != nil {
+		t.Fatalf("Database can't be opened after the crash: %v", err)
+	}
+	states.Close()
+}
+
 func TestCommit(t *testing.T) {
 	// Redefine the diff layer depth allowance for faster testing.
 	maxDiffLayers = 4
@@ -907,7 +1055,7 @@ func testJournal(t *testing.T, journalDir string) {
 		t.Errorf("Failed to journal, err: %v", err)
 	}
 	tester.db.Close()
-	tester.db = New(tester.db.diskdb, tester.db.config, false)
+	tester.db = New(tester.db.diskdb, tester.db.config)
 
 	// Verify states including disk layer and all diff on top.
 	for i := 0; i < len(tester.roots); i++ {
@@ -959,7 +1107,7 @@ func testCorruptedJournal(t *testing.T, journalDir string, modifyFn func(databas
 	modifyFn(tester.db.diskdb)
 
 	// Verify states, all not-yet-written states should be discarded
-	tester.db = New(tester.db.diskdb, tester.db.config, false)
+	tester.db = New(tester.db.diskdb, tester.db.config)
 	for i := 0; i < len(tester.roots); i++ {
 		if tester.roots[i] == root {
 			if err := tester.verifyState(root); err != nil {
@@ -996,7 +1144,7 @@ func TestTailTruncateHistory(t *testing.T) {
 	defer tester.release()
 
 	tester.db.Close()
-	tester.db = New(tester.db.diskdb, &Config{StateHistory: 10}, false)
+	tester.db = New(tester.db.diskdb, &Config{StateHistory: 10})
 
 	head, err := tester.db.stateFreezer.Ancients()
 	if err != nil {
@@ -1061,7 +1209,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 	var (
 		dIndex int
 		roots  = env.roots
-		hr     = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer)
+		hr     = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer, nil)
 	)
 	for i, root := range roots {
 		if root == dRoot {
@@ -1086,7 +1234,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 	rawdb.WriteTrieJournal(env.db.diskdb, blob)
 
 	// Reload the database, the extra state histories should be removed
-	env.db = New(env.db.diskdb, env.db.config, false)
+	env.db = New(env.db.diskdb, env.db.config)
 
 	for i := range roots {
 		_, err := readStateHistory(env.db.stateFreezer, uint64(i+1))
@@ -1111,6 +1259,9 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 			panic(fmt.Errorf("failed to update state changes, err: %w", err))
 		}
 	}
+	if err := env.db.waitWrites(); err != nil {
+		t.Fatalf("Failed to write histories, %v", err)
+	}
 	remain, _, err = env.db.IndexProgress()
 	if err != nil {
 		t.Fatalf("Failed to obtain the progress, %v", err)
@@ -1122,7 +1273,7 @@ func TestDatabaseIndexRecovery(t *testing.T) {
 
 	// Ensure the truncated state histories become accessible
 	bRoot = env.db.tree.bottom().rootHash()
-	hr = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer)
+	hr = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer, nil)
 	for i, root := range roots {
 		if root == bRoot {
 			break

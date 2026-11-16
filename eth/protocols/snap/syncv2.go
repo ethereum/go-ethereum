@@ -297,10 +297,14 @@ const (
 
 	// phaseGenerate covers the local trie generation after the download
 	// has completed. It targets the exact pivot root it was started with,
-	// so pivot updates are refused from here on.
+	// so pivot updates are refused for its duration (see FrozenPivot).
 	phaseGenerate
 
-	// phaseComplete means the sync ran to completion for the pivot.
+	// phaseComplete means the flat state and the tries are both complete
+	// for the pivot. The pivot may move again from here on: every move is
+	// rolled forward purely locally through the BAL catch-up, which keeps
+	// the flat state and the tries in lockstep and commits each block as
+	// one atomic transition, so the sync stays complete at every step.
 	phaseComplete
 )
 
@@ -406,23 +410,23 @@ type syncerV2 struct {
 	storageReqs    map[uint64]*storageRequestV2  // Storage requests currently running
 	accessListReqs map[uint64]*accessListRequest // BAL requests currently running
 
-	accountSynced  uint64             // Number of accounts downloaded
-	accountBytes   common.StorageSize // Number of account trie bytes persisted to disk
-	bytecodeSynced uint64             // Number of bytecodes downloaded
-	bytecodeBytes  common.StorageSize // Number of bytecode bytes downloaded
-	storageSynced  uint64             // Number of storage slots downloaded
-	storageBytes   common.StorageSize // Number of storage trie bytes persisted to disk
+	accountSynced  uint64       // Number of accounts downloaded
+	accountBytes   atomic.Int64 // Number of account trie bytes persisted to disk, updated by the workers
+	bytecodeSynced uint64       // Number of bytecodes downloaded
+	bytecodeBytes  atomic.Int64 // Number of bytecode bytes downloaded, updated by the workers
+	storageSynced  uint64       // Number of storage slots downloaded
+	storageBytes   atomic.Int64 // Number of storage trie bytes persisted to disk, updated by the workers
 
-	accessListSynced uint64        // Block access lists fetched so far during catch-up
-	accessListTotal  uint64        // Block access lists to fetch for the current catch-up
-	genProgress      atomic.Uint64 // The live trie-generation progress
+	accessListSynced uint64          // Block access lists fetched so far during catch-up
+	accessListTotal  uint64          // Block access lists to fetch for the current catch-up
+	genProgress      atomic.Uint64   // The live trie-generation progress
+	extProgress      *syncProgressV2 // progress that can be exposed to external caller.
 
-	extProgress *syncProgressV2 // progress that can be exposed to external caller.
-
-	startTime time.Time // Time instance when snapshot sync started
-	logTime   time.Time // Time instance when status was last reported
-
-	catchUpWindow uint64 // Number of blocks fetched/applied per BAL catch-up window (overridable in tests)
+	syncRunner    *syncRunner // Executor running the flat-state persistence off the runloop
+	startTime     time.Time   // Time instance when snapshot sync started
+	logTime       time.Time   // Time instance when status was last reported
+	profile       syncProfile // Wall-clock statistics of the runloop and the peer handovers
+	catchUpWindow uint64      // Number of blocks fetched/applied per BAL catch-up window (overridable in tests)
 
 	pend sync.WaitGroup // Tracks network request goroutines for graceful shutdown
 	lock sync.RWMutex   // Protects fields that can change outside of sync (peers, reqs, pivot)
@@ -438,7 +442,7 @@ func newSyncerV2(db ethdb.Database, scheme string) *syncerV2 {
 		peers:    make(map[string]SyncPeerV2),
 		peerJoin: new(event.Feed),
 		peerDrop: new(event.Feed),
-		rates:    msgrate.NewTrackers(log.New("proto", "snap")),
+		rates:    msgrate.NewTrackers(log.New("proto", "snap"), 0),
 		update:   make(chan struct{}, 1),
 
 		statelessPeers:   make(map[string]struct{}),
@@ -455,6 +459,8 @@ func newSyncerV2(db ethdb.Database, scheme string) *syncerV2 {
 		extProgress:   new(syncProgressV2),
 		catchUpWindow: catchUpWindow,
 	}
+	s.syncRunner = newSyncRunner(&s.profile, s.update)
+
 	if raw := rawdb.ReadSnapshotSyncStatus(db); len(raw) > 0 && raw[0] == syncProgressVersion {
 		var progress syncProgressV2
 		if err := json.Unmarshal(raw[1:], &progress); err == nil {
@@ -563,28 +569,6 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 		return nil
 	}
 
-	// If the pivot of a completed sync was already committed, full sync has
-	// been mutating the flat state since. Nothing here can be resumed or
-	// rolled forward, snap sync was re-enabled, so wipe and start fresh.
-	// FrozenPivot refuses to freeze such a pivot, so the downloader resumes
-	// against a fresh target and lands here to do the cleanup. Same-pivot
-	// retries return through the skip above on purpose, a cycle that dies
-	// right after the commit just needs to recommit.
-	if prevPivot != nil && s.getPhase() == phaseComplete && isPivotCommitted(s.db, prevPivot) {
-		log.Warn("Reenabled snap sync over a completed one, restarting from scratch", "oldpivot", prevPivot.Number, "target", target.Number)
-		s.resetSyncState()
-		prevPivot = nil
-		isPivotChanged = false
-	}
-
-	// We're committing to running this sync. Demote a completed phase so a
-	// mid-run save (on cancel or error) doesn't persist a stale complete
-	// status from a prior pivot. The download remains done, only the trie
-	// generation must be redone against the new pivot.
-	if s.getPhase() == phaseComplete {
-		s.setPhase(phaseGenerate)
-	}
-
 	defer func() {
 		// Whether sync completed or not, disregard any future packets
 		log.Debug("Terminating snapshot sync cycle", "root", root)
@@ -608,6 +592,8 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 
 	log.Debug("Starting snapshot sync cycle", "root", root)
 
+	// Either a fresh sync with no prior progress, or a resume against the
+	// same pivot the journal was written for.
 	if !isPivotChanged {
 		if prevPivot != nil {
 			// Resumed against the same pivot. An unclean shutdown may have left
@@ -622,9 +608,6 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 		// progress is still usable. If yes, roll forward via BAL catch-up. If not,
 		// wipe everything and restart fresh.
 		switch {
-		case isPivotReorged(s.db, prevPivot, target):
-			log.Warn("Restarting snap sync from scratch", "oldnumber", prevPivot.Number, "oldHash", prevPivot.Hash())
-			s.resetSyncState()
 		case catchUpExceedsRetention(prevPivot, target):
 			// The pivot moved further than the BAL retention window. The access
 			// lists required for catch-up are almost certainly unavailable from
@@ -632,6 +615,11 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 			// instead of starting a catch-up doomed to stall.
 			log.Warn("Catch-up gap exceeds BAL retention, restarting snap sync from scratch", "oldnumber", prevPivot.Number, "newnumber", target.Number, "gap", new(big.Int).Sub(target.Number, prevPivot.Number), "limit", maxCatchUpBlocks)
 			s.resetSyncState()
+
+		case s.isPivotReorged(prevPivot, target):
+			log.Warn("Restarting snap sync from scratch", "oldnumber", prevPivot.Number, "oldHash", prevPivot.Hash())
+			s.resetSyncState()
+
 		default:
 			// An unclean shutdown may have left flushed snapshot data the journal
 			// doesn't cover.
@@ -645,11 +633,17 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 			// cycles against the frozen header itself. Reaching this branch
 			// frozen indicates a bug on the downloader side; roll the flat
 			// state forward defensively and regenerate.
-			if s.getPhase() >= phaseGenerate {
+			if s.getPhase() == phaseGenerate {
 				log.Warn("Frozen pivot moved unexpectedly, rolling forward", "frozen", prevPivot.Number, "new", target.Number)
 			}
 			if err := s.catchUp(target, cancel); err != nil {
 				return err
+			}
+			// A completed sync is rolled forward in full by the catch-up. There is
+			// nothing left to download or generate.
+			if s.getPhase() == phaseComplete {
+				log.Info("Snap sync rolled forward to new pivot", "number", target.Number, "root", root)
+				return nil
 			}
 		}
 	}
@@ -663,22 +657,43 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 	}
 	log.Info("State download complete", "root", root)
 
+	if s.profile.idle.count.Load() > 0 {
+		s.profile.report() // skip on resumes that had nothing left to download
+	}
 	// Entering the generation phase makes the downloader stop moving the
-	// pivot (see FrozenPivot) until the pivot block is committed. The phase
-	// is persisted right away so the freeze also holds across a restart,
-	// before the generation has had a chance to finish.
+	// pivot until the generation completes.
+	//
+	// The phase is persisted right away so the freeze also holds across a
+	// restart, before the generation has had a chance to finish.
 	if s.getPhase() < phaseGenerate {
 		s.setPhase(phaseGenerate)
 		s.saveSyncStatus()
 	}
 
+	// Launch the trie generation only if the snap sync is not yet completed
 	log.Info("Starting trie generation", "root", root)
 	batch := s.db.NewBatch()
 	s.resetTrienodes(batch)
 	if err := batch.Write(); err != nil {
 		return err
 	}
+	// Mirror the live generation progress into the metrics while it runs
+	stop := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(time.Second * 30)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				genProgressGauge.Update(int64(s.genProgress.Load()))
+			case <-stop:
+				return
+			}
+		}
+	}()
 	_, genErr := triedb.GenerateTrieWithProgress(s.db, s.scheme, root, cancel, &s.genProgress)
+	close(stop)
+	genProgressGauge.Update(int64(s.genProgress.Load()))
 	if genErr != nil {
 		return genErr
 	}
@@ -691,23 +706,19 @@ func (s *syncerV2) Sync(target *types.Header, cancel chan struct{}) error {
 }
 
 // FrozenPivot returns the pivot header the sync is bound to, or nil while
-// the pivot may still move freely. The pivot freezes once the state
-// download completes. The remaining work (trie generation) and the pivot
-// commit is purely local and targets the exact pivot root the download
-// finished with, so from that point on the downloader must neither move the
-// pivot nor start a new cycle against a different one.
+// the pivot may move freely.
+//
+// The pivot is frozen only for the trie generation phase, in which it targets
+// the exact pivot root the download finished with, so for its duration the
+// downloader must neither move the pivot nor start a new cycle against a
+// different one. Once the tries are complete, a pivot move is rolled forward
+// locally by the BAL catch-up again.
 func (s *syncerV2) FrozenPivot() *types.Header {
-	if s.getPhase() < phaseGenerate {
+	if s.getPhase() != phaseGenerate {
 		return nil
 	}
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	// A committed pivot from a completed sync is a dead leftover, not a
-	// freeze. Handing it back would pin a re-enabled sync to the old pivot,
-	// so report it as unfrozen and let the next Sync wipe the journal.
-	if s.getPhase() == phaseComplete && s.pivot != nil && isPivotCommitted(s.db, s.pivot) {
-		return nil
-	}
 	return s.pivot
 }
 
@@ -733,10 +744,12 @@ func (s *syncerV2) downloadState(cancel chan struct{}) error {
 		lastJournal      = time.Now()
 	)
 	for {
-		// Remove all completed tasks and terminate if everything's done
+		// Remove all completed tasks and terminate if everything's done.
+		schedStart := time.Now()
 		s.cleanStorageTasks()
 		s.cleanAccountTasks()
-		if len(s.tasks) == 0 {
+		if len(s.tasks) == 0 && !s.syncRunner.pending() {
+			s.syncRunner.barrier()
 			return nil
 		}
 		// Periodically persist the progress journal. The flat state batches
@@ -744,7 +757,7 @@ func (s *syncerV2) downloadState(cancel chan struct{}) error {
 		// disk on graceful teardown; everything written beyond the journaled
 		// markers is sacrificed on an unclean shutdown, so the save interval
 		// bounds the loss.
-		if time.Since(lastJournal) > time.Minute {
+		if time.Since(lastJournal) > 3*time.Minute {
 			lastJournal = time.Now()
 			s.saveSyncStatus()
 		}
@@ -757,30 +770,41 @@ func (s *syncerV2) downloadState(cancel chan struct{}) error {
 		s.lock.Lock()
 		s.refreshProgressLocked()
 		s.lock.Unlock()
+		s.profile.schedule.observe(time.Since(schedStart))
 
 		// Wait for something to happen
+		idleStart := time.Now()
 		select {
 		case <-s.update:
 			// Something happened (new peer, delivery, timeout), recheck tasks
+			s.profile.idle.observe(time.Since(idleStart))
 		case <-peerJoin:
 			// A new peer joined, try to schedule it new tasks
+			s.profile.idle.observe(time.Since(idleStart))
 		case id := <-peerDrop:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.revertStateRequests(id)
 		case <-cancel:
 			return ErrCancelled
 
 		case req := <-accountReqFails:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.revertAccountRequest(req)
 		case req := <-bytecodeReqFails:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.revertBytecodeRequest(req)
 		case req := <-storageReqFails:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.revertStorageRequest(req)
 
 		case res := <-accountResps:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.processAccountResponse(res)
 		case res := <-bytecodeResps:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.processBytecodeResponse(res)
 		case res := <-storageResps:
+			s.profile.idle.observe(time.Since(idleStart))
 			s.processStorageResponse(res)
 		}
 
@@ -790,28 +814,19 @@ func (s *syncerV2) downloadState(cancel chan struct{}) error {
 }
 
 // isPivotReorged reports whether the previous pivot is no longer usable
-// as a starting point for forward catch-up. Either it was reorged out
-// of the canonical chain, or the new pivot doesn't advance past it.
-func isPivotReorged(db ethdb.Database, prev, curr *types.Header) bool {
+// as a starting point for forward catch-up. Either the new pivot doesn't
+// advance past it, or it is not an ancestor of the new pivot.
+func (s *syncerV2) isPivotReorged(prev, curr *types.Header) bool {
 	// If the new pivot is at or below the old one, there's nothing for
 	// catchUp to roll forward.
 	if curr.Number.Cmp(prev.Number) <= 0 {
 		return true
 	}
-	// If there's no canonical hash at the old pivot's height, something
-	// is wrong. Headers up to the new pivot should already be indexed,
-	// so a missing entry at an earlier block means the chain state is
-	// broken. The most common cause is a chain rewind across the
-	// snap-synced pivot, which resets head to genesis and deletes
-	// canonical entries above it (see rewindPathHead in core/blockchain.go).
-	// Bail and let the fresh sync recover.
-	canonical := rawdb.ReadCanonicalHash(db, prev.Number.Uint64())
-	if canonical == (common.Hash{}) {
-		return true
-	}
-	// If canonical at the old pivot's height has a different hash, the
-	// old pivot was reorged out.
-	return canonical != prev.Hash()
+	// Walk the header chain back from the new pivot. The canonical index
+	// can't answer this, it only covers the blocks the downloader has
+	// committed so far, and those trail the pivot.
+	_, err := s.gapHashChain(prev, curr)
+	return err != nil
 }
 
 // catchUpExceedsRetention reports whether rolling the flat state forward from
@@ -823,27 +838,6 @@ func catchUpExceedsRetention(prev, curr *types.Header) bool {
 	return gap.Cmp(big.NewInt(maxCatchUpBlocks)) > 0
 }
 
-// isPivotCommitted reports whether the head block has caught up to the
-// pivot. That only happens when a completed sync committed the pivot block
-// as the new chain head.
-func isPivotCommitted(db ethdb.Database, pivot *types.Header) bool {
-	// A reorg across the pivot means the committed sync was undone, not
-	// advanced past, so the pivot must still be canonical.
-	if rawdb.ReadCanonicalHash(db, pivot.Number.Uint64()) != pivot.Hash() {
-		return false
-	}
-	head := rawdb.ReadHeadBlockHash(db)
-	if head == (common.Hash{}) {
-		return false
-	}
-	number, ok := rawdb.ReadHeaderNumber(db, head)
-	if !ok {
-		return false
-	}
-	// A genesis head is just an empty chain.
-	return number > 0 && number >= pivot.Number.Uint64()
-}
-
 // catchUp runs the BAL catch-up. When the pivot has moved, it fetches BALs
 // for the gap blocks, verifies them against block headers, and applies the
 // diffs to roll flat state forward.
@@ -853,10 +847,12 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 	s.lock.RUnlock()
 
 	var (
-		from = prev.Number.Uint64() + 1
-		to   = target.Number.Uint64()
+		from     = prev.Number.Uint64() + 1
+		to       = target.Number.Uint64()
+		withTrie = s.getPhase() == phaseComplete
+		parent   = prev // Last block rolled forward, tries are opened at its root
 	)
-	log.Info("Starting BAL catch-up", "from", from, "to", to, "blocks", to-from+1)
+	log.Info("Starting BAL catch-up", "from", from, "to", to, "blocks", to-from+1, "tries", withTrie)
 
 	// Resolve the hash chain of the whole gap upfront by walking the parent
 	// hashes backward from the trusted target header.
@@ -917,20 +913,34 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 
 			// Decode the raw RLP into a BAL.
 			var (
-				b     bal.BlockAccessList
-				batch = s.db.NewBatch()
+				b         bal.BlockAccessList
+				batch     = s.db.NewBatch()
+				nextPivot = headers[hash]
+				tries     *stateTrie
 			)
 			if err := rlp.DecodeBytes(raw, &b); err != nil {
 				return fmt.Errorf("failed to decode BAL for block %d: %v", num, err)
 			}
-			if err := s.applyAccessList(&b, batch); err != nil {
+			if withTrie {
+				tries, err = s.openStateTrie(parent.Root, batch)
+				if err != nil {
+					return err
+				}
+			}
+			root, err := s.applyAccessList(&b, batch, tries)
+			if err != nil {
 				return fmt.Errorf("BAL application failed for block %d: %v", num, err)
+			}
+			// With the tries maintained, the post-block root must reproduce
+			// the header's. Nothing of a mismatching block is persisted, the
+			// sync stays complete and consistent for the previous block.
+			if withTrie && root != nextPivot.Root {
+				return fmt.Errorf("state root mismatch after applying BAL for block %d: have %x, want %x", num, root, nextPivot.Root)
 			}
 
 			// Persist incremental progress so a crash mid-catchUp can resume
 			// from the next unapplied block. Serialize the next pivot without
 			// advancing the in-memory pivot until the batch has committed.
-			nextPivot := headers[hash]
 			s.saveSyncStatusWith(batch, nextPivot)
 
 			// Commit the state transition alongside the sync progress atomically.
@@ -940,6 +950,7 @@ func (s *syncerV2) catchUp(target *types.Header, cancel chan struct{}) error {
 			s.lock.Lock()
 			s.pivot = nextPivot
 			s.lock.Unlock()
+			parent = nextPivot
 		}
 		log.Info("BAL catch-up progress", "applied", end, "target", to, "remaining", to-end)
 	}
@@ -1057,6 +1068,8 @@ func (s *syncerV2) fetchAccessLists(hashes []common.Hash, headers map[common.Has
 		s.accessListSynced += uint64(len(fetched) - lastFetched)
 		lastFetched = len(fetched)
 		s.refreshProgressLocked()
+		balFetchedGauge.Update(int64(s.accessListSynced))
+		balTotalGauge.Update(int64(s.accessListTotal))
 		s.lock.Unlock()
 	}
 	// Assemble results in input order
@@ -1176,13 +1189,7 @@ func (s *syncerV2) processAccessListResponse(res *accessListResponse, headers ma
 			refused[h][res.req.peer] = struct{}{}
 			continue
 		}
-		var b bal.BlockAccessList
-		if err := rlp.DecodeBytes(raw, &b); err != nil {
-			log.Warn("Peer sent unparseable BAL", "peer", res.req.peer, "block", h, "err", err)
-			stateless = true
-			continue
-		}
-		if err := verifyAccessList(&b, headers[h]); err != nil {
+		if err := verifyAccessList(raw, headers[h]); err != nil {
 			log.Warn("Peer sent invalid BAL", "peer", res.req.peer, "block", h, "err", err)
 			stateless = true
 			continue
@@ -1236,11 +1243,11 @@ func (s *syncerV2) loadSyncStatus() {
 			s.pivot = progress.Pivot
 			s.setPhase(progress.Phase)
 			s.accountSynced = progress.AccountSynced
-			s.accountBytes = progress.AccountBytes
+			s.accountBytes.Store(int64(progress.AccountBytes))
 			s.bytecodeSynced = progress.BytecodeSynced
-			s.bytecodeBytes = progress.BytecodeBytes
+			s.bytecodeBytes.Store(int64(progress.BytecodeBytes))
 			s.storageSynced = progress.StorageSynced
-			s.storageBytes = progress.StorageBytes
+			s.storageBytes.Store(int64(progress.StorageBytes))
 
 			// Seed the externally-exposed snapshot from the restored counters so
 			// eth_syncing reports real stats during catch-up and trie generation
@@ -1393,9 +1400,10 @@ func (s *syncerV2) resetSyncState() {
 	s.tasks = nil
 	s.pivot = nil
 	s.setPhase(phaseDownload)
-	s.accountSynced, s.accountBytes = 0, 0
-	s.bytecodeSynced, s.bytecodeBytes = 0, 0
-	s.storageSynced, s.storageBytes = 0, 0
+	s.accountSynced, s.bytecodeSynced, s.storageSynced = 0, 0, 0
+	s.accountBytes.Store(0)
+	s.bytecodeBytes.Store(0)
+	s.storageBytes.Store(0)
 	s.accessListSynced, s.accessListTotal = 0, 0
 	s.genProgress.Store(0)
 	s.refreshProgressLocked()
@@ -1432,6 +1440,13 @@ func (s *syncerV2) saveSyncStatus() {
 // saveSyncStatusWith marshals the remaining sync tasks alongside the provided
 // pivot header into the database.
 func (s *syncerV2) saveSyncStatusWith(db ethdb.KeyValueWriter, pivot *types.Header) {
+	// Wait out all the in-flight jobs: the in-memory task cursors run ahead
+	// of the database, so the journal must not be persisted until every job
+	// it accounts for has flushed its data. On this side of the barrier the
+	// journal can only ever trail the disk, which a resume repairs by
+	// pruning and re-downloading the overlap.
+	s.syncRunner.barrier()
+
 	// Serialize any partial progress to disk before spinning down
 	for _, task := range s.tasks {
 		// Save the account hashes of completed storage.
@@ -1449,11 +1464,11 @@ func (s *syncerV2) saveSyncStatusWith(db ethdb.KeyValueWriter, pivot *types.Head
 		Tasks:          s.tasks,
 		Phase:          s.getPhase(),
 		AccountSynced:  s.accountSynced,
-		AccountBytes:   s.accountBytes,
+		AccountBytes:   common.StorageSize(s.accountBytes.Load()),
 		BytecodeSynced: s.bytecodeSynced,
-		BytecodeBytes:  s.bytecodeBytes,
+		BytecodeBytes:  common.StorageSize(s.bytecodeBytes.Load()),
 		StorageSynced:  s.storageSynced,
-		StorageBytes:   s.storageBytes,
+		StorageBytes:   common.StorageSize(s.storageBytes.Load()),
 	}
 	blob, err := json.Marshal(progress)
 	if err != nil {
@@ -1469,11 +1484,11 @@ func (s *syncerV2) saveSyncStatusWith(db ethdb.KeyValueWriter, pivot *types.Head
 func (s *syncerV2) refreshProgressLocked() {
 	s.extProgress = &syncProgressV2{
 		AccountSynced:    s.accountSynced,
-		AccountBytes:     s.accountBytes,
+		AccountBytes:     common.StorageSize(s.accountBytes.Load()),
 		BytecodeSynced:   s.bytecodeSynced,
-		BytecodeBytes:    s.bytecodeBytes,
+		BytecodeBytes:    common.StorageSize(s.bytecodeBytes.Load()),
 		StorageSynced:    s.storageSynced,
-		StorageBytes:     s.storageBytes,
+		StorageBytes:     common.StorageSize(s.storageBytes.Load()),
 		AccessListSynced: s.accessListSynced,
 		AccessListTotal:  s.accessListTotal,
 	}
@@ -2102,6 +2117,8 @@ func (s *syncerV2) revertAccessListRequest(req *accessListRequest, pending map[c
 // processAccountResponse integrates an already validated account range response
 // into the account tasks.
 func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
+	start := time.Now()
+
 	// Switch the task from pending to filling
 	res.task.req = nil
 	res.task.res = res
@@ -2197,6 +2214,8 @@ func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
 			}
 		}
 	}
+	s.profile.process[profAccount].observe(time.Since(start))
+
 	// If the account range contained no contracts, or all have been fully filled
 	// beforehand, short circuit storage filling and forward to the next task
 	if res.task.pend == 0 {
@@ -2210,9 +2229,13 @@ func (s *syncerV2) processAccountResponse(res *accountResponseV2) {
 // processBytecodeResponse integrates an already validated bytecode response
 // into the account tasks.
 func (s *syncerV2) processBytecodeResponse(res *bytecodeResponseV2) {
-	batch := s.db.NewBatch()
+	procStart := time.Now()
 
-	var codes uint64
+	var (
+		codes  uint64
+		hashes []common.Hash
+		blobs  [][]byte
+	)
 	for i, hash := range res.hashes {
 		code := res.codes[i]
 
@@ -2228,18 +2251,25 @@ func (s *syncerV2) processBytecodeResponse(res *bytecodeResponseV2) {
 				res.task.pend--
 			}
 		}
-		// Push the bytecode into a database batch
+		// Collect the bytecode for asynchronous persistence
 		codes++
-		rawdb.WriteCode(batch, hash, code)
-	}
-	bytes := common.StorageSize(batch.ValueSize())
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to persist bytecodes", "err", err)
+		hashes = append(hashes, hash)
+		blobs = append(blobs, code)
 	}
 	s.bytecodeSynced += codes
-	s.bytecodeBytes += bytes
 
-	log.Debug("Persisted set of bytecodes", "count", codes, "bytes", bytes)
+	// Bytecodes are content addressed with no ordering constraints, hand the
+	// writes over to the workers keyed by the job itself (fully parallel).
+	if len(hashes) > 0 {
+		job := &bytecodeJobV2{
+			hashes: hashes,
+			codes:  blobs,
+		}
+		s.syncRunner.submit(profBytecode, job, func() { s.executeBytecodeJob(job) })
+	}
+	log.Debug("Queued set of bytecodes", "count", codes)
+
+	s.profile.process[profBytecode].observe(time.Since(procStart))
 
 	// If this delivery completed the last pending task, forward the account task
 	// to the next chunk
@@ -2254,33 +2284,27 @@ func (s *syncerV2) processBytecodeResponse(res *bytecodeResponseV2) {
 // processStorageResponse integrates an already validated storage response
 // into the account tasks.
 func (s *syncerV2) processStorageResponse(res *storageResponseV2) {
+	procStart := time.Now()
+
 	// Switch the subtask from pending to idle
 	if res.subTask != nil {
 		res.subTask.req = nil
 	}
-	batch := ethdb.HookedBatch{
-		Batch: s.db.NewBatch(),
-		OnPut: func(key []byte, value []byte) {
-			s.storageBytes += common.StorageSize(len(key) + len(value))
-		},
-	}
 	var (
-		slots           int
-		oldStorageBytes = s.storageBytes
+		slots int
+		job   *storageJobV2
 	)
-	// Iterate over all the accounts and reconstruct their storage tries from the
-	// delivered slots
+	// Iterate over all the accounts and route their storage slots
 	for i, account := range res.accounts {
 		// If the account was not delivered, reschedule it
 		if i >= len(res.hashes) {
 			res.mainTask.stateTasks[account] = res.roots[i]
 			continue
 		}
-		// State was delivered, if complete mark as not needed any more
-		for j, hash := range res.mainTask.res.hashes {
-			if account != hash {
-				continue
-			}
+		j := sort.Search(len(res.mainTask.res.hashes), func(k int) bool {
+			return bytes.Compare(res.mainTask.res.hashes[k][:], account[:]) >= 0
+		})
+		if j < len(res.mainTask.res.hashes) && res.mainTask.res.hashes[j] == account {
 			acc := res.mainTask.res.accounts[j]
 
 			// If the packet contains multiple contract storage slots, all
@@ -2375,24 +2399,26 @@ func (s *syncerV2) processStorageResponse(res *storageResponseV2) {
 				}
 			}
 		}
-		// Iterate over all the complete contracts, reconstruct the trie nodes and
-		// push them to disk. If the contract is chunked, the trie nodes will be
-		// reconstructed later.
 		slots += len(res.hashes[i])
 
-		// Persist the received storage segments. These flat state may be outdated
-		// during the sync, but it will be fixed by the BAL-healing.
-		for j := 0; j < len(res.hashes[i]); j++ {
-			rawdb.WriteStorageSnapshot(batch, account, res.hashes[i][j], res.slots[i][j])
+		// Package the account's flat writes into the response's job. There
+		// is no trie generation in snap/2, so complete and chunked contracts
+		// alike are plain flat writes sharing one batch.
+		if job == nil {
+			job = new(storageJobV2)
 		}
+		job.accounts = append(job.accounts, account)
+		job.hashes = append(job.hashes, res.hashes[i])
+		job.slots = append(job.slots, res.slots[i])
 	}
-	// Flush anything written just now and update the stats
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to persist storage slots", "err", err)
+	// Hand the execution over to the workers and update the stats. The job
+	// is independent of everything else, keyed by itself (fully parallel).
+	if job != nil {
+		s.syncRunner.submit(profStorage, job, func() { s.executeStorageJob(job) })
 	}
 	s.storageSynced += uint64(slots)
-
-	log.Debug("Persisted set of storage slots", "accounts", len(res.hashes), "slots", slots, "bytes", s.storageBytes-oldStorageBytes)
+	log.Debug("Queued set of storage slots", "accounts", len(res.hashes), "slots", slots)
+	s.profile.process[profStorage].observe(time.Since(procStart))
 
 	// If this delivery completed the last pending task, forward the account task
 	// to the next chunk
@@ -2415,36 +2441,24 @@ func (s *syncerV2) forwardAccountTask(task *accountTaskV2) {
 	}
 	task.res = nil
 
-	// Persist the received account segments. These flat state maybe
-	// outdated during the sync, but it can be fixed later during the
-	// trie generation.
-	oldAccountBytes := s.accountBytes
+	fwStart := time.Now()
+	defer func() {
+		s.profile.process[profAccount].observe(time.Since(fwStart))
+	}()
 
-	batch := ethdb.HookedBatch{
-		Batch: s.db.NewBatch(),
-		OnPut: func(key []byte, value []byte) {
-			s.accountBytes += common.StorageSize(len(key) + len(value))
-		},
-	}
-	for i, hash := range res.hashes {
+	// Determine the consecutive prefix of complete accounts and push the
+	// chunk marker forward over them. Note the cursor advances before the
+	// data is persisted by the packaged job below: the in-memory progress
+	// runs ahead of the database, which is safe as the journal is only
+	// saved behind a runner barrier.
+	last := len(res.hashes)
+	for i := range res.hashes {
 		if task.needCode[i] || task.needState[i] {
+			last = i
 			break
 		}
-		slim := types.SlimAccountRLP(*res.accounts[i])
-		rawdb.WriteAccountSnapshot(batch, hash, slim)
 	}
-	// Flush anything written just now and update the stats
-	if err := batch.Write(); err != nil {
-		log.Crit("Failed to persist accounts", "err", err)
-	}
-	s.accountSynced += uint64(len(res.accounts))
-
-	// Task filling persisted, push the chunk marker forward to the first
-	// account still missing data.
-	for i, hash := range res.hashes {
-		if task.needCode[i] || task.needState[i] {
-			return
-		}
+	for _, hash := range res.hashes[:last] {
 		task.Next = incHash(hash)
 
 		// Remove the completion flag once the account range is pushed
@@ -2452,14 +2466,30 @@ func (s *syncerV2) forwardAccountTask(task *accountTaskV2) {
 		// cycle.
 		delete(task.stateCompleted, hash)
 	}
-	// All accounts marked as complete, track if the entire task is done
-	task.done = !res.cont
+	if last == len(res.hashes) {
+		// All accounts marked as complete, track if the entire task is done
+		task.done = !res.cont
 
-	// Error out if there is any leftover completion flag.
-	if task.done && len(task.stateCompleted) != 0 {
-		panic(fmt.Errorf("storage completion flags should be emptied, %d left", len(task.stateCompleted)))
+		// Error out if there is any leftover completion flag.
+		if task.done && len(task.stateCompleted) != 0 {
+			panic(fmt.Errorf("storage completion flags should be emptied, %d left", len(task.stateCompleted)))
+		}
 	}
-	log.Debug("Persisted range of accounts", "accounts", len(res.accounts), "bytes", s.accountBytes-oldAccountBytes)
+	s.accountSynced += uint64(len(res.accounts))
+
+	if last == 0 {
+		return // nothing to persist
+	}
+	// Persist the received account segments. The flat state may be outdated
+	// during the sync, but it will be fixed by the BAL catch-up. Consecutive
+	// forwards of a task write disjoint ranges, so the job is keyed by itself
+	// (fully parallel) like the storage and bytecode ones.
+	job := &accountJobV2{
+		hashes:   res.hashes[:last],
+		accounts: res.accounts[:last],
+	}
+	s.syncRunner.submit(profAccount, job, func() { s.executeAccountJob(job) })
+	log.Debug("Queued range of accounts", "accounts", last)
 }
 
 // OnAccounts is a callback method to invoke when a range of accounts are
@@ -2534,7 +2564,11 @@ func (s *syncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, 
 	for i, node := range proof {
 		nodes[i] = node
 	}
-	cont, err := trie.VerifyRangeProof(root, req.origin[:], keys, accounts, nodes.Set())
+	firstKey, proofdb := req.origin[:], ethdb.KeyValueReader(nodes.Set())
+	if len(nodes) == 0 && req.origin == (common.Hash{}) {
+		firstKey, proofdb = nil, nil
+	}
+	cont, err := trie.VerifyRangeProof(root, firstKey, keys, accounts, proofdb)
 	if err != nil {
 		logger.Warn("Account range failed proof", "err", err)
 
@@ -2556,11 +2590,13 @@ func (s *syncerV2) OnAccounts(peer SyncPeerV2, id uint64, hashes []common.Hash, 
 		accounts: accs,
 		cont:     cont,
 	}
+	deliverStart := time.Now()
 	select {
 	case req.deliver <- response:
 	case <-req.cancel:
 	case <-req.stale:
 	}
+	s.profile.deliver[profAccount].observe(time.Since(deliverStart))
 	return nil
 }
 
@@ -2654,11 +2690,13 @@ func (s *syncerV2) OnByteCodes(peer SyncPeerV2, id uint64, bytecodes [][]byte) e
 		hashes: req.hashes,
 		codes:  codes,
 	}
+	deliverStart := time.Now()
 	select {
 	case req.deliver <- response:
 	case <-req.cancel:
 	case <-req.stale:
 	}
+	s.profile.deliver[profBytecode].observe(time.Since(deliverStart))
 	return nil
 }
 
@@ -2803,11 +2841,13 @@ func (s *syncerV2) OnStorage(peer SyncPeerV2, id uint64, hashes [][]common.Hash,
 		slots:    slots,
 		cont:     cont,
 	}
+	deliverStart := time.Now()
 	select {
 	case req.deliver <- response:
 	case <-req.cancel:
 	case <-req.stale:
 	}
+	s.profile.deliver[profStorage].observe(time.Since(deliverStart))
 	return nil
 }
 
@@ -2906,7 +2946,7 @@ func (s *syncerV2) reportSyncProgressV2(force bool) {
 		return
 	}
 	// Don't report anything until we have a meaningful progress
-	synced := s.accountBytes + s.bytecodeBytes + s.storageBytes
+	synced := common.StorageSize(s.accountBytes.Load() + s.bytecodeBytes.Load() + s.storageBytes.Load())
 	if synced == 0 {
 		return
 	}
@@ -2937,10 +2977,17 @@ func (s *syncerV2) reportSyncProgressV2(force bool) {
 	// Create a mega progress report
 	var (
 		progress = fmt.Sprintf("%.2f%%", float64(synced)*100/estBytes)
-		accounts = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.accountSynced), s.accountBytes.TerminalString())
-		storage  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.storageSynced), s.storageBytes.TerminalString())
-		bytecode = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.bytecodeSynced), s.bytecodeBytes.TerminalString())
+		accounts = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.accountSynced), common.StorageSize(s.accountBytes.Load()).TerminalString())
+		storage  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.storageSynced), common.StorageSize(s.storageBytes.Load()).TerminalString())
+		bytecode = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.bytecodeSynced), common.StorageSize(s.bytecodeBytes.Load()).TerminalString())
 	)
+	syncProgressGauge.Update(float64(synced) / estBytes)
+	syncBytesGauge.Update(int64(synced))
+	syncEstimateGauge.Update(int64(estBytes))
+	syncAccountsGauge.Update(int64(s.accountSynced))
+	syncSlotsGauge.Update(int64(s.storageSynced))
+	syncCodesGauge.Update(int64(s.bytecodeSynced))
+
 	log.Info("Syncing: state download in progress", "synced", progress, "state", synced,
 		"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
 }

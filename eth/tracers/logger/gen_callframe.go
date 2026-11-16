@@ -16,12 +16,13 @@ var _ = (*callFrameMarshaling)(nil)
 // MarshalJSON marshals as JSON.
 func (c callFrame) MarshalJSON() ([]byte, error) {
 	type callFrame struct {
-		From  common.Address      `json:"from"`
-		To    common.Address      `json:"to"`
-		Input hexutil.Bytes       `json:"input,omitempty"`
-		Gas   math.HexOrDecimal64 `json:"gas"`
-		Value *hexutil.Big        `json:"value"`
-		Type  string              `json:"type"`
+		From              common.Address      `json:"from"`
+		To                common.Address      `json:"to"`
+		Input             hexutil.Bytes       `json:"input,omitempty"`
+		Gas               math.HexOrDecimal64 `json:"gas"`
+		Value             *hexutil.Big        `json:"value"`
+		StateGasReservoir math.HexOrDecimal64 `json:"stateGasReservoir,omitempty"`
+		Type              string              `json:"type"`
 	}
 	var enc callFrame
 	enc.From = c.From
@@ -29,6 +30,7 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 	enc.Input = c.Input
 	enc.Gas = math.HexOrDecimal64(c.Gas)
 	enc.Value = (*hexutil.Big)(c.Value)
+	enc.StateGasReservoir = math.HexOrDecimal64(c.StateGasReservoir)
 	enc.Type = c.Type()
 	return json.Marshal(&enc)
 }
@@ -36,11 +38,12 @@ func (c callFrame) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON unmarshals from JSON.
 func (c *callFrame) UnmarshalJSON(input []byte) error {
 	type callFrame struct {
-		From  *common.Address      `json:"from"`
-		To    *common.Address      `json:"to"`
-		Input *hexutil.Bytes       `json:"input,omitempty"`
-		Gas   *math.HexOrDecimal64 `json:"gas"`
-		Value *hexutil.Big         `json:"value"`
+		From              *common.Address      `json:"from"`
+		To                *common.Address      `json:"to"`
+		Input             *hexutil.Bytes       `json:"input,omitempty"`
+		Gas               *math.HexOrDecimal64 `json:"gas"`
+		Value             *hexutil.Big         `json:"value"`
+		StateGasReservoir *math.HexOrDecimal64 `json:"stateGasReservoir,omitempty"`
 	}
 	var dec callFrame
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -60,6 +63,9 @@ func (c *callFrame) UnmarshalJSON(input []byte) error {
 	}
 	if dec.Value != nil {
 		c.Value = (*big.Int)(dec.Value)
+	}
+	if dec.StateGasReservoir != nil {
+		c.StateGasReservoir = uint64(*dec.StateGasReservoir)
 	}
 	return nil
 }

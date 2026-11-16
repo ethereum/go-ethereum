@@ -571,6 +571,7 @@ type FilterMapsRange struct {
 	BlocksFirst, BlocksAfterLast uint64
 	MapsFirst, MapsAfterLast     uint32
 	TailPartialEpoch             uint32
+	LocalBase                    bool `rlp:"optional"` // log value indices not anchored to genesis
 }
 
 // ReadFilterMapsRange retrieves the filter maps range data. Note that if the

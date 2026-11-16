@@ -17,9 +17,15 @@
 package database
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
+
+// ErrStateUnavailable is returned when the requested state is not available,
+// either because it was never stored or because it has been pruned.
+var ErrStateUnavailable = errors.New("state not available")
 
 // NodeReader wraps the Node method of a backing trie reader.
 type NodeReader interface {
@@ -37,7 +43,8 @@ type NodeReader interface {
 // NodeDatabase wraps the methods of a backing trie store.
 type NodeDatabase interface {
 	// NodeReader returns a node reader associated with the specific state.
-	// An error will be returned if the specified state is not available.
+	// The returned error wraps ErrStateUnavailable if the specified state is
+	// not available.
 	NodeReader(stateRoot common.Hash) (NodeReader, error)
 }
 
@@ -65,6 +72,7 @@ type StateReader interface {
 // StateDatabase wraps the methods of a backing state store.
 type StateDatabase interface {
 	// StateReader returns a state reader associated with the specific state.
-	// An error will be returned if the specified state is not available.
+	// The returned error wraps ErrStateUnavailable if the specified state is
+	// not available.
 	StateReader(stateRoot common.Hash) (StateReader, error)
 }

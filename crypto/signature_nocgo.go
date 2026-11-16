@@ -46,6 +46,11 @@ func sigToPub(hash, sig []byte) (*secp256k1.PublicKey, error) {
 	if len(hash) != DigestLength {
 		return nil, fmt.Errorf("hash is required to be exactly %d bytes (%d)", DigestLength, len(hash))
 	}
+	// Reject recovery ids above 3, which the compact format below would
+	// otherwise accept as compressed-key variants.
+	if sig[RecoveryIDOffset] >= 4 {
+		return nil, errors.New("invalid signature recovery id")
+	}
 	// Convert to secp256k1 input format with 'recovery id' v at the beginning.
 	btcsig := make([]byte, SignatureLength)
 	btcsig[0] = sig[RecoveryIDOffset] + 27

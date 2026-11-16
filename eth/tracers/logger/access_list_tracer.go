@@ -128,12 +128,12 @@ func NewAccessListTracer(acl types.AccessList, addressesToExclude map[common.Add
 
 func (a *AccessListTracer) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
-		OnOpcode: a.OnOpcode,
+		OnOpcodeV2: a.OnOpcode,
 	}
 }
 
 // OnOpcode captures all opcodes that touch storage or addresses and adds them to the accesslist.
-func (a *AccessListTracer) OnOpcode(pc uint64, opcode byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (a *AccessListTracer) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 	stackData := scope.StackData()
 	stackLen := len(stackData)
 	op := vm.OpCode(opcode)

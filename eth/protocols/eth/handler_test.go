@@ -543,6 +543,79 @@ func TestHashBody(t *testing.T) {
 	}
 }
 
+func TestCheckBodyItemCounts(t *testing.T) {
+	// The smallest possible encodings must be accepted.
+	txs := []*types.Transaction{
+		types.NewTx(&types.LegacyTx{}),
+		types.NewTx(&types.AccessListTx{}),
+		types.NewTx(&types.DynamicFeeTx{}),
+	}
+	wds := []*types.Withdrawal{{}, {}}
+	for _, tx := range txs {
+		enc, _ := tx.MarshalBinary()
+		if tx.Type() == types.LegacyTxType && len(enc) != minTxEncodedSize {
+			t.Fatalf("minimal legacy tx has size %d, want %d", len(enc), minTxEncodedSize)
+		}
+	}
+	if enc, _ := rlp.EncodeToBytes(wds[0]); len(enc) != minWithdrawalEncodedSize {
+		t.Fatalf("minimal withdrawal has size %d, want %d", len(enc), minWithdrawalEncodedSize)
+	}
+	wdList := encodeRL(wds)
+	body := BlockBody{Transactions: encodeRL(txs), Withdrawals: &wdList}
+	if err := checkBodyItemCounts(&body); err != nil {
+		t.Fatalf("valid body rejected: %v", err)
+	}
+
+	// Lists of elements too small to be valid must be rejected.
+	var tinyTxs rlp.RawList[*types.Transaction]
+	var tinyWds rlp.RawList[*types.Withdrawal]
+	for range 1000 {
+		tinyTxs.AppendRaw([]byte{0x01})
+		tinyWds.AppendRaw([]byte{0x01})
+	}
+	if err := checkBodyItemCounts(&BlockBody{Transactions: tinyTxs}); err == nil {
+		t.Fatal("body with tiny transactions accepted")
+	}
+	if err := checkBodyItemCounts(&BlockBody{Withdrawals: &tinyWds}); err == nil {
+		t.Fatal("body with tiny withdrawals accepted")
+	}
+}
+
+func TestCheckReceiptItemCounts(t *testing.T) {
+	// The smallest possible encodings must be accepted.
+	receipts := []*types.Receipt{
+		{Type: types.LegacyTxType, Status: types.ReceiptStatusFailed},
+		{Type: types.DynamicFeeTxType, Status: types.ReceiptStatusSuccessful},
+	}
+	for _, tr := range receipts {
+		r := newReceipt(tr)
+		enc, _ := rlp.EncodeToBytes(&r)
+		if len(enc) != minReceiptEncodedSize {
+			t.Fatalf("minimal receipt has size %d, want %d", len(enc), minReceiptEncodedSize)
+		}
+		var dec Receipt
+		if err := dec.decode(enc); err != nil {
+			t.Fatalf("minimal receipt is not decodable: %v", err)
+		}
+	}
+	if err := checkReceiptItemCounts([]*ReceiptList{NewReceiptList(receipts)}); err != nil {
+		t.Fatalf("valid receipts rejected: %v", err)
+	}
+
+	// Lists of elements too small to be valid must be rejected. The two-byte
+	// element is a list holding a single empty string, which passes the
+	// structural checks in EncodeForStorage.
+	for _, elem := range [][]byte{{0x01}, {0xc1, 0x80}} {
+		var tiny ReceiptList
+		for range 1000 {
+			tiny.items.AppendRaw(elem)
+		}
+		if err := checkReceiptItemCounts([]*ReceiptList{&tiny}); err == nil {
+			t.Fatalf("receipt list of %d-byte elements accepted", len(elem))
+		}
+	}
+}
+
 // Tests that the transaction receipts can be retrieved based on hashes.
 func TestGetBlockReceipts69(t *testing.T) { testGetBlockReceipts(t, ETH69) }
 
@@ -953,6 +1026,41 @@ func testGetPooledTransaction(t *testing.T, blobTx bool) {
 		List:      encodeRL([]*types.Transaction{tx}),
 	}); err != nil {
 		t.Errorf("pooled transaction mismatch: %v", err)
+	}
+}
+
+// Tests that pooled transaction retrievals stop after maxPooledTxServe lookups,
+// even if the requested hashes are unknown and the response stays empty.
+func TestGetPooledTransactionsLookupCap(t *testing.T) {
+	backend := newTestBackendWithGenerator(0, true, false, nil)
+	defer backend.close()
+
+	signer := types.NewCancunSigner(params.TestChainConfig.ChainID)
+	tx, err := types.SignTx(
+		types.NewTransaction(0, testAddr, big.NewInt(10_000), params.TxGas, big.NewInt(1_000_000_000), nil),
+		signer,
+		testKey,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if errs := backend.txpool.Add([]*types.Transaction{tx}, true); errs[0] != nil {
+		t.Fatal(errs[0])
+	}
+	// Pad the request with unknown hashes so the known one lands at the given index
+	request := func(index int) GetPooledTransactionsRequest {
+		query := make(GetPooledTransactionsRequest, index+1)
+		for i := range index {
+			query[i] = common.BigToHash(big.NewInt(int64(i + 1)))
+		}
+		query[index] = tx.Hash()
+		return query
+	}
+	if hashes, _ := answerGetPooledTransactions(backend, request(maxPooledTxServe-1), ETH69); len(hashes) != 1 {
+		t.Errorf("transaction within lookup cap not served: have %d, want 1", len(hashes))
+	}
+	if hashes, _ := answerGetPooledTransactions(backend, request(maxPooledTxServe), ETH69); len(hashes) != 0 {
+		t.Errorf("transaction beyond lookup cap served: have %d, want 0", len(hashes))
 	}
 }
 

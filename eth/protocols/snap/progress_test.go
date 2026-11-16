@@ -209,11 +209,11 @@ func TestSyncProgressV2RoundTrip(t *testing.T) {
 	saver := newSyncerV2(db, rawdb.HashScheme)
 	saver.pivot = &types.Header{Number: new(big.Int).SetUint64(123), Difficulty: common.Big0}
 	saver.accountSynced = 1
-	saver.accountBytes = 2
+	saver.accountBytes.Store(2)
 	saver.bytecodeSynced = 3
-	saver.bytecodeBytes = 4
+	saver.bytecodeBytes.Store(4)
 	saver.storageSynced = 5
-	saver.storageBytes = 6
+	saver.storageBytes.Store(6)
 	saver.saveSyncStatus()
 
 	raw := rawdb.ReadSnapshotSyncStatus(db)
@@ -229,11 +229,11 @@ func TestSyncProgressV2RoundTrip(t *testing.T) {
 		want uint64
 	}{
 		{"accountSynced", loader.accountSynced, 1},
-		{"accountBytes", uint64(loader.accountBytes), 2},
+		{"accountBytes", uint64(loader.accountBytes.Load()), 2},
 		{"bytecodeSynced", loader.bytecodeSynced, 3},
-		{"bytecodeBytes", uint64(loader.bytecodeBytes), 4},
+		{"bytecodeBytes", uint64(loader.bytecodeBytes.Load()), 4},
 		{"storageSynced", loader.storageSynced, 5},
-		{"storageBytes", uint64(loader.storageBytes), 6},
+		{"storageBytes", uint64(loader.storageBytes.Load()), 6},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s mismatch: got %d, want %d", c.name, c.got, c.want)

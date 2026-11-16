@@ -38,6 +38,9 @@ type Protocol struct {
 	// by the protocol.
 	Length uint64
 
+	// AllowBrowser indicates the protocol may run on anonymous browser connections.
+	AllowBrowser bool
+
 	// Run is called in a new goroutine when the protocol has been
 	// negotiated with a peer. It should read and write messages from
 	// rw. The Payload for each message must be fully consumed.
@@ -67,6 +70,17 @@ type Protocol struct {
 
 func (p Protocol) cap() Cap {
 	return Cap{p.Name, p.Version}
+}
+
+// filterProtocols returns the protocols where AllowBrowser matches.
+func filterProtocols(protos []Protocol, browser bool) []Protocol {
+	var allowed []Protocol
+	for _, p := range protos {
+		if p.AllowBrowser == browser {
+			allowed = append(allowed, p)
+		}
+	}
+	return allowed
 }
 
 // Cap is the structure of a peer capability.

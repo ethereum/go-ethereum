@@ -89,6 +89,7 @@ func TestBuildCapabilities(t *testing.T) {
 					OldestBlock:    hexUintPtr(5_000_000 - 2_350_000 + 1),
 					DeleteStrategy: windowStrategy(2_350_000),
 				},
+				"receipts": {OldestBlock: hexUintPtr(5_000_000 - 2_350_000 + 1)},
 			},
 		},
 		{
@@ -119,6 +120,22 @@ func TestBuildCapabilities(t *testing.T) {
 					OldestBlock:    hexUintPtr(4_000_000),
 					DeleteStrategy: windowStrategy(2_350_000),
 				},
+				"receipts": {OldestBlock: hexUintPtr(4_000_000)},
+			},
+		},
+		{
+			name:    "receipts oldest is bounded by the tx index tail",
+			headNum: 5_000_000,
+			cutoff:  0,
+			ret: HistoryRetention{
+				StateScheme:    rawdb.PathScheme,
+				TxIndexHistory: 2_350_000,
+			},
+			expected: map[string]CapabilityResource{
+				// Receipt data reaches the cutoff, but hash-keyed
+				// lookups cannot resolve below the tx index tail.
+				"blocks":   {OldestBlock: hexUintPtr(0)},
+				"receipts": {OldestBlock: hexUintPtr(5_000_000 - 2_350_000 + 1)},
 			},
 		},
 		{

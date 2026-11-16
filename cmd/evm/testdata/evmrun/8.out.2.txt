@@ -903,7 +903,7 @@
 {"pc":18,"op":96,"gas":"0x88d","gasCost":"0x3","memSize":0,"stack":["0x0","0x0","0x0","0x0"],"depth":3,"refund":19900,"opName":"PUSH1"}
 {"pc":20,"op":96,"gas":"0x88a","gasCost":"0x3","memSize":0,"stack":["0x0","0x0","0x0","0x0","0x0"],"depth":3,"refund":19900,"opName":"PUSH1"}
 {"pc":22,"op":90,"gas":"0x887","gasCost":"0x2","memSize":0,"stack":["0x0","0x0","0x0","0x0","0x0","0xf9"],"depth":3,"refund":19900,"opName":"GAS"}
-{"pc":23,"op":242,"gas":"0x885","gasCost":"0x64","memSize":0,"stack":["0x0","0x0","0x0","0x0","0x0","0xf9","0x885"],"depth":3,"refund":19900,"opName":"CALLCODE","error":"out of gas: out of gas"}
+{"pc":23,"op":242,"gas":"0x885","gasCost":"0x0","memSize":0,"stack":["0x0","0x0","0x0","0x0","0x0","0xf9","0x885"],"depth":3,"refund":19900,"opName":"CALLCODE","error":"out of gas: out of gas"}
 {"output":"","gasUsed":"0x5729","error":"out of gas: out of gas"}
 {"pc":1786,"op":80,"gas":"0x162","gasCost":"0x2","memSize":1472,"stack":["0x94a843a7335fc63be036fbdecc40b1365f3c5f26","0x0"],"depth":2,"refund":0,"opName":"POP"}
 {"pc":1787,"op":80,"gas":"0x160","gasCost":"0x2","memSize":1472,"stack":["0x94a843a7335fc63be036fbdecc40b1365f3c5f26"],"depth":2,"refund":0,"opName":"POP"}

@@ -66,7 +66,7 @@ func newFourByteTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart: t.OnTxStart,
-			OnEnter:   t.OnEnter,
+			OnEnterV2: t.OnEnter,
 		},
 		GetResult: t.GetResult,
 		Stop:      t.Stop,
@@ -96,7 +96,7 @@ func (t *fourByteTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *fourByteTracer) OnEnter(depth int, opcode byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *fourByteTracer) OnEnter(depth int, opcode byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
 	// Skip if tracing was interrupted
 	if t.interrupt.Load() {
 		return

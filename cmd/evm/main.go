@@ -152,61 +152,15 @@ var (
 			t8ntool.TraceEnableCallFramesFlag,
 			t8ntool.OutputBasedir,
 			t8ntool.OutputAllocFlag,
-			t8ntool.OutputBTFlag,
 			t8ntool.OutputResultFlag,
 			t8ntool.OutputBodyFlag,
 			t8ntool.InputAllocFlag,
 			t8ntool.InputEnvFlag,
-			t8ntool.InputBTFlag,
 			t8ntool.InputTxsFlag,
 			t8ntool.ForknameFlag,
 			t8ntool.ChainIDFlag,
 			t8ntool.RewardFlag,
 			t8ntool.OpcodeCountFlag,
-		},
-	}
-
-	verkleCommand = &cli.Command{
-		Name:    "verkle",
-		Aliases: []string{"vkt"},
-		Usage:   "Binary Trie helpers",
-		Subcommands: []*cli.Command{
-			{
-				Name:    "tree-keys",
-				Aliases: []string{"v"},
-				Usage:   "compute a set of binary trie keys, given their source addresses and optional slot numbers",
-				Action:  t8ntool.BinKeys,
-				Flags: []cli.Flag{
-					t8ntool.InputAllocFlag,
-				},
-			},
-			{
-				Name:    "single-key",
-				Aliases: []string{"vk"},
-				Usage:   "compute the binary trie key given an address and optional slot number",
-				Action:  t8ntool.BinKey,
-			},
-			{
-				Name:    "code-chunk-key",
-				Aliases: []string{"vck"},
-				Usage:   "compute the binary trie key given an address and chunk number",
-				Action:  t8ntool.BinaryCodeChunkKey,
-			},
-			{
-				Name:    "chunkify-code",
-				Aliases: []string{"vcc"},
-				Usage:   "chunkify a given bytecode for a binary trie",
-				Action:  t8ntool.BinaryCodeChunkCode,
-			},
-			{
-				Name:    "state-root",
-				Aliases: []string{"vsr"},
-				Usage:   "compute the state-root of a binary trie for the given alloc",
-				Action:  t8ntool.BinTrieRoot,
-				Flags: []cli.Flag{
-					t8ntool.InputAllocFlag,
-				},
-			},
 		},
 	}
 
@@ -264,7 +218,6 @@ func init() {
 		stateTransitionCommand,
 		transactionCommand,
 		blockBuilderCommand,
-		verkleCommand,
 	}
 	app.Before = func(ctx *cli.Context) error {
 		flags.MigrateGlobalFlags(ctx)

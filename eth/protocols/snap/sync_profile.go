@@ -81,16 +81,17 @@ type syncProfile struct {
 
 // observeCommit records one batch write, returning its duration so that the
 // enclosing job execution can net it out of its own timing.
-func (s *syncer) observeCommit(kind int, start time.Time) time.Duration {
+func (p *syncProfile) observeCommit(kind int, start time.Time) time.Duration {
 	elapsed := time.Since(start)
-	s.profile.commit[kind].observe(elapsed)
+	p.commit[kind].observe(elapsed)
 	return elapsed
 }
 
-// reportProfile dumps the accumulated statistics.
-func (s *syncer) reportProfile() {
-	log.Info("State sync profile", "idle", s.profile.idle.String(), "schedule", s.profile.schedule.String(), "skippableheals", s.skippableHeals.Load())
+// report dumps the accumulated statistics. The optional context is appended
+// to the summary line, for the syncer-specific counters.
+func (p *syncProfile) report(ctx ...interface{}) {
+	log.Info("State sync profile", append([]interface{}{"idle", p.idle.String(), "schedule", p.schedule.String()}, ctx...)...)
 	for i, name := range profKindNames {
-		log.Info("State sync profile: "+name, "deliverwait", s.profile.deliver[i].String(), "process", s.profile.process[i].String(), "submitwait", s.profile.submitWait[i].String(), "exec", s.profile.exec[i].String(), "commit", s.profile.commit[i].String())
+		log.Info("State sync profile: "+name, "deliverwait", p.deliver[i].String(), "process", p.process[i].String(), "submitwait", p.submitWait[i].String(), "exec", p.exec[i].String(), "commit", p.commit[i].String())
 	}
 }

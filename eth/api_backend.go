@@ -103,14 +103,14 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	if number == rpc.FinalizedBlockNumber {
 		block := b.eth.blockchain.CurrentFinalBlock()
 		if block == nil {
-			return nil, errors.New("finalized block not found")
+			return nil, ethapi.ErrFinalizedBlockNotFound
 		}
 		return block, nil
 	}
 	if number == rpc.SafeBlockNumber {
 		block := b.eth.blockchain.CurrentSafeBlock()
 		if block == nil {
-			return nil, errors.New("safe block not found")
+			return nil, ethapi.ErrSafeBlockNotFound
 		}
 		return block, nil
 	}
@@ -161,14 +161,14 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	if number == rpc.FinalizedBlockNumber {
 		header := b.eth.blockchain.CurrentFinalBlock()
 		if header == nil {
-			return nil, errors.New("finalized block not found")
+			return nil, ethapi.ErrFinalizedBlockNotFound
 		}
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
 	if number == rpc.SafeBlockNumber {
 		header := b.eth.blockchain.CurrentSafeBlock()
 		if header == nil {
-			return nil, errors.New("safe block not found")
+			return nil, ethapi.ErrSafeBlockNotFound
 		}
 		return b.eth.blockchain.GetBlock(header.Hash(), header.Number.Uint64()), nil
 	}
@@ -257,9 +257,9 @@ func (b *EthAPIBackend) StateAndHeaderByNumber(ctx context.Context, number rpc.B
 	if header == nil {
 		return nil, nil, errors.New("header not found")
 	}
-	stateDb, err := b.eth.BlockChain().StateAt(header)
+	stateDb, err := b.eth.BlockChain().StateAt(header.Root, header.Number, header.Time)
 	if err != nil {
-		stateDb, err = b.eth.BlockChain().HistoricState(header)
+		stateDb, err = b.eth.BlockChain().HistoricState(header.Root, header.Number, header.Time)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -282,9 +282,9 @@ func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockN
 		if blockNrOrHash.RequireCanonical && b.eth.blockchain.GetCanonicalHash(header.Number.Uint64()) != hash {
 			return nil, nil, errors.New("hash is not currently canonical")
 		}
-		stateDb, err := b.eth.BlockChain().StateAt(header)
+		stateDb, err := b.eth.BlockChain().StateAt(header.Root, header.Number, header.Time)
 		if err != nil {
-			stateDb, err = b.eth.BlockChain().HistoricState(header)
+			stateDb, err = b.eth.BlockChain().HistoricState(header.Root, header.Number, header.Time)
 			if err != nil {
 				return nil, nil, err
 			}

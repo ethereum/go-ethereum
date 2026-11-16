@@ -96,6 +96,7 @@ type NodeSet struct {
 
 	updates int // the count of updated and inserted nodes
 	deletes int // the count of deleted nodes
+	size    int // the total length of the paths and blobs of the held nodes
 }
 
 // NewNodeSet initializes a node set. The owner is zero for the account trie and
@@ -132,6 +133,7 @@ func (set *NodeSet) AddNode(path []byte, n *NodeWithPrev) {
 	key := string(path)
 	set.Nodes[key] = n.Node
 	set.Origins[key] = n.Prev
+	set.size += len(key) + len(n.Blob)
 }
 
 // MergeDisjoint merges this 'set' with 'other'. It assumes that the sets are disjoint,
@@ -145,6 +147,7 @@ func (set *NodeSet) MergeDisjoint(other *NodeSet) error {
 
 	set.deletes += other.deletes
 	set.updates += other.updates
+	set.size += other.size
 
 	// Since we assume the sets are disjoint, we can safely append leaves
 	// like this without deduplication.
@@ -167,12 +170,14 @@ func (set *NodeSet) Merge(other *NodeSet) error {
 			} else {
 				set.updates -= 1
 			}
+			set.size -= len(path) + len(prev.Blob)
 		}
 		if node.IsDeleted() {
 			set.deletes += 1
 		} else {
 			set.updates += 1
 		}
+		set.size += len(path) + len(node.Blob)
 		set.Nodes[path] = node // overwrite the node with new value
 
 		// Add the original value only if it was previously non-existent.
@@ -196,6 +201,11 @@ func (set *NodeSet) AddLeaf(parent common.Hash, blob []byte) {
 // Size returns the number of dirty nodes in set.
 func (set *NodeSet) Size() (int, int) {
 	return set.updates, set.deletes
+}
+
+// DataSize returns the total length of the paths and blobs of the held nodes.
+func (set *NodeSet) DataSize() int {
+	return set.size
 }
 
 // HashSet returns a set of trie nodes keyed by node hash.

@@ -18,10 +18,18 @@ package snap
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+// HasLegacySyncProgress reports whether an unfinished snap/1 sync is persisted.
+// snap/1 stores its progress as bare JSON, snap/2 prefixes a version byte.
+func HasLegacySyncProgress(db ethdb.KeyValueReader) bool {
+	raw := rawdb.ReadSnapshotSyncStatus(db)
+	return len(raw) > 0 && raw[0] != syncProgressVersion
+}
 
 // Progress is the set of snap-syncer progress that eth/downloader surfaces in
 // ethereum.SyncProgress. The two syncer versions report it via different types

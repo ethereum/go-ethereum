@@ -525,7 +525,7 @@ func newSyncer(db ethdb.KeyValueStore, scheme string) *syncer {
 		peers:    make(map[string]SyncPeer),
 		peerJoin: new(event.Feed),
 		peerDrop: new(event.Feed),
-		rates:    msgrate.NewTrackers(log.New("proto", "snap")),
+		rates:    msgrate.NewTrackers(log.New("proto", "snap"), 0),
 		update:   make(chan struct{}, 1),
 
 		accountIdlers:  make(map[string]struct{}),
@@ -546,7 +546,7 @@ func newSyncer(db ethdb.KeyValueStore, scheme string) *syncer {
 
 		extProgress: new(syncProgress),
 	}
-	s.syncRunner = newSyncRunner(s)
+	s.syncRunner = newSyncRunner(&s.profile, s.update)
 	return s
 }
 
@@ -717,7 +717,7 @@ func (s *syncer) Sync(root common.Hash, cancel chan struct{}) error {
 			s.syncTimeOnce.Do(func() {
 				stateSyncTimeGauge.Update(int64(time.Since(s.startTime)))
 				log.Info("State sync phase is completed", "elapsed", common.PrettyDuration(time.Since(s.startTime)))
-				s.reportProfile()
+				s.profile.report("skippableheals", s.skippableHeals.Load())
 			})
 			if s.healStartTime.IsZero() {
 				s.healStartTime = time.Now()
@@ -2573,7 +2573,11 @@ func (s *syncer) OnAccounts(peer SyncPeer, id uint64, hashes []common.Hash, acco
 	for i, node := range proof {
 		nodes[i] = node
 	}
-	cont, err := trie.VerifyRangeProof(root, req.origin[:], keys, accounts, nodes.Set())
+	firstKey, proofdb := req.origin[:], ethdb.KeyValueReader(nodes.Set())
+	if len(nodes) == 0 && req.origin == (common.Hash{}) {
+		firstKey, proofdb = nil, nil
+	}
+	cont, err := trie.VerifyRangeProof(root, firstKey, keys, accounts, proofdb)
 	if err != nil {
 		logger.Warn("Account range failed proof", "err", err)
 		// Signal this request as failed, and ready for rescheduling
@@ -3154,6 +3158,13 @@ func (s *syncer) reportSyncProgress(force bool) {
 		storage  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.storageSynced), common.StorageSize(s.storageBytes.Load()).TerminalString())
 		bytecode = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.bytecodeSynced), common.StorageSize(s.bytecodeBytes.Load()).TerminalString())
 	)
+	syncProgressGauge.Update(float64(synced) / estBytes)
+	syncBytesGauge.Update(int64(synced))
+	syncEstimateGauge.Update(int64(estBytes))
+	syncAccountsGauge.Update(int64(s.accountSynced))
+	syncSlotsGauge.Update(int64(s.storageSynced))
+	syncCodesGauge.Update(int64(s.bytecodeSynced))
+
 	log.Info("Syncing: state download in progress", "synced", progress, "state", synced,
 		"accounts", accounts, "slots", storage, "codes", bytecode, "eta", common.PrettyDuration(estTime-elapsed))
 }
@@ -3172,9 +3183,16 @@ func (s *syncer) reportHealProgress(force bool) {
 		bytecode = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.bytecodeHealSynced), s.bytecodeHealBytes.TerminalString())
 		accounts = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.accountHealed), s.accountHealedBytes.TerminalString())
 		storage  = fmt.Sprintf("%v@%v", log.FormatLogfmtUint64(s.storageHealed), s.storageHealedBytes.TerminalString())
+		pending  = s.healer.scheduler.Pending()
 	)
+	healAccountsGauge.Update(int64(s.accountHealed))
+	healSlotsGauge.Update(int64(s.storageHealed))
+	healCodesGauge.Update(int64(s.bytecodeHealSynced))
+	healNodesGauge.Update(int64(s.trienodeHealSynced))
+	healPendingGauge.Update(int64(pending))
+
 	log.Info("Syncing: state healing in progress", "accounts", accounts, "slots", storage,
-		"codes", bytecode, "nodes", trienode, "pending", s.healer.scheduler.Pending())
+		"codes", bytecode, "nodes", trienode, "pending", pending)
 }
 
 // estimateRemainingSlots tries to determine roughly how many slots are left in

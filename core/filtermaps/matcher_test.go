@@ -19,10 +19,15 @@ package filtermaps
 import (
 	"context"
 	crand "crypto/rand"
+	"errors"
 	"math/rand"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 func TestMatcher(t *testing.T) {
@@ -83,5 +88,158 @@ func TestMatcher(t *testing.T) {
 		if !found {
 			t.Fatalf("Log search did not return expected log (addresses: %v, topics: %v, expected log: %v)", addresses, topics, *log)
 		}
+	}
+}
+
+// hookBackend forwards every request to the wrapped backend, optionally calling
+// a hook first. Once armed, it counts the requests that were served without an
+// error.
+type hookBackend struct {
+	MatcherBackend
+	beforeGetFilterMapRows func()
+	beforeGetLogByLvIndex  func()
+
+	armed                  atomic.Bool
+	servedRows, servedLogs atomic.Int32 // requests started after arming and served successfully
+}
+
+func (b *hookBackend) GetFilterMapRows(ctx context.Context, mapIndices []uint32, rowIndex uint32, baseLayerOnly bool) ([]FilterRow, error) {
+	if b.beforeGetFilterMapRows != nil {
+		b.beforeGetFilterMapRows()
+	}
+	armed := b.armed.Load()
+	rows, err := b.MatcherBackend.GetFilterMapRows(ctx, mapIndices, rowIndex, baseLayerOnly)
+	if armed && err == nil {
+		b.servedRows.Add(1)
+	}
+	return rows, err
+}
+
+func (b *hookBackend) GetLogByLvIndex(ctx context.Context, lvIndex uint64) (*types.Log, error) {
+	if b.beforeGetLogByLvIndex != nil {
+		b.beforeGetLogByLvIndex()
+	}
+	armed := b.armed.Load()
+	log, err := b.MatcherBackend.GetLogByLvIndex(ctx, lvIndex)
+	if armed && err == nil {
+		b.servedLogs.Add(1)
+	}
+	return log, err
+}
+
+// newMatcherTestSetup creates an indexed test chain and returns a matcher backend
+// along with an address filter matching at least one of its logs.
+func newMatcherTestSetup(t *testing.T) (*testSetup, *FilterMapsMatcherBackend, []common.Address) {
+	ts := newTestSetup(t)
+	ts.chain.addBlocks(100, 10, 10, 4, true)
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+
+	for _, bhash := range ts.chain.canonical {
+		for _, receipt := range ts.chain.receipts[bhash] {
+			if len(receipt.Logs) > 0 {
+				return ts, ts.fm.NewMatcherBackend(), []common.Address{receipt.Logs[0].Address}
+			}
+		}
+	}
+	ts.close()
+	t.Fatal("Test chain has no logs")
+	return nil, nil, nil
+}
+
+// waitSearch waits for a log search to return its error.
+func waitSearch(t *testing.T, errCh chan error) error {
+	select {
+	case err := <-errCh:
+		return err
+	case <-time.After(10 * time.Second):
+		t.Fatal("Log search did not return")
+		return nil
+	}
+}
+
+// TestMatcherCancel checks that a cancelled search returns with the context
+// error and does not process any further requests.
+func TestMatcherCancel(t *testing.T) {
+	ts, mb, addresses := newMatcherTestSetup(t)
+	defer ts.close()
+	defer mb.Close()
+
+	// search with an already cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := GetPotentialMatches(ctx, mb, 0, 1000, addresses, nil); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Search with cancelled context returned error %v, want %v", err, context.Canceled)
+	}
+
+	// cancel the search when it first accesses the filter maps
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	var (
+		backend = &hookBackend{MatcherBackend: mb}
+		once    sync.Once
+		errCh   = make(chan error, 1)
+	)
+	backend.beforeGetFilterMapRows = func() {
+		once.Do(func() {
+			cancel()
+			backend.armed.Store(true)
+		})
+	}
+	go func() {
+		_, err := GetPotentialMatches(ctx, backend, 0, 1000, addresses, nil)
+		errCh <- err
+	}()
+	if err := waitSearch(t, errCh); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Cancelled search returned error %v, want %v", err, context.Canceled)
+	}
+	if rows, logs := backend.servedRows.Load(), backend.servedLogs.Load(); rows != 0 || logs != 0 {
+		t.Fatalf("Cancelled search kept running (rows served: %d, logs served: %d)", rows, logs)
+	}
+}
+
+// TestMatcherCancelWhileWaitingForIndexLock checks that log lookups waiting for
+// the indexer to release the index lock do not proceed once the lock is
+// released if the search has been cancelled in the meantime.
+func TestMatcherCancelWhileWaitingForIndexLock(t *testing.T) {
+	ts, mb, addresses := newMatcherTestSetup(t)
+	defer ts.close()
+	defer mb.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var (
+		backend = &hookBackend{MatcherBackend: mb}
+		once    sync.Once
+		locked  = make(chan struct{})
+		errCh   = make(chan error, 1)
+	)
+	backend.beforeGetLogByLvIndex = func() {
+		once.Do(func() {
+			// stand in for the indexer writing a batch of rendered maps
+			ts.fm.indexLock.Lock()
+			backend.armed.Store(true)
+			close(locked)
+		})
+	}
+	go func() {
+		_, err := GetPotentialMatches(ctx, backend, 0, 1000, addresses, nil)
+		errCh <- err
+	}()
+	select {
+	case <-locked:
+	case err := <-errCh:
+		t.Fatalf("Search finished without a log lookup (error: %v)", err)
+	}
+	cancel()
+	ts.fm.indexLock.Unlock()
+
+	if err := waitSearch(t, errCh); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Cancelled search returned error %v, want %v", err, context.Canceled)
+	}
+	if logs := backend.servedLogs.Load(); logs != 0 {
+		t.Fatalf("Cancelled search looked up %d logs after the index lock was released", logs)
 	}
 }

@@ -21,6 +21,7 @@ package filters
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -325,8 +326,14 @@ func (es *EventSystem) SubscribeLogs(crit ethereum.FilterQuery, logs chan []*typ
 		return nil, errPendingLogsUnsupported
 	}
 
+	// Resolve history cutoffs.
 	if from == rpc.EarliestBlockNumber {
 		from = rpc.BlockNumber(es.backend.HistoryPruningCutoff())
+		crit.FromBlock = big.NewInt(int64(from))
+	}
+	if to == rpc.EarliestBlockNumber {
+		to = rpc.BlockNumber(es.backend.HistoryPruningCutoff())
+		crit.ToBlock = big.NewInt(int64(to))
 	}
 	// Queries beyond the pruning cutoff are not supported.
 	if uint64(from) < es.backend.HistoryPruningCutoff() {

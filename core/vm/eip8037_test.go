@@ -21,6 +21,7 @@
 package vm
 
 import (
+	"errors"
 	"math"
 	"math/big"
 	"math/rand"
@@ -148,6 +149,93 @@ func TestSStoreClearZeroAtStart(t *testing.T) {
 	}
 }
 
+func TestSStoreRefillCost(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		original byte
+		current  byte
+		value    byte
+		execGas  uint64
+		spilled  uint64
+		refill   uint64
+		wantErr  error
+	}{
+		{name: "reservoir", current: 1, execGas: 3000, refill: uint64(stateGasNewSlot)},
+		{name: "spill", current: 1, execGas: 3000, spilled: uint64(stateGasNewSlot), refill: uint64(stateGasNewSlot)},
+		{name: "partial spill", current: 1, execGas: 3000, spilled: uint64(stateGasNewSlot) / 2, refill: uint64(stateGasNewSlot)},
+		{name: "preexisting slot", original: 1, current: 2, value: 1, execGas: 3000},
+		{name: "dirty update", current: 1, value: 2, execGas: 3000},
+		{name: "noop", execGas: 3000},
+		{name: "sentry before refill", current: 1, execGas: params.SstoreSentryGasEIP2200, spilled: uint64(stateGasNewSlot), wantErr: ErrOutOfGas},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			self := common.BytesToAddress([]byte("self"))
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			statedb.CreateAccount(self)
+			statedb.SetCode(self, []byte{byte(STOP)}, tracing.CodeChangeUnspecified)
+			statedb.SetState(self, common.Hash{}, common.BytesToHash([]byte{tc.original}))
+			statedb.Finalise(params.Rules{IsEIP158: true})
+			statedb.SetState(self, common.Hash{}, common.BytesToHash([]byte{tc.current}))
+			statedb.AddSlotToAccessList(self, common.Hash{})
+
+			evm := amsterdam8037EVM(statedb)
+			gas := NewGasBudget(tc.execGas, 0)
+			gas.UsedStateGas = int64(tc.refill)
+			gas.Spilled = tc.spilled
+			contract := NewContract(common.Address{}, self, new(uint256.Int), gas, nil)
+
+			stack := newStackForTesting()
+			stack.push(uint256.NewInt(uint64(tc.value))) // value
+			stack.push(new(uint256.Int))                 // slot
+
+			mem := NewMemory()
+			defer mem.Free()
+
+			cost, err := gasSStore8037And8038(evm, contract, stack, mem, 0)
+			wantCost := GasCosts{
+				ExecutionGas:   params.WarmStorageAccessAmsterdam,
+				StateGasRefill: tc.refill,
+			}
+			if tc.wantErr == nil {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if cost != wantCost {
+					t.Errorf("calculated cost = %v, want %v", cost, wantCost)
+				}
+			} else if err == nil {
+				t.Fatal("expected gas calculation to fail before refilling")
+			}
+			if contract.Gas != gas {
+				t.Fatalf("calculator changed budget: have %v, want %v", contract.Gas, gas)
+			}
+
+			// The metering layer applies the returned refill exactly once.
+			cost, err = contract.chargeDynamicGas(gasSStore8037And8038, evm, stack, mem, 0)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("metering error = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
+				if contract.Gas != gas {
+					t.Fatalf("failed metering changed budget: have %v, want %v", contract.Gas, gas)
+				}
+				return
+			}
+			if cost != wantCost {
+				t.Errorf("metered cost = %v, want %v", cost, wantCost)
+			}
+			want := gas
+			if !want.ChargeExecutionOnly(cost.ExecutionGas) {
+				t.Fatal("insufficient execution gas in test")
+			}
+			want.RefundState(tc.refill)
+			if contract.Gas != want {
+				t.Errorf("metered budget = %v, want %v", contract.Gas, want)
+			}
+		})
+	}
+}
+
 // x -> x -> 0: clearing a slot non-zero at tx start makes no state adjustment.
 func TestSStoreClearOriginalNonzero(t *testing.T) {
 	_, res, err := run8037(t, sstore(0, 0), hugeBudget(), new(uint256.Int), setSlot(0, 1))
@@ -270,6 +358,159 @@ func fund(addr common.Address, wei int64) func(*state.StateDB, common.Address) {
 }
 
 // ====================== CALL* new-account state-gas =======================
+
+func TestCallDynamicStateGasCost(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		gas        GasBudget
+		badCallGas bool
+		wantErr    error
+	}{
+		{name: "reservoir", gas: NewGasBudget(500_000, 200_000)},
+		{name: "spill", gas: NewGasBudget(500_000, 0)},
+		{name: "partial reservoir", gas: NewGasBudget(500_000, 50_000)},
+		{name: "existing usage", gas: GasBudget{ExecutionGas: 500_000, UsedExecutionGas: 1000, UsedStateGas: 500, Spilled: 500}},
+		{name: "cold access out of gas", gas: NewGasBudget(1_000, 200_000), wantErr: ErrOutOfGas},
+		{name: "value transfer out of gas", gas: NewGasBudget(5_000, 200_000), wantErr: ErrOutOfGas},
+		{name: "state charge out of gas", gas: NewGasBudget(100_000, 0), wantErr: ErrOutOfGas},
+		{name: "call gas overflow", gas: NewGasBudget(500_000, 0), badCallGas: true, wantErr: ErrGasUintOverflow},
+	} {
+		for _, phase := range []struct {
+			name  string
+			meter bool
+		}{{name: "calculate"}, {name: "meter", meter: true}} {
+			t.Run(tc.name+"/"+phase.name, func(t *testing.T) {
+				statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+				evm := amsterdam8037EVM(statedb)
+				contract := NewContract(common.Address{}, common.BytesToAddress([]byte("self")), new(uint256.Int), tc.gas, nil)
+				stack := newStackForTesting()
+				for i := 0; i < 4; i++ {
+					stack.push(new(uint256.Int)) // output size/offset, input size/offset
+				}
+				stack.push(uint256.NewInt(1))
+				stack.push(new(uint256.Int).SetBytes(freshAddr.Bytes()))
+				requested := uint256.NewInt(math.MaxUint64)
+				if tc.badCallGas {
+					evm.chainRules.IsEIP150 = false
+					requested.Lsh(uint256.NewInt(1), 64)
+				}
+				stack.push(requested)
+				mem := NewMemory()
+				defer mem.Free()
+
+				var cost GasCosts
+				var err error
+				if phase.meter {
+					cost, err = contract.chargeDynamicGas(gasCall8038, evm, stack, mem, 0)
+				} else {
+					cost, err = gasCall8038(evm, contract, stack, mem, 0)
+				}
+				wantErr := tc.wantErr
+				if phase.meter && wantErr != nil {
+					wantErr = ErrOutOfGas // chargeDynamicGas wraps calculator errors.
+				}
+				if !errors.Is(err, wantErr) {
+					t.Fatalf("error = %v, want %v", err, wantErr)
+				}
+
+				intrinsic := params.ColdAccountAccessAmsterdam - params.WarmStorageReadCostEIP2929 + params.CallValueTransferAmsterdam
+				want := tc.gas
+				if tc.wantErr == nil {
+					spill := uint64(stateGasNewAccount) - min(uint64(stateGasNewAccount), tc.gas.StateGas)
+					available := tc.gas.ExecutionGas - intrinsic - spill
+					forward := available - available/64
+					wantCost := GasCosts{ExecutionGas: intrinsic + forward, StateGas: uint64(stateGasNewAccount)}
+					if cost != wantCost {
+						t.Errorf("cost = %v, want %v", cost, wantCost)
+					}
+					if evm.callGasTemp != forward {
+						t.Errorf("forwarded gas = %d, want %d", evm.callGasTemp, forward)
+					}
+					if phase.meter {
+						want.ExecutionGas = available / 64
+						want.StateGas -= uint64(stateGasNewAccount) - spill
+						want.UsedExecutionGas += intrinsic + forward
+						want.UsedStateGas += stateGasNewAccount
+						want.Spilled += spill
+					}
+				}
+				if contract.Gas != want {
+					t.Errorf("budget = %v, want %v", contract.Gas, want)
+				}
+			})
+		}
+	}
+}
+
+func TestTracedCallStateGasCost(t *testing.T) {
+	for _, tc := range []struct {
+		name                string
+		value               byte
+		existing            bool
+		insufficientBalance bool
+		gas                 GasBudget
+		wantState           int64
+		wantErr             error
+	}{
+		{name: "new account", value: 1, gas: NewGasBudget(1_000_000, 200_000), wantState: stateGasNewAccount},
+		{name: "new account spill", value: 1, gas: NewGasBudget(1_000_000, 0), wantState: stateGasNewAccount},
+		{name: "existing account", value: 1, existing: true, gas: hugeBudget()},
+		{name: "zero value", gas: hugeBudget()},
+		{name: "insufficient balance refill", value: 1, insufficientBalance: true, gas: hugeBudget(), wantState: stateGasNewAccount},
+		// Error events omit cost, regardless of which charge failed.
+		{name: "cold access out of gas", value: 1, gas: NewGasBudget(1_000, 0), wantErr: ErrOutOfGas},
+		{name: "value transfer out of gas", value: 1, gas: NewGasBudget(5_000, 0), wantErr: ErrOutOfGas},
+		{name: "state charge out of gas", value: 1, gas: NewGasBudget(100_000, 0), wantErr: ErrOutOfGas},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			self := common.BytesToAddress([]byte("self"))
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			statedb.CreateAccount(self)
+			statedb.SetCode(self, callCode(freshAddr, tc.value, stop), tracing.CodeChangeUnspecified)
+			if !tc.insufficientBalance {
+				statedb.AddBalance(self, uint256.NewInt(10), tracing.BalanceChangeUnspecified)
+			}
+			if tc.existing {
+				statedb.AddBalance(freshAddr, uint256.NewInt(1), tracing.BalanceChangeUnspecified)
+			}
+			statedb.Finalise(params.Rules{IsEIP158: true})
+			evm := amsterdam8037EVM(statedb)
+			calls := 0
+			evm.Config.Tracer = &tracing.Hooks{
+				OnOpcodeV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+					if OpCode(op) != CALL {
+						return
+					}
+					calls++
+					if cost.State != tc.wantState {
+						t.Errorf("traced state cost = %d, want %d", cost.State, tc.wantState)
+					}
+					if err != nil && cost != (tracing.OpCost{}) {
+						t.Errorf("error event cost = %v, want zero", cost)
+					}
+					if !errors.Is(err, tc.wantErr) {
+						t.Errorf("traced error = %v, want %v", err, tc.wantErr)
+					}
+				},
+			}
+			_, result, err := evm.Call(common.Address{}, self, nil, tc.gas, new(uint256.Int))
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tc.wantErr)
+			}
+			if calls != 1 {
+				t.Errorf("CALL events = %d, want 1", calls)
+			}
+			wantUsed := tc.wantState
+			if tc.wantErr != nil || tc.insufficientBalance {
+				wantUsed = 0
+			}
+			if result.UsedStateGas != wantUsed {
+				t.Errorf("used state gas = %d, want %d", result.UsedStateGas, wantUsed)
+			}
+			assertBudgetSane(t, tc.gas, result)
+		})
+	}
+}
 
 // CALL with value to a non-existent account charges one account creation.
 func TestCallValueToNewAccount(t *testing.T) {

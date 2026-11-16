@@ -616,7 +616,7 @@ func (db *Database) NodeReader(root common.Hash) (database.NodeReader, error) {
 		return &reader{db: db}, nil
 	}
 	if _, err := db.node(root); err != nil {
-		return nil, fmt.Errorf("state %#x is not available, %v", root, err)
+		return nil, fmt.Errorf("%w: %#x, %v", database.ErrStateUnavailable, root, err)
 	}
 	return &reader{db: db}, nil
 }

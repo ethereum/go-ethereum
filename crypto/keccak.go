@@ -38,6 +38,10 @@ var hasherPool = sync.Pool{
 
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
+	if len(data) == 1 && len(data[0]) <= keccakCacheMaxInput {
+		h := cachedKeccak256(data[0])
+		return h[:]
+	}
 	b := make([]byte, 32)
 	d := hasherPool.Get().(KeccakState)
 	d.Reset()
@@ -52,6 +56,9 @@ func Keccak256(data ...[]byte) []byte {
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
 func Keccak256Hash(data ...[]byte) (h common.Hash) {
+	if len(data) == 1 && len(data[0]) <= keccakCacheMaxInput {
+		return cachedKeccak256(data[0])
+	}
 	d := hasherPool.Get().(KeccakState)
 	d.Reset()
 	for _, b := range data {

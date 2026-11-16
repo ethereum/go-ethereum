@@ -197,6 +197,13 @@ type filterMapsRange struct {
 	// rendered
 	// blockLvPointers are available in the blocks range
 	blocks common.Range[uint64]
+
+	// if localBase is set then the index was started at the history cutoff
+	// with no checkpoint available there. Log value indices are then counted
+	// from a locally chosen base instead of genesis: searches work the same
+	// but epochs before the base cannot be rendered and the index cannot be
+	// exported as checkpoints.
+	localBase bool
 }
 
 // hasIndexedBlocks returns true if the range has at least one fully indexed block.
@@ -256,6 +263,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 			blocks:           common.NewRange(rs.BlocksFirst, rs.BlocksAfterLast-rs.BlocksFirst),
 			maps:             common.NewRange(rs.MapsFirst, rs.MapsAfterLast-rs.MapsFirst),
 			tailPartialEpoch: rs.TailPartialEpoch,
+			localBase:        rs.LocalBase,
 		},
 		// deleting last unindexed epoch might have been interrupted by shutdown
 		cleanedEpochsBefore: max(rs.MapsFirst>>params.logMapsPerEpoch, 1) - 1,
@@ -274,7 +282,7 @@ func NewFilterMaps(db ethdb.KeyValueStore, initView *ChainView, historyCutoff, f
 		log.Info("Initialized log indexer",
 			"firstblock", f.indexedRange.blocks.First(), "lastblock", f.indexedRange.blocks.Last(),
 			"firstmap", f.indexedRange.maps.First(), "lastmap", f.indexedRange.maps.Last(),
-			"headindexed", f.indexedRange.headIndexed)
+			"headindexed", f.indexedRange.headIndexed, "localbase", f.indexedRange.localBase)
 	}
 	return f, nil
 }
@@ -393,26 +401,47 @@ func (f *FilterMaps) init() error {
 			bestIdx, bestLen = idx, max
 		}
 	}
-	var initBlockNumber uint64
+	var (
+		cpList          checkpointList
+		initBlockNumber uint64
+		localBase       bool
+	)
 	if bestLen > 0 {
-		initBlockNumber = checkpoints[bestIdx][bestLen-1].BlockNumber
+		cpList = checkpoints[bestIdx][:bestLen]
+		initBlockNumber = cpList[bestLen-1].BlockNumber
 	}
 	if initBlockNumber < f.historyCutoff {
-		return errors.New("cannot start indexing before history cutoff point")
+		// The receipts needed to start from the best checkpoint have been pruned,
+		// so the global log value index of the blocks after the cutoff cannot be
+		// known. Start at the cutoff block instead, as if it was the last block
+		// of epoch 0 with its first log value at the start of epoch 1.
+		if f.historyCutoff >= f.targetView.HeadNumber() {
+			return errors.New("cannot start indexing at history cutoff point after chain head")
+		}
+		cpList = checkpointList{{
+			BlockNumber: f.historyCutoff,
+			BlockId:     f.targetView.BlockId(f.historyCutoff),
+			FirstIndex:  uint64(f.firstEpochMap(1)) << f.logValuesPerMap,
+		}}
+		localBase = true
+		log.Info("Starting log index at history cutoff with a local log value index base", "block", f.historyCutoff)
+		if f.exportFileName != "" {
+			log.Warn("Log index checkpoints cannot be exported from a local log value index base")
+		}
 	}
 	batch := f.db.NewBatch()
-	for epoch := range bestLen {
-		cp := checkpoints[bestIdx][epoch]
+	for epoch, cp := range cpList {
 		f.storeLastBlockOfMap(batch, f.lastEpochMap(uint32(epoch)), cp.BlockNumber, cp.BlockId)
 		f.storeBlockLvPointer(batch, cp.BlockNumber, cp.FirstIndex)
 	}
 	fmr := filterMapsRange{
 		initialized: true,
+		localBase:   localBase,
 	}
-	if bestLen > 0 {
-		cp := checkpoints[bestIdx][bestLen-1]
+	if len(cpList) > 0 {
+		cp := cpList[len(cpList)-1]
 		fmr.blocks = common.NewRange(cp.BlockNumber+1, 0)
-		fmr.maps = common.NewRange(f.firstEpochMap(uint32(bestLen)), 0)
+		fmr.maps = common.NewRange(f.firstEpochMap(uint32(len(cpList))), 0)
 	}
 	f.setRange(batch, f.targetView, fmr, false)
 	return batch.Write()
@@ -473,6 +502,7 @@ func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, ne
 			MapsFirst:        newRange.maps.First(),
 			MapsAfterLast:    newRange.maps.AfterLast(),
 			TailPartialEpoch: newRange.tailPartialEpoch,
+			LocalBase:        newRange.localBase,
 		}
 		rawdb.WriteFilterMapsRange(batch, rs)
 		if !isTempRange {
@@ -494,20 +524,34 @@ func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, ne
 // Note that this function assumes that the indexer read lock is being held when
 // called from outside the indexerLoop goroutine.
 func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
+	blockNumber, lvPointer, ok, err := f.getLogBlock(lvIndex)
+	if !ok || err != nil {
+		return nil, err
+	}
+	return f.getLogInBlock(f.indexedView, blockNumber, lvPointer, lvIndex)
+}
+
+// getLogBlock returns the number of the block containing the given log value
+// index, along with the log value pointer of the block. If the index is outside
+// the indexed range then false is returned.
+//
+// Note that this function assumes that the indexer read lock is being held when
+// called from outside the indexerLoop goroutine.
+func (f *FilterMaps) getLogBlock(lvIndex uint64) (uint64, uint64, bool, error) {
 	mapIndex := uint32(lvIndex >> f.logValuesPerMap)
 	if !f.indexedRange.maps.Includes(mapIndex) {
-		return nil, nil
+		return 0, 0, false, nil
 	}
 	// find possible block range based on map to block pointers
 	lastBlockNumber, _, err := f.getLastBlockOfMap(mapIndex)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve last block of map %d containing searched log value index %d: %v", mapIndex, lvIndex, err)
+		return 0, 0, false, fmt.Errorf("failed to retrieve last block of map %d containing searched log value index %d: %v", mapIndex, lvIndex, err)
 	}
 	var firstBlockNumber uint64
 	if mapIndex > 0 {
 		firstBlockNumber, _, err = f.getLastBlockOfMap(mapIndex - 1)
 		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve last block of map %d before searched log value index %d: %v", mapIndex, lvIndex, err)
+			return 0, 0, false, fmt.Errorf("failed to retrieve last block of map %d before searched log value index %d: %v", mapIndex, lvIndex, err)
 		}
 	}
 	if firstBlockNumber < f.indexedRange.blocks.First() {
@@ -518,7 +562,7 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 		midBlockNumber := (firstBlockNumber + lastBlockNumber + 1) / 2
 		midLvPointer, err := f.getBlockLvPointer(midBlockNumber)
 		if err != nil {
-			return nil, fmt.Errorf("failed to retrieve log value pointer of block %d while binary searching log value index %d: %v", midBlockNumber, lvIndex, err)
+			return 0, 0, false, fmt.Errorf("failed to retrieve log value pointer of block %d while binary searching log value index %d: %v", midBlockNumber, lvIndex, err)
 		}
 		if lvIndex < midLvPointer {
 			lastBlockNumber = midBlockNumber - 1
@@ -526,14 +570,25 @@ func (f *FilterMaps) getLogByLvIndex(lvIndex uint64) (*types.Log, error) {
 			firstBlockNumber = midBlockNumber
 		}
 	}
-	// get block receipts
-	receipts := f.indexedView.Receipts(firstBlockNumber)
-	if receipts == nil {
-		return nil, fmt.Errorf("failed to retrieve receipts for block %d containing searched log value index %d: %v", firstBlockNumber, lvIndex, err)
-	}
 	lvPointer, err := f.getBlockLvPointer(firstBlockNumber)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve log value pointer of block %d containing searched log value index %d: %v", firstBlockNumber, lvIndex, err)
+		return 0, 0, false, fmt.Errorf("failed to retrieve log value pointer of block %d containing searched log value index %d: %v", firstBlockNumber, lvIndex, err)
+	}
+	return firstBlockNumber, lvPointer, true, nil
+}
+
+// getLogInBlock returns the log at the given log value index, located in the
+// given block of the chain view. The log value pointer of the block should be
+// retrieved from the log index consistent with the chain view. If the index
+// does not point to the first log value entry of a log then no log and no error
+// are returned as this can happen when the log value index was a false positive.
+//
+// Note that this function does not access the log index, therefore it does not
+// require the indexer read lock.
+func (f *FilterMaps) getLogInBlock(view *ChainView, blockNumber, lvPointer, lvIndex uint64) (*types.Log, error) {
+	receipts := view.Receipts(blockNumber)
+	if receipts == nil {
+		return nil, fmt.Errorf("failed to retrieve receipts for block %d containing searched log value index %d", blockNumber, lvIndex)
 	}
 	// iterate through receipts to find the exact log starting at lvIndex
 	for _, receipt := range receipts {
@@ -849,6 +904,9 @@ func (f *FilterMaps) deleteTailEpoch(epoch uint32) (bool, error) {
 // Note: acquiring the indexLock read lock is unnecessary here, as this function
 // is always called within the indexLoop.
 func (f *FilterMaps) exportCheckpoints() {
+	if f.indexedRange.localBase {
+		return // log value indices are not the global ones
+	}
 	finalLvPtr, err := f.getBlockLvPointer(f.finalBlock + 1)
 	if err != nil {
 		log.Error("Error fetching log value pointer of finalized block", "block", f.finalBlock, "error", err)

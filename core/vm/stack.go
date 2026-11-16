@@ -226,6 +226,13 @@ func (s *Stack) swap16() {
 	s.inner.data[s.bottom+s.size-17], s.inner.data[s.bottom+s.size-1] = s.inner.data[s.bottom+s.size-1], s.inner.data[s.bottom+s.size-17]
 }
 
+// swap exchanges the top of the stack with the n'th item below it. The generated
+// dispatch calls this in place of swap1 through swap16, whose n is baked in.
+func (s *Stack) swap(n int) {
+	top := s.bottom + s.size - 1
+	s.inner.data[top-n], s.inner.data[top] = s.inner.data[top], s.inner.data[top-n]
+}
+
 func (s *Stack) dup(n int) {
 	s.inner.data[s.bottom+s.size] = s.inner.data[s.bottom+s.size-n]
 	s.size++

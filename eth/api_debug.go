@@ -84,7 +84,7 @@ func (api *DebugAPI) DumpBlock(blockNr rpc.BlockNumber) (state.Dump, error) {
 	if header == nil {
 		return state.Dump{}, fmt.Errorf("block #%d not found", blockNr)
 	}
-	stateDb, err := api.eth.BlockChain().StateAt(header)
+	stateDb, err := api.eth.BlockChain().StateAt(header.Root, header.Number, header.Time)
 	if err != nil {
 		return state.Dump{}, err
 	}
@@ -213,7 +213,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 			if header == nil {
 				return state.Dump{}, fmt.Errorf("block #%d not found", number)
 			}
-			stateDb, err = api.eth.BlockChain().StateAt(header)
+			stateDb, err = api.eth.BlockChain().StateAt(header.Root, header.Number, header.Time)
 			if err != nil {
 				return state.Dump{}, err
 			}
@@ -223,7 +223,7 @@ func (api *DebugAPI) AccountRange(blockNrOrHash rpc.BlockNumberOrHash, start hex
 		if block == nil {
 			return state.Dump{}, fmt.Errorf("block %s not found", hash.Hex())
 		}
-		stateDb, err = api.eth.BlockChain().StateAt(block.Header())
+		stateDb, err = api.eth.BlockChain().StateAt(block.Root(), block.Number(), block.Time())
 		if err != nil {
 			return state.Dump{}, err
 		}
@@ -409,6 +409,12 @@ func (api *DebugAPI) getModifiedAccounts(startHeader, endHeader *types.Header) (
 			return nil, fmt.Errorf("no preimage found for hash %x", iter.Key)
 		}
 		dirty = append(dirty, common.BytesToAddress(key))
+	}
+	// Iterator.Next returns false on both exhaustion and error, so a failure to
+	// resolve a trie node mid-traversal would otherwise be reported as a complete
+	// set of modified accounts. Surface the error instead of silently truncating.
+	if iter.Err != nil {
+		return nil, iter.Err
 	}
 	return dirty, nil
 }

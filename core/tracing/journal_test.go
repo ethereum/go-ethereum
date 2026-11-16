@@ -219,6 +219,33 @@ func TestNonceIncOnCreate(t *testing.T) {
 	}
 }
 
+// TestNonceIncOnCreateWithoutFrame checks that the creator's nonce increment
+// of a contract creation transaction halted before its frame is entered (the
+// account creation state gas of EIP-8037 cannot be paid) is recorded without a
+// frame to attach it to, and survives the halted frame's revert.
+func TestNonceIncOnCreateWithoutFrame(t *testing.T) {
+	const opCREATE = 0xf0
+
+	tr := &testTracer{t: t}
+	wr, err := WrapWithJournal(&Hooks{OnNonceChange: tr.OnNonceChange})
+	if err != nil {
+		t.Fatalf("failed to wrap test tracer: %v", err)
+	}
+
+	addr := common.HexToAddress("0x1234")
+	{
+		// The nonce is incremented with no frame open, then the halted top
+		// frame is entered and exited reverting.
+		wr.OnNonceChangeV2(addr, 0, 1, NonceChangeContractCreator)
+		wr.OnEnter(0, opCREATE, addr, addr, nil, 1000, big.NewInt(0))
+		wr.OnExit(0, nil, 1000, errors.New("out of gas"), true)
+	}
+
+	if tr.nonce != 1 {
+		t.Fatalf("unexpected nonce: %v", tr.nonce)
+	}
+}
+
 // TestNonceIncOnCreateParentReverts checks that the creator's nonce increment
 // from CREATE survives the CREATE frame's own revert but is properly reverted
 // when the parent call frame reverts.

@@ -107,8 +107,10 @@ func TestCreation(t *testing.T) {
 				{1735372, 1761017183, ID{Hash: checksumToBytes(0xe2ae4999), Next: 1761017184}}, // Last Osaka block
 				{1735372, 1761017184, ID{Hash: checksumToBytes(0x56078a1e), Next: 1761607008}}, // First BPO1 block
 				{1735372, 1761607007, ID{Hash: checksumToBytes(0x56078a1e), Next: 1761607008}}, // Last BPO1 block
-				{1735372, 1761607008, ID{Hash: checksumToBytes(0x268956b6), Next: 0}},          // First BPO2 block
-				{1735372, 2000000000, ID{Hash: checksumToBytes(0x268956b6), Next: 0}},          // Future BPO2 block
+				{1735372, 1761607008, ID{Hash: checksumToBytes(0x268956b6), Next: 1791294816}}, // First BPO2 block
+				{1735372, 1791294815, ID{Hash: checksumToBytes(0x268956b6), Next: 1791294816}}, // Last BPO2 block
+				{1735372, 1791294816, ID{Hash: checksumToBytes(0x6c1d9423), Next: 0}},          // First Amsterdam block
+				{1735372, 2000000000, ID{Hash: checksumToBytes(0x6c1d9423), Next: 0}},          // Future Amsterdam block
 			},
 		},
 		// Hoodi test cases

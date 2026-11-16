@@ -21,7 +21,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth/protocols/eth"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 // bodyQueue implements typedQueue and is a type adapter between the generic
@@ -38,6 +37,12 @@ func (q *bodyQueue) waker() chan bool {
 // by the concurrent downloader.
 func (q *bodyQueue) pending() int {
 	return q.queue.PendingBodies()
+}
+
+// next returns the number of the block at the head of the body retrieval
+// queue, false if none is pending.
+func (q *bodyQueue) next() (uint64, bool) {
+	return q.queue.NextBody()
 }
 
 // capacity is responsible for calculating how many bodies a particular peer is
@@ -58,17 +63,10 @@ func (q *bodyQueue) reserve(peer *peerConnection, items int) (*fetchRequest, boo
 	return q.queue.ReserveBodies(peer, items)
 }
 
-// unreserve is responsible for removing the current body retrieval allocation
-// assigned to a specific peer and placing it back into the pool to allow
-// reassigning to some other peer.
-func (q *bodyQueue) unreserve(peer string) int {
-	fails := q.queue.ExpireBodies(peer)
-	if fails > 2 {
-		log.Trace("Body delivery timed out", "peer", peer)
-	} else {
-		log.Debug("Body delivery stalling", "peer", peer)
-	}
-	return fails
+// requeue is responsible for placing the current body retrieval allocation of a
+// specific peer back into the pool for some other peer to retrieve as well.
+func (q *bodyQueue) requeue(peer string) {
+	q.queue.RequeueBodies(peer)
 }
 
 // request is responsible for converting a generic fetch request into a body
@@ -100,4 +98,16 @@ func (q *bodyQueue) deliver(peer *peerConnection, packet *eth.Response) (int, er
 		peer.log.Debug("Failed to deliver retrieved bodies", "err", err)
 	}
 	return accepted, err
+}
+
+// stalled returns the peer whose body request holds the head of the result
+// cache for longer than the given threshold, blocking the consumer.
+func (q *bodyQueue) stalled(threshold time.Duration) string {
+	return q.queue.StalledBodies(threshold)
+}
+
+// metrics returns the collectors the concurrent fetcher reports the scheduling
+// state of body retrievals into.
+func (q *bodyQueue) metrics() *fetchMetrics {
+	return bodyFetchMetrics
 }

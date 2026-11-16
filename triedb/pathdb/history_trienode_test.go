@@ -127,7 +127,7 @@ func TestEncodeDecodeTrienodeHistory(t *testing.T) {
 func TestTrienodeHistoryReader(t *testing.T) {
 	var (
 		hs         = makeTrienodeHistories(10)
-		freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false, false)
+		freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false)
 	)
 	defer freezer.Close()
 
@@ -407,7 +407,7 @@ func TestInvalidOffsets(t *testing.T) {
 func TestTrienodeHistoryReaderNonExistentPath(t *testing.T) {
 	var (
 		h          = makeTrienodeHistory()
-		freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false, false)
+		freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false)
 	)
 	defer freezer.Close()
 
@@ -448,7 +448,7 @@ func TestTrienodeHistoryReaderNilValues(t *testing.T) {
 
 	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
 
-	var freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false, false)
+	var freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false)
 	defer freezer.Close()
 
 	header, keySection, valueSection, _ := h.encode()
@@ -496,7 +496,7 @@ func TestTrienodeHistoryReaderNilKey(t *testing.T) {
 
 	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
 
-	var freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false, false)
+	var freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false)
 	defer freezer.Close()
 
 	header, keySection, valueSection, _ := h.encode()
@@ -694,7 +694,7 @@ func TestSearchSingle(t *testing.T) {
 	}
 	h := newTrienodeHistory(common.Hash{}, common.Hash{}, 1, nodes)
 
-	var freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false, false)
+	var freezer, _ = rawdb.NewTrienodeFreezer(t.TempDir(), false)
 	defer freezer.Close()
 
 	header, keySection, valueSection, _ := h.encode()

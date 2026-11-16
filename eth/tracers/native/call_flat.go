@@ -146,8 +146,8 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 		Hooks: &tracing.Hooks{
 			OnTxStart: ft.OnTxStart,
 			OnTxEnd:   ft.OnTxEnd,
-			OnEnter:   ft.OnEnter,
-			OnExit:    ft.OnExit,
+			OnEnterV2: ft.OnEnter,
+			OnExitV2:  ft.OnExit,
 		},
 		Stop:      ft.Stop,
 		GetResult: ft.GetResult,
@@ -155,7 +155,7 @@ func newFlatCallTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *p
 }
 
 // OnEnter is called when EVM enters a new scope (via call, create or selfdestruct).
-func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
 	if t.interrupt.Load() {
 		return
 	}
@@ -173,11 +173,11 @@ func (t *flatCallTracer) OnEnter(depth int, typ byte, from common.Address, to co
 
 // OnExit is called when EVM exits a scope, even if the scope didn't
 // execute any code.
-func (t *flatCallTracer) OnExit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *flatCallTracer) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
 	if t.interrupt.Load() {
 		return
 	}
-	t.tracer.OnExit(depth, output, gasUsed, err, reverted)
+	t.tracer.OnExit(depth, output, gasLeft, err, reverted)
 
 	if depth == 0 {
 		return

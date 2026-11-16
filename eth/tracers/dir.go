@@ -38,6 +38,11 @@ type Context struct {
 // for it to be available through the RPC interface.
 // This involves a method to retrieve results and one to
 // stop tracing.
+//
+// Opcode callbacks carrying an error and fault callbacks omit cost: both gas
+// dimensions are zero. This replaces the costs previously reported for
+// failed opcodes. An earlier pre-execution opcode callback can still contain
+// computed costs. This does not change the gas consumed by the frame.
 type Tracer struct {
 	*tracing.Hooks
 	GetResult func() (json.RawMessage, error)

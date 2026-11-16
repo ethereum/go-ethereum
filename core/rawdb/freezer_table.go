@@ -175,7 +175,7 @@ func newTable(path string, name string, readMeter, writeMeter *metrics.Meter, si
 	}
 	// Load metadata from the file. The tag will be true if legacy metadata
 	// is detected.
-	metadata, err := newMetadata(meta)
+	metadata, err := newMetadata(meta, readonly)
 	if err != nil {
 		meta.Close()
 		index.Close()

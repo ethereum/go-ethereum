@@ -33,6 +33,9 @@ import (
 
 // hookedStateDB represents a statedb which emits calls to tracing-hooks
 // on state operations.
+//
+// Note, NewTracerView unwraps it to suspend access list recording for tracer
+// reads; any other wrapper of StateDB must be handled there as well.
 type hookedStateDB struct {
 	inner *StateDB
 	hooks *tracing.Hooks
@@ -157,10 +160,6 @@ func (s *hookedStateDB) AddPreimage(hash common.Hash, bytes []byte) {
 
 func (s *hookedStateDB) Witness() *stateless.Witness {
 	return s.inner.Witness()
-}
-
-func (s *hookedStateDB) AccessEvents() *AccessEvents {
-	return s.inner.AccessEvents()
 }
 
 func (s *hookedStateDB) SubBalance(addr common.Address, amount *uint256.Int, reason tracing.BalanceChangeReason) uint256.Int {

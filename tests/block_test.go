@@ -91,6 +91,10 @@ func TestExecutionSpecBlocktests(t *testing.T) {
 	bt.skipLoad(`.*eip7251_consolidations/contract_deployment/system_contract_deployment\.json`)
 	bt.skipLoad(`.*eip7002_el_triggerable_withdrawals/contract_deployment/system_contract_deployment\.json`)
 
+	// TODO: these require netting the BAL changes over a whole block access index
+	bt.skipLoad(`.*bal_withdrawals_and_dequeues_net_balance_at_last_index\.json/.*forward_all\]`)
+	bt.skipLoad(`.*bal_post_execution_calls_net_storage_at_last_index\.json`)
+
 	bt.walk(t, executionSpecBlockchainTestDir, func(t *testing.T, name string, test *BlockTest) {
 		execBlockTest(t, bt, test)
 	})
@@ -110,9 +114,14 @@ func execBlockTest(t *testing.T, bt *testMatcher, test *BlockTest) {
 		snapshotConf = []bool{snapshotConf[rand.Int()%2]}
 		dbschemeConf = []string{dbschemeConf[rand.Int()%2]}
 	}
+	// The binary tree exists in the path scheme only, without stateless support.
+	witness := true
+	if config, ok := Forks[test.Network()]; ok && config.PBTTime != nil {
+		dbschemeConf, witness = []string{rawdb.PathScheme}, false
+	}
 	for _, snapshot := range snapshotConf {
 		for _, dbscheme := range dbschemeConf {
-			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, true, nil, nil)); err != nil {
+			if err := bt.checkFailure(t, test.Run(snapshot, dbscheme, witness, nil, nil)); err != nil {
 				t.Errorf("test with config {snapshotter:%v, scheme:%v} failed: %v", snapshot, dbscheme, err)
 				return
 			}

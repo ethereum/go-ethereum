@@ -17,6 +17,8 @@
 package blobpool
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -32,9 +34,6 @@ type BlockChain interface {
 	// CurrentBlock returns the current head of the chain.
 	CurrentBlock() *types.Header
 
-	// Genesis returns the genesis block of the chain.
-	Genesis() *types.Block
-
 	// CurrentFinalBlock returns the current block below which blobs should not
 	// be maintained anymore for reorg purposes.
 	CurrentFinalBlock() *types.Header
@@ -43,5 +42,5 @@ type BlockChain interface {
 	GetBlock(hash common.Hash, number uint64) *types.Block
 
 	// StateAt returns a state database for a given chain header (generally the head).
-	StateAt(header *types.Header) (*state.StateDB, error)
+	StateAt(root common.Hash, number *big.Int, time uint64) (*state.StateDB, error)
 }

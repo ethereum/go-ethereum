@@ -263,6 +263,13 @@ var combinedJSONBindTestsV2 = []bindV2Test{
 		nil,
 		nil,
 	},
+	{
+		"OriginalErrorName",
+		[]string{`[{"inputs":[{"internalType":"uint256","name":"value","type":"uint256"}],"name":"bad_thing","type":"error"}]`},
+		[]string{""},
+		nil,
+		nil,
+	},
 }
 
 // TestBindingV2ConvertedV1Tests regenerates contracts from the v1 binding test

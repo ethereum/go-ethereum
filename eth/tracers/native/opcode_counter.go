@@ -34,7 +34,7 @@ func NewOpcodeCounter() *tracers.Tracer {
 	c := &opcodeCounter{}
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
-			OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+			OnOpcodeV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 				c.counts[op]++
 			},
 		},

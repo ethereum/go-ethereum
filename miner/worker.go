@@ -224,7 +224,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	}
 
 	// Collect consensus-layer requests if Prague is enabled.
-	requests, bal, err := core.PostExecution(ctx, miner.chainConfig, work.header.Number, work.header.Time, allLogs, work.evm, uint32(work.tcount+1))
+	requests, bal, err := core.PostExecution(ctx, miner.chainConfig, work.header.Number, work.header.Time, allLogs, genParam.withdrawals, work.evm, uint32(work.tcount+1))
 	if err != nil {
 		return &newPayloadResult{err: err}
 	}
@@ -235,7 +235,7 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	work.bal.Merge(bal)
 
 	// Apply the consensus-specific post-transaction changes
-	miner.engine.Finalize(miner.chain, work.header, work.state, &body, uint32(work.tcount+1), work.bal)
+	miner.engine.Finalize(miner.chain, work.header, work.state, &body)
 
 	// Assemble the block for delivery.
 	_, _, assembleSpanEnd := telemetry.StartSpan(ctx, "miner.AssembleBlock")
@@ -246,6 +246,14 @@ func (miner *Miner) generateWork(ctx context.Context, genParam *generateParams, 
 	// weird flush or a trie node missing, we need to bail out and not create a block.
 	if dbErr := work.state.Error(); dbErr != nil {
 		return &newPayloadResult{err: fmt.Errorf("%w: %v", errStateReadFailure, dbErr)}
+	}
+	// The receipts were made before the block hash was known (see applyTransaction).
+	hash := block.Hash()
+	for _, receipt := range work.receipts {
+		receipt.BlockHash = hash
+		for _, l := range receipt.Logs {
+			l.BlockHash = hash
+		}
 	}
 	return &newPayloadResult{
 		block:       block,
@@ -390,12 +398,12 @@ func (miner *Miner) makeEnv(parent *types.Header, header *types.Header, coinbase
 }
 
 func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx *types.Transaction) (err error) {
-	_, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransaction")
+	ctx, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransaction")
 	defer spanEnd(&err)
 	if tx.Type() == types.BlobTxType {
-		return miner.commitBlobTransaction(env, tx)
+		return miner.commitBlobTransaction(ctx, env, tx)
 	}
-	receipt, bal, err := miner.applyTransaction(env, tx)
+	receipt, bal, err := miner.applyTransaction(ctx, env, tx)
 	if err != nil {
 		return err
 	}
@@ -407,7 +415,7 @@ func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx 
 	return nil
 }
 
-func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transaction) error {
+func (miner *Miner) commitBlobTransaction(ctx context.Context, env *environment, tx *types.Transaction) error {
 	sc := tx.BlobTxSidecar()
 	if sc == nil {
 		panic("blob transaction without blobs in miner")
@@ -420,7 +428,7 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 	if env.blobs+len(sc.Blobs) > maxBlobs {
 		return errors.New("max data blobs reached")
 	}
-	receipt, bal, err := miner.applyTransaction(env, tx)
+	receipt, bal, err := miner.applyTransaction(ctx, env, tx)
 	if err != nil {
 		return err
 	}
@@ -437,12 +445,20 @@ func (miner *Miner) commitBlobTransaction(env *environment, tx *types.Transactio
 }
 
 // applyTransaction runs the transaction. If execution fails, state and gas pool are reverted.
-func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*types.Receipt, *bal.ConstructionBlockAccessList, error) {
+// The receipt and its logs get an empty block hash: generateWork sets it once the block is
+// assembled.
+func (miner *Miner) applyTransaction(ctx context.Context, env *environment, tx *types.Transaction) (*types.Receipt, *bal.ConstructionBlockAccessList, error) {
 	var (
 		snap = env.state.Snapshot()
 		gp   = env.gasPool.Snapshot()
+
+		receipt    *types.Receipt
+		accessList *bal.ConstructionBlockAccessList
+		msg, err   = core.TransactionToMessage(tx, env.signer, env.header.BaseFee)
 	)
-	receipt, bal, err := core.ApplyTransaction(env.evm, env.gasPool, env.state, env.header, tx)
+	if err == nil {
+		receipt, accessList, err = core.ApplyTransactionWithEVM(ctx, msg, env.gasPool, env.state, env.header.Number, common.Hash{}, env.header.Time, tx, env.evm)
+	}
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
 		env.gasPool.Set(gp)
@@ -452,14 +468,23 @@ func (miner *Miner) applyTransaction(env *environment, tx *types.Transaction) (*
 		return nil, nil, err
 	}
 	env.header.GasUsed = env.gasPool.Used()
-	return receipt, bal, nil
+	return receipt, accessList, nil
 }
 
 func (miner *Miner) commitTransactions(ctx context.Context, env *environment, plainTxs, blobTxs *txorder.TransactionsByPriceAndNonce, interrupt *atomic.Int32) error {
 	ctx, _, spanEnd := telemetry.StartSpan(ctx, "miner.commitTransactions")
 	defer spanEnd(nil)
 
-	isCancun := miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
+	var (
+		isCancun    = miner.chainConfig.IsCancun(env.header.Number, env.header.Time)
+		isAmsterdam = miner.chainConfig.IsAmsterdam(env.header.Number, env.header.Time)
+	)
+	// The smallest gas limit a transaction may carry, EIP-2780 lowers
+	// the intrinsic floor after Amsterdam.
+	minTxGas := params.TxGas
+	if isAmsterdam {
+		minTxGas = params.TxBaseCost2780
+	}
 	for {
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
@@ -468,8 +493,8 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 			}
 		}
 		// If we don't have enough gas for any further transactions then we're done.
-		if env.gasPool.Gas() < params.TxGas {
-			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
+		if env.gasPool.Available(isAmsterdam) < minTxGas {
+			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", minTxGas)
 			break
 		}
 		// If we don't have enough blob space for any further blob transactions,
@@ -503,8 +528,8 @@ func (miner *Miner) commitTransactions(ctx context.Context, env *environment, pl
 			break
 		}
 		// If we don't have enough space for the next transaction, skip the account.
-		if env.gasPool.Gas() < ltx.Gas {
-			log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "left", env.gasPool.Gas(), "needed", ltx.Gas)
+		if env.gasPool.Available(isAmsterdam) < ltx.Gas {
+			log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "have", env.gasPool, "needed", ltx.Gas)
 			txs.Pop()
 			continue
 		}

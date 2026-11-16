@@ -24,20 +24,17 @@ import (
 )
 
 // GasCosts denotes a vector of gas costs in the multidimensional metering
-// paradigm. It represents the cost charged by an individual operation.
+// paradigm. It represents the charges and state-gas refill of an individual
+// operation.
 type GasCosts struct {
-	ExecutionGas uint64
-	StateGas     uint64
-}
-
-// Sum returns the total gas (execution + state).
-func (g GasCosts) Sum() uint64 {
-	return g.ExecutionGas + g.StateGas
+	ExecutionGas   uint64
+	StateGas       uint64
+	StateGasRefill uint64
 }
 
 // String returns a visual representation of the gas vector.
 func (g GasCosts) String() string {
-	return fmt.Sprintf("<%v,%v>", g.ExecutionGas, g.StateGas)
+	return fmt.Sprintf("<%v,%v,refill=%v>", g.ExecutionGas, g.StateGas, g.StateGasRefill)
 }
 
 // GasBudget is the unified gas-state structure used throughout the EVM.
@@ -270,7 +267,8 @@ func (g GasBudget) Exit(err error) GasBudget {
 // budget. Additionally, it does an EIP-8037 spillover correction:
 // state-gas that spilled into the execution pool inside the child frame is
 // excluded from the UsedExecutionGas.
-func (g *GasBudget) Absorb(child GasBudget) {
+func (g *GasBudget) Absorb(child GasBudget, logger *tracing.Hooks) {
+	prior := *g
 	g.UsedExecutionGas -= child.ExecutionGas
 	g.ExecutionGas += child.ExecutionGas
 	g.StateGas = child.StateGas
@@ -284,8 +282,19 @@ func (g *GasBudget) Absorb(child GasBudget) {
 	// the gas ends up in the child's reservoir and is handed back to the parent. The
 	// parent's state reservoir can then be non-zero while it still has outstanding
 	// debt from the execution gas.
+	merged := *g
 	d := min(g.StateGas, g.Spilled)
 	g.ExecutionGas += d
 	g.StateGas -= d
 	g.Spilled -= d
+
+	if !logger.HasGasHook() {
+		return
+	}
+	if prior.AsTracing() != merged.AsTracing() {
+		logger.EmitGasChange(prior.AsTracing(), merged.AsTracing(), tracing.GasChangeCallLeftOverRefunded)
+	}
+	if merged.AsTracing() != g.AsTracing() {
+		logger.EmitGasChange(merged.AsTracing(), g.AsTracing(), tracing.GasChangeStateGasRepaid)
+	}
 }

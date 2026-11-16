@@ -29,7 +29,7 @@ import (
 
 func emptyLayer() *diskLayer {
 	return &diskLayer{
-		db:     New(rawdb.NewMemoryDatabase(), nil, false),
+		db:     New(rawdb.NewMemoryDatabase(), nil),
 		buffer: newBuffer(defaultBufferSize, nil, nil, 0),
 	}
 }

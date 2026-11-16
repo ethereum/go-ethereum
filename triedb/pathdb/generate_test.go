@@ -50,7 +50,7 @@ func newGenTester() *genTester {
 	config := *Defaults
 	config.SnapshotNoBuild = true // no background generation
 	config.NoAsyncFlush = true    // no async flush
-	db := New(disk, &config, false)
+	db := New(disk, &config)
 	tr, _ := trie.New(trie.StateTrieID(types.EmptyRootHash), db)
 	return &genTester{
 		diskdb:   disk,

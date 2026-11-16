@@ -129,7 +129,7 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
 	Number        *hexutil.Big
-	Difficulty    *hexutil.Big // No-op if we're simulating post-merge calls.
+	Difficulty    *hexutil.Big // No-op post-merge outside eth_simulateV1, which rejects it.
 	Time          *hexutil.Uint64
 	GasLimit      *hexutil.Uint64
 	FeeRecipient  *common.Address
@@ -190,7 +190,8 @@ func (o *BlockOverrides) MakeHeader(header *types.Header) *types.Header {
 	if o.Number != nil {
 		h.Number = o.Number.ToInt()
 	}
-	if o.Difficulty != nil {
+	// Difficulty is a no-op on post-merge (zero-difficulty) headers.
+	if o.Difficulty != nil && (h.Difficulty == nil || h.Difficulty.Sign() != 0) {
 		h.Difficulty = o.Difficulty.ToInt()
 	}
 	if o.Time != nil {

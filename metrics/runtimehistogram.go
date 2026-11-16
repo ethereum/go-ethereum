@@ -100,6 +100,7 @@ func (h *runtimeHistogramSnapshot) calc() {
 		if count == 0 { // Set min only first loop iteration
 			min = int64(math.Floor(h.internal.Buckets[i]))
 		}
+		first := count == 0
 		count += int64(c)
 		sum += h.midpoint(i) * float64(c)
 		// Set max on every iteration
@@ -107,7 +108,7 @@ func (h *runtimeHistogramSnapshot) calc() {
 		if math.IsInf(edge, 1) {
 			edge = h.internal.Buckets[i]
 		}
-		if edge > max {
+		if first || edge > max {
 			max = edge
 		}
 	}

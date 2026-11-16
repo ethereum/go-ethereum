@@ -18,6 +18,7 @@ package rawdb
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"os"
@@ -30,6 +31,10 @@ const (
 	freezerTableV1 = 1              // Initial version of metadata struct
 	freezerTableV2 = 2              // Add field: 'flushOffset'
 	freezerVersion = freezerTableV2 // The current used version
+
+	// freezerMetaSize is the size the metadata is written at, padded with zeros,
+	// which decoding ignores; A rewrite should never changes the file's length.
+	freezerMetaSize = 32
 )
 
 // freezerTableMeta is a collection of additional properties that describe the
@@ -125,7 +130,7 @@ func decodeV2(file *os.File) *freezerTableMeta {
 
 // newMetadata initializes the metadata object, either by loading it from the file
 // or by constructing a new one from scratch.
-func newMetadata(file *os.File) (*freezerTableMeta, error) {
+func newMetadata(file *os.File, readonly bool) (*freezerTableMeta, error) {
 	stat, err := file.Stat()
 	if err != nil {
 		return nil, err
@@ -142,13 +147,29 @@ func newMetadata(file *os.File) (*freezerTableMeta, error) {
 		}
 		return m, nil
 	}
-	if m := decodeV2(file); m != nil {
+	m := decodeV2(file)
+	if m == nil {
+		m = decodeV1(file) // legacy metadata
+	}
+	if m == nil {
+		return nil, errors.New("failed to decode metadata")
+	}
+	if readonly {
 		return m, nil
 	}
-	if m := decodeV1(file); m != nil {
-		return m, nil // legacy metadata
+	// Make the fixed size durable before any rewrite, so that rewrites never
+	// change the length on disk. A file an earlier version wrote is shorter and
+	// is extended first; the sync is needed at that size too, as an extension
+	// by a process killed before its sync may not be on disk.
+	if stat.Size() < freezerMetaSize {
+		if err := file.Truncate(freezerMetaSize); err != nil {
+			return nil, err
+		}
 	}
-	return nil, errors.New("failed to decode metadata")
+	if err := file.Sync(); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 // setVirtualTail sets the virtual tail and flushes the metadata if sync is true.
@@ -175,11 +196,16 @@ func (m *freezerTableMeta) write(sync bool) error {
 	o.Tail = m.virtualTail
 	o.Offset = uint64(m.flushOffset)
 
-	_, err := m.file.Seek(0, io.SeekStart)
+	enc, err := rlp.EncodeToBytes(&o)
 	if err != nil {
 		return err
 	}
-	if err := rlp.Encode(m.file, &o); err != nil {
+	if len(enc) > freezerMetaSize {
+		return fmt.Errorf("metadata encoding %d bytes exceeds the fixed size %d", len(enc), freezerMetaSize)
+	}
+	buf := make([]byte, freezerMetaSize)
+	copy(buf, enc)
+	if _, err := m.file.WriteAt(buf, 0); err != nil {
 		return err
 	}
 	if !sync {

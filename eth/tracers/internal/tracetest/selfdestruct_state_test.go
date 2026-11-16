@@ -162,7 +162,7 @@ func setupTestBlockchain(t *testing.T, genesis *core.Genesis, tx *types.Transact
 	if genesisBlock == nil {
 		t.Fatalf("failed to get genesis block")
 	}
-	statedb, err := blockchain.StateAt(genesisBlock.Header())
+	statedb, err := blockchain.StateAt(genesisBlock.Root(), genesisBlock.Number(), genesisBlock.Time())
 	if err != nil {
 		t.Fatalf("failed to get state: %v", err)
 	}
@@ -632,7 +632,7 @@ func TestSelfdestructStateTracer(t *testing.T) {
 			}
 			context := core.NewEVMBlockContext(block.Header(), blockchain, nil)
 			evm := vm.NewEVM(context, hookedState, tt.genesis.Config, vm.Config{Tracer: tracer.Hooks()})
-			_, _, err = core.ApplyTransactionWithEVM(msg, core.NewGasPool(msg.GasLimit), statedb, block.Number(), block.Hash(), block.Time(), tx, evm)
+			_, _, err = core.ApplyTransactionWithEVM(t.Context(), msg, core.NewGasPool(msg.GasLimit), statedb, block.Number(), block.Hash(), block.Time(), tx, evm)
 			if err != nil {
 				t.Fatalf("failed to execute transaction: %v", err)
 			}

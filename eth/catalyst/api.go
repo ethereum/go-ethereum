@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 	"slices"
 	"strconv"
@@ -335,10 +336,14 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 			log.Info("Skipping beacon update to finalized ancestor", "number", block.NumberU64(), "hash", update.HeadBlockHash)
 			return valid(nil), nil
 		}
-		depth := api.eth.BlockChain().CurrentBlock().Number.Uint64() - block.NumberU64()
-		if api.maxReorgDepth > 0 && depth > api.maxReorgDepth {
-			log.Warn("Refusing too deep reorg", "depth", depth, "head", update.HeadBlockHash)
-			return engine.STATUS_INVALID, engine.TooDeepReorg.With(fmt.Errorf("reorg depth %d exceeds limit %d", depth, api.maxReorgDepth))
+		// A canonical block above the current head (the index outlived a head
+		// rewind, e.g. after an unclean shutdown) is a forward move, not a reorg.
+		if current := api.eth.BlockChain().CurrentBlock().Number.Uint64(); block.NumberU64() < current {
+			depth := current - block.NumberU64()
+			if api.maxReorgDepth > 0 && depth > api.maxReorgDepth {
+				log.Warn("Refusing too deep reorg", "depth", depth, "head", update.HeadBlockHash)
+				return engine.STATUS_INVALID, engine.TooDeepReorg.With(fmt.Errorf("reorg depth %d exceeds limit %d", depth, api.maxReorgDepth))
+			}
 		}
 		if !api.eth.Synced() {
 			log.Info("Ignoring beacon update to old head while syncing", "number", block.NumberU64(), "hash", update.HeadBlockHash)
@@ -875,9 +880,11 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 		return invalidStatus, paramsErr("nil executionRequests post-prague")
 	case params.SlotNumber == nil:
 		return invalidStatus, paramsErr("nil slotnumber post-amsterdam")
-	case len(params.BlockAccessList) == 0:
-		// Post-Amsterdam the access list is always present, an empty block
-		// still carries the RLP encoding of an empty list.
+	case params.BlockAccessList == nil:
+		// Post-Amsterdam the access list field is always present, an empty
+		// block still carries the RLP encoding of an empty list. A field that
+		// is present but does not decode (including the empty byte string) is
+		// not a params error, the payload is rejected as INVALID further down.
 		return invalidStatus, paramsErr("missing block access list post-amsterdam")
 	case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
 		return invalidStatus, unsupportedForkErr("newPayloadV5 must only be called for amsterdam payloads")
@@ -887,6 +894,17 @@ func (api *ConsensusAPI) NewPayloadV5(ctx context.Context, params engine.Executa
 		return engine.PayloadStatusV1{Status: engine.INVALID}, engine.InvalidParams.With(err)
 	}
 	return api.newPayload(ctx, params, versionedHashes, beaconRoot, requests, false)
+}
+
+// payloadToBlock builds the block of a payload. The senders are recovered in the
+// background while the block is hashed and checked, so execution finds them ready.
+func (api *ConsensusAPI) payloadToBlock(params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte) (*types.Block, error) {
+	txs, err := engine.DecodeTransactions(params.Transactions)
+	if err != nil {
+		return nil, err
+	}
+	core.SenderCacher().Recover(types.MakeSigner(api.config(), new(big.Int).SetUint64(params.Number), params.Timestamp), txs)
+	return engine.ExecutableDataToBlockWithTxs(params, txs, versionedHashes, beaconRoot, requests)
 }
 
 func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.ExecutableData, versionedHashes []common.Hash, beaconRoot *common.Hash, requests [][]byte, witness bool) (result engine.PayloadStatusV1, err error) {
@@ -913,8 +931,11 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 	api.newPayloadLock.Lock()
 	defer api.newPayloadLock.Unlock()
 
+	// The slow block log reports the time from here to the start of the processing
+	ctx = core.WithPrepareStart(ctx, time.Now())
+
 	log.Trace("Engine API request received", "method", "NewPayload", "number", params.Number, "hash", params.BlockHash)
-	block, err := engine.ExecutableDataToBlock(params, versionedHashes, beaconRoot, requests)
+	block, err := api.payloadToBlock(params, versionedHashes, beaconRoot, requests)
 	if err != nil {
 		bgu := "nil"
 		if params.BlobGasUsed != nil {
@@ -949,9 +970,6 @@ func (api *ConsensusAPI) newPayload(ctx context.Context, params engine.Executabl
 			"beaconRoot", beaconRoot,
 			"len(requests)", len(requests),
 			"error", err)
-		if errors.Is(err, engine.ErrMalformedPayload) {
-			return invalidStatus, engine.InvalidParams.With(err)
-		}
 		return api.invalid(err, nil), nil
 	}
 	// Stash away the last update to warn the user if the beacon client goes offline

@@ -17,6 +17,9 @@
 package types
 
 import (
+	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -65,6 +68,41 @@ func TestParseDelegation(t *testing.T) {
 		}
 		if !ok && tt.want != nil {
 			t.Fatalf("failed to parse, want %s", tt.want.Hex())
+		}
+	}
+}
+
+// TestSetCodeAuthorizationJSONYParity checks that the yParity field of an
+// authorization must fit in uint8 when decoded from JSON, instead of being
+// truncated. Values above 1 (e.g. legacy 27/28) are valid on chain.
+func TestSetCodeAuthorizationJSONYParity(t *testing.T) {
+	for _, tt := range []struct {
+		yParity string
+		want    uint8
+		wantErr error
+	}{
+		{"0x0", 0, nil},
+		{"0x1", 1, nil},
+		{"0x2", 2, nil},
+		{"0x1c", 28, nil},
+		{"0xff", 255, nil},
+		{"0x100", 0, errYParityOverflow},
+	} {
+		input := `{"chainId":"0x1","address":"0x0000000000000000000000000000000000000001","nonce":"0x0","yParity":"` + tt.yParity + `","r":"0x1","s":"0x1"}`
+		var auth SetCodeAuthorization
+		err := json.Unmarshal([]byte(input), &auth)
+		if !errors.Is(err, tt.wantErr) {
+			t.Errorf("yParity %s: error %v, want %v", tt.yParity, err, tt.wantErr)
+			continue
+		}
+		if err == nil && auth.V != tt.want {
+			t.Errorf("yParity %s: V = %d, want %d", tt.yParity, auth.V, tt.want)
+		}
+		if err == nil {
+			out, _ := json.Marshal(auth)
+			if !strings.Contains(string(out), `"yParity":"`+tt.yParity+`"`) {
+				t.Errorf("yParity %s: round trip produced %s", tt.yParity, out)
+			}
 		}
 	}
 }

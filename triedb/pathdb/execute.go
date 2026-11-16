@@ -39,7 +39,7 @@ type context struct {
 	rawStorageKey bool
 
 	// TODO (rjl493456442) abstract out the state hasher
-	// for supporting verkle tree.
+	// for supporting binary tree.
 	accountTrie *trie.Trie
 }
 
