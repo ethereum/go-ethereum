@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"net/http"
@@ -92,6 +93,66 @@ func TestClientNullResponse(t *testing.T) {
 	}
 	if !reflect.DeepEqual(result, json.RawMessage("null")) {
 		t.Errorf("Expected null, got %s", result)
+	}
+}
+
+// This test checks that a response with both a result and a null error is a successful call.
+func TestClientNullError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			body, _ = io.ReadAll(r.Body)
+			batch   = isBatch(body)
+			reqs    = make([]struct{ ID json.RawMessage }, 1)
+		)
+		if batch {
+			json.Unmarshal(body, &reqs)
+		} else {
+			json.Unmarshal(body, &reqs[0])
+		}
+		resps := make([]string, len(reqs))
+		for i, req := range reqs {
+			resps[i] = fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"result":"0x1","error":null}`, req.ID)
+		}
+		resp := strings.Join(resps, ",")
+		if batch {
+			resp = "[" + resp + "]"
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, resp)
+	}))
+	defer server.Close()
+
+	client, err := Dial(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+
+	var result string
+	if err := client.Call(&result, "test_method"); err != nil {
+		t.Fatal(err)
+	}
+	if result != "0x1" {
+		t.Errorf("wrong result %q", result)
+	}
+
+	batch := []BatchElem{{Method: "test_method", Result: new(string)}}
+	if err := client.BatchCall(batch); err != nil {
+		t.Fatal(err)
+	}
+	if batch[0].Error != nil {
+		t.Fatal(batch[0].Error)
+	}
+	if got := *batch[0].Result.(*string); got != "0x1" {
+		t.Errorf("wrong batch result %q", got)
+	}
+
+	// The stream codecs parse messages on their own path.
+	msgs, _ := parseMessage(json.RawMessage(`{"jsonrpc":"2.0","id":1,"result":"0x1","error":null}`))
+	if msgs[0].Error != nil {
+		t.Errorf("null error kept: %s", msgs[0].Error)
 	}
 }
 
