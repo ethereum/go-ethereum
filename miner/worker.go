@@ -423,6 +423,15 @@ func (miner *Miner) commitTransaction(ctx context.Context, env *environment, tx 
 // included, so the block satisfies the list (EIP-7805). Including one of them
 // can make another one valid, so the list is gone over until nothing more fits.
 func (miner *Miner) commitInclusionList(ctx context.Context, env *environment, list [][]byte) {
+	isAmsterdam := miner.chainConfig.IsAmsterdam(env.header.Number, env.header.Time)
+	minTxGas := params.TxGas
+	if isAmsterdam {
+		minTxGas = params.TxBaseCost2780
+	}
+	// If we don't have enough gas for any transaction, the list is satisfied.
+	if env.gasPool.Available(isAmsterdam) < minTxGas {
+		return
+	}
 	pending := make([]*types.Transaction, 0, len(list))
 	for _, enc := range list {
 		// Blob transactions are exempt, and come without their blobs anyway.
@@ -436,6 +445,9 @@ func (miner *Miner) commitInclusionList(ctx context.Context, env *environment, l
 		included = false
 		remaining := pending[:0]
 		for _, tx := range pending {
+			if env.gasPool.Available(isAmsterdam) < minTxGas {
+				return
+			}
 			env.state.SetTxContext(tx.Hash(), env.tcount, uint32(env.tcount+1))
 			if err := miner.commitTransaction(ctx, env, tx); err != nil {
 				remaining = append(remaining, tx)

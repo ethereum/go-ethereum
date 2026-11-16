@@ -265,6 +265,52 @@ func TestBuildPayloadInclusionList(t *testing.T) {
 	}
 }
 
+// TestCommitInclusionListLastGas checks that a list transaction needing exactly the gas left is included.
+func TestCommitInclusionListLastGas(t *testing.T) {
+	var (
+		zero   uint64
+		config = *params.MergedTestChainConfig
+	)
+	config.AmsterdamTime, config.BogotaTime = &zero, &zero
+	config.BlobScheduleConfig = params.DefaultBlobSchedule
+	w, b := newTestWorker(t, &config, beacon.New(ethash.NewFaker()), rawdb.NewMemoryDatabase(), 0)
+
+	// A self-transfer without value needs the smallest gas a transaction can have.
+	var list [][]byte
+	for nonce := range uint64(2) {
+		tx := types.MustSignNewTx(testBankKey, types.LatestSigner(&config), &types.LegacyTx{
+			Nonce:    nonce,
+			To:       &testBankAddress,
+			Gas:      params.TxBaseCost2780,
+			GasPrice: big.NewInt(2 * params.InitialBaseFee),
+		})
+		enc, err := tx.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
+		}
+		list = append(list, enc)
+	}
+	// One transaction checks the gas before the list is decoded, two check it
+	// again once the first one has used its share.
+	for n := 1; n <= len(list); n++ {
+		slot := uint64(1)
+		env, err := w.prepareWork(context.Background(), &generateParams{
+			timestamp:  b.chain.CurrentBlock().Time + 12,
+			beaconRoot: &common.Hash{},
+			slotNum:    &slot,
+		}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		env.gasPool = core.NewGasPool(uint64(n) * params.TxBaseCost2780)
+		w.commitInclusionList(context.Background(), env, list[:n])
+		if len(env.txs) != n {
+			t.Errorf("%d transactions included, want %d", len(env.txs), n)
+		}
+		env.discard()
+	}
+}
+
 func TestPayloadId(t *testing.T) {
 	t.Parallel()
 	ids := make(map[string]int)
