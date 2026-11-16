@@ -2,7 +2,7 @@ name: PR Format Validation
 
 on:
   pull_request:
-    types: [opened, edited, synchronize]
+    types: [opened, edited, synchronize, reopened]
 
 jobs:
   validate-pr:
