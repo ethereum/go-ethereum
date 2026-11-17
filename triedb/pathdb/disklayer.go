@@ -149,9 +149,9 @@ func (dl *diskLayer) node(owner common.Hash, path []byte, depth int) ([]byte, co
 	// Try to retrieve the trie node from the disk.
 	var blob []byte
 	if owner == (common.Hash{}) {
-		blob = rawdb.ReadAccountTrieNode(dl.db.diskdb, path)
+		blob = rawdb.ReadAccountTrieNode(dl.db.statedb, path)
 	} else {
-		blob = rawdb.ReadStorageTrieNode(dl.db.diskdb, owner, path)
+		blob = rawdb.ReadStorageTrieNode(dl.db.statedb, owner, path)
 	}
 	// Store the resolved data in the clean cache. The background buffer flusher
 	// may also write to the clean cache concurrently, but two writers cannot
@@ -221,7 +221,7 @@ func (dl *diskLayer) account(hash common.Hash, depth int) ([]byte, error) {
 		cleanStateMissMeter.Mark(1)
 	}
 	// Try to retrieve the account from the disk.
-	blob := rawdb.ReadAccountSnapshot(dl.db.diskdb, hash)
+	blob := rawdb.ReadAccountSnapshot(dl.db.statedb, hash)
 
 	// Store the resolved data in the clean cache. The background buffer flusher
 	// may also write to the clean cache concurrently, but two writers cannot
@@ -300,7 +300,7 @@ func (dl *diskLayer) storage(accountHash, storageHash common.Hash, depth int) ([
 		cleanStateMissMeter.Mark(1)
 	}
 	// Try to retrieve the account from the disk
-	blob := rawdb.ReadStorageSnapshot(dl.db.diskdb, accountHash, storageHash)
+	blob := rawdb.ReadStorageSnapshot(dl.db.statedb, accountHash, storageHash)
 
 	// Store the resolved data in the clean cache. The background buffer flusher
 	// may also write to the clean cache concurrently, but two writers cannot
@@ -394,7 +394,7 @@ func (dl *diskLayer) historyTask(typ historyType, diff *diffLayer) (func() error
 			//
 			// These measures ensure the persisted state ID always remains greater
 			// than or equal to the first history ID.
-			if persistentID := rawdb.ReadPersistentStateID(dl.db.diskdb); persistentID < newFirst {
+			if persistentID := rawdb.ReadPersistentStateID(dl.db.statedb); persistentID < newFirst {
 				log.Debug("Skip tail truncation", "type", typ, "persistentID", persistentID, "tailID", tail+1, "headID", id, "limit", limit)
 				newFirst, flush = 0, true
 			}
@@ -462,9 +462,9 @@ func (dl *diskLayer) write(diff *diffLayer) (bool, error) {
 		// by the **unique** state root. It's impossible that in the same chain
 		// blocks are not adjacent but have the same root.
 		if dl.id == 0 {
-			rawdb.WriteStateID(dl.db.diskdb, dl.root, 0)
+			rawdb.WriteStateID(dl.db.statedb, dl.root, 0)
 		}
-		rawdb.WriteStateID(dl.db.diskdb, diff.rootHash(), diff.stateID())
+		rawdb.WriteStateID(dl.db.statedb, diff.rootHash(), diff.stateID())
 		return nil
 	}
 	return flushA || flushB, dl.db.writer.submit(task)
@@ -527,7 +527,7 @@ func (dl *diskLayer) commit(bottom *diffLayer, force bool) (*diskLayer, error) {
 
 		// Freeze the live buffer and schedule background flushing
 		dl.frozen = combined
-		dl.frozen.flush(bottom.root, dl.db.diskdb, dl.db.persistHistory, progress, dl.nodes, dl.states, bottom.stateID(), func() {
+		dl.frozen.flush(bottom.root, dl.db.statedb, dl.db.persistHistory, progress, dl.nodes, dl.states, bottom.stateID(), func() {
 			// Resume the background generation if it's not completed yet.
 			// The generator is assumed to be available if the progress is
 			// not nil.
@@ -600,7 +600,7 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 	// needs to be reverted is not yet flushed and cached in node
 	// buffer, otherwise, manipulate persistent state directly.
 	if !dl.buffer.empty() {
-		err := dl.buffer.revertTo(dl.db.diskdb, nodes, accounts, storages)
+		err := dl.buffer.revertTo(dl.db.statedb, nodes, accounts, storages)
 		if err != nil {
 			return nil, err
 		}
@@ -631,7 +631,7 @@ func (dl *diskLayer) revert(h *stateHistory) (*diskLayer, error) {
 		dl.generator.stop()
 		progress = dl.generator.progressMarker()
 	}
-	batch := dl.db.diskdb.NewBatch()
+	batch := dl.db.statedb.NewBatch()
 	writeNodes(batch, nodes, dl.nodes)
 
 	// Provide the original values of modified accounts and storages for revert

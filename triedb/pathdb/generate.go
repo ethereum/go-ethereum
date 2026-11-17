@@ -188,7 +188,7 @@ func generateSnapshot(triedb *Database, root common.Hash, noBuild bool) *diskLay
 		genMarker = []byte{} // Initialized but empty!
 	)
 	dl := newDiskLayer(root, 0, triedb, nil, nil, newBuffer(triedb.config.WriteBufferSize, nil, nil, 0), nil)
-	dl.setGenerator(newGenerator(triedb.diskdb, noBuild, genMarker, stats))
+	dl.setGenerator(newGenerator(triedb.statedb, noBuild, genMarker, stats))
 
 	if !noBuild {
 		dl.generator.run(root)

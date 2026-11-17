@@ -128,7 +128,7 @@ func checkHistoriesInRange(t *testing.T, freezer ethdb.AncientReader, from, to u
 func TestTruncateHeadStateHistory(t *testing.T) {
 	var (
 		hs         = makeStateHistories(10)
-		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false)
+		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), rawdb.MerkleStateFreezerName, false)
 	)
 	defer freezer.Close()
 
@@ -152,7 +152,7 @@ func TestTruncateHeadStateHistory(t *testing.T) {
 func TestTruncateTailStateHistory(t *testing.T) {
 	var (
 		hs         = makeStateHistories(10)
-		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false)
+		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), rawdb.MerkleStateFreezerName, false)
 	)
 	defer freezer.Close()
 
@@ -201,7 +201,7 @@ func TestTruncateTailStateHistories(t *testing.T) {
 	for i, c := range cases {
 		var (
 			hs         = makeStateHistories(10)
-			freezer, _ = rawdb.NewStateFreezer(t.TempDir()+fmt.Sprintf("%d", i), false)
+			freezer, _ = rawdb.NewStateFreezer(t.TempDir()+fmt.Sprintf("%d", i), rawdb.MerkleStateFreezerName, false)
 		)
 		defer freezer.Close()
 
@@ -225,7 +225,7 @@ func TestTruncateTailStateHistories(t *testing.T) {
 func TestTruncateOutOfRange(t *testing.T) {
 	var (
 		hs         = makeStateHistories(10)
-		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), false)
+		freezer, _ = rawdb.NewStateFreezer(t.TempDir(), rawdb.MerkleStateFreezerName, false)
 	)
 	defer freezer.Close()
 

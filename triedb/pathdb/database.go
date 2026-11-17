@@ -28,17 +28,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie/pbt"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 )
 
-// layer is the interface implemented by all state layers which includes some
-// public methods and some additional methods for internal usage.
-type layer interface {
+// trieNodeReader provides access to trie nodes.
+type trieNodeReader interface {
 	// node retrieves the trie node with the node info. An error will be returned
 	// if the read operation exits abnormally. Specifically, if the layer is
 	// already stale.
@@ -47,7 +43,10 @@ type layer interface {
 	// - the returned node is not a copy, please don't modify it.
 	// - no error will be returned if the requested node is not found in database.
 	node(owner common.Hash, path []byte, depth int) ([]byte, common.Hash, nodeLoc, error)
+}
 
+// flatStateReader provides access to flat accounts and storage slots.
+type flatStateReader interface {
 	// account directly retrieves the account RLP associated with a particular
 	// hash in the slim data format. An error will be returned if the read
 	// operation exits abnormally. Specifically, if the layer is already stale.
@@ -65,6 +64,12 @@ type layer interface {
 	// - the returned storage data is not a copy, please don't modify it.
 	// - no error will be returned if the requested slot is not found in database.
 	storage(accountHash, storageHash common.Hash, depth int) ([]byte, error)
+}
+
+// layer combines trie nodes and flat state at a common state root.
+type layer interface {
+	trieNodeReader
+	flatStateReader
 
 	// rootHash returns the root hash for which this layer was made.
 	rootHash() common.Hash
@@ -87,17 +92,6 @@ type layer interface {
 	journal(w io.Writer) error
 }
 
-// nodeHasher is the function to compute the hash of supplied node blob.
-type nodeHasher func([]byte) (common.Hash, error)
-
-// merkleNodeHasher computes the hash of the given merkle node.
-func merkleNodeHasher(blob []byte) (common.Hash, error) {
-	if len(blob) == 0 {
-		return types.EmptyRootHash, nil
-	}
-	return crypto.Keccak256Hash(blob), nil
-}
-
 // Database is a multiple-layered structure for maintaining in-memory states
 // along with its dirty trie nodes. It consists of one persistent base layer
 // backed by a key-value store, on top of which arbitrarily many in-memory diff
@@ -114,14 +108,14 @@ type Database struct {
 	// readOnly is the flag whether the mutation is allowed to be applied.
 	// It will be set automatically when the database is journaled during
 	// the shutdown to reject all following unexpected mutations.
-	readOnly bool       // Flag if database is opened in read only mode
-	waitSync bool       // Flag if database is deactivated due to initial state sync
-	isPBT    bool       // Flag if database is used for partitioned binary tree
-	hasher   nodeHasher // Trie node hasher
+	readOnly bool // Flag if database is opened in read only mode
+	waitSync bool // Flag if database is deactivated due to initial state sync
 
-	config *Config        // Configuration for database
-	diskdb ethdb.Database // Persistent storage for matured trie nodes
-	tree   *layerTree     // The group for all known layers
+	config  *Config        // Configuration for database
+	diskdb  ethdb.Database // Global database for chain metadata and contract code
+	statedb ethdb.Database // Namespace for nodes, flat state, history indexes and metadata
+	trie    stateTrie      // Trie-specific storage and hashing behavior
+	tree    *layerTree     // The group for all known layers
 
 	stateFreezer ethdb.ResettableAncientStore // Freezer for storing state histories, nil possible in tests
 	stateIndexer *historyIndexer              // History indexer historical state data, nil possible
@@ -137,16 +131,16 @@ type Database struct {
 // store (with a number of memory layers from a journal). If the journal is not
 // matched with the base persistent layer, all the recorded diff layers are discarded.
 func New(diskdb ethdb.Database, config *Config) *Database {
-	return newDatabase(diskdb, config, false)
+	return newDatabase(diskdb, config, mptTrie{})
 }
 
 // NewPBT is New for an EIP-8297 partitioned binary tree, kept in its own
 // namespace.
 func NewPBT(diskdb ethdb.Database, config *Config) *Database {
-	return newDatabase(diskdb, config, true)
+	return newDatabase(diskdb, config, pbtTrie{})
 }
 
-func newDatabase(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
+func newDatabase(diskdb ethdb.Database, config *Config, trie stateTrie) *Database {
 	if config == nil {
 		config = Defaults
 	}
@@ -154,39 +148,32 @@ func newDatabase(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
 
 	db := &Database{
 		readOnly: config.ReadOnly,
-		isPBT:    isPBT,
+		trie:     trie,
 		config:   config,
 		diskdb:   diskdb,
-		hasher:   merkleNodeHasher,
+		statedb:  diskdb,
 		writer:   newAsyncWriter(),
 	}
-	// Establish a dedicated database namespace tailored for the partitioned
-	// binary tree data, ensuring the isolation of both binary and merkle tree
-	// data. It's important to note that the introduction of a prefix won't lead
-	// to substantial storage overhead, as the underlying database will
-	// efficiently compress the shared key prefix.
-	if isPBT {
-		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.PBTPrefix))
-		db.hasher = pbt.DeserializeAndHash
+	// Keep nodes, flat state and metadata in the implementation's existing
+	// namespace.
+	trieConfig := trie.config()
+	if len(trieConfig.namespace) != 0 {
+		db.statedb = rawdb.NewTable(diskdb, string(trieConfig.namespace))
 	}
 	// Construct the layer tree by resolving the in-disk singleton state
 	// and in-memory layer journal.
 	db.tree = newLayerTree(db.loadLayers())
 
-	// Repair the history, which might not be aligned with the persistent
-	// state in the key-value store due to an unclean shutdown. The partitioned
-	// binary tree keeps none: rolling back replays history through a
-	// merkle-patricia trie, which cannot revert it.
-	if !isPBT {
-		states, trienodes, err := repairHistory(db.diskdb, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
-		if err != nil {
-			log.Crit("Failed to repair history", "err", err)
-		}
-		db.stateFreezer, db.trienodeFreezer = states, trienodes
+	// Repair each database's own flat state history. Trie node history is
+	// optional and requires implementation-specific encoding and indexing.
+	states, trienodes, err := repairHistory(db.statedb, db.config.ReadOnly, db.tree.bottom().stateID(), trieConfig.nodeHistory && db.config.TrienodeHistory >= 0, trieConfig)
+	if err != nil {
+		log.Crit("Failed to repair history", "err", err)
 	}
+	db.stateFreezer, db.trienodeFreezer = states, trienodes
 
-	// Disable database in case node is still in the initial state sync stage.
-	if rawdb.ReadSnapSyncStatusFlag(diskdb) == rawdb.StateSyncRunning && !db.readOnly {
+	// Restore this database's paused state if initial state sync is incomplete.
+	if rawdb.ReadSnapSyncStatusFlag(db.statedb) == rawdb.StateSyncRunning && !db.readOnly {
 		if err := db.Disable(); err != nil {
 			log.Crit("Failed to disable database", "err", err) // impossible to happen
 		}
@@ -201,9 +188,7 @@ func newDatabase(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
 	db.setHistoryIndexer()
 
 	fields := config.fields()
-	if db.isPBT {
-		fields = append(fields, "pbt", true)
-	}
+	fields = append(fields, "trie", trieConfig.name)
 	log.Info("Initialized path database", fields...)
 	return db
 }
@@ -233,14 +218,14 @@ func (db *Database) setHistoryIndexer() {
 		if db.stateIndexer != nil {
 			db.stateIndexer.close()
 		}
-		db.stateIndexer = newHistoryIndexer(db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory, db.config.NoHistoryIndexDelay)
+		db.stateIndexer = newHistoryIndexer(db.statedb, db.diskdb, db.stateFreezer, db.tree.bottom().stateID(), typeStateHistory, db.config.NoHistoryIndexDelay)
 		log.Info("Enabled state history indexing")
 	}
 	if db.trienodeFreezer != nil {
 		if db.trienodeIndexer != nil {
 			db.trienodeIndexer.close()
 		}
-		db.trienodeIndexer = newHistoryIndexer(db.diskdb, db.trienodeFreezer, db.tree.bottom().stateID(), typeTrienodeHistory, db.config.NoHistoryIndexDelay)
+		db.trienodeIndexer = newHistoryIndexer(db.statedb, db.diskdb, db.trienodeFreezer, db.tree.bottom().stateID(), typeTrienodeHistory, db.config.NoHistoryIndexDelay)
 		log.Info("Enabled trienode history indexing")
 	}
 }
@@ -250,16 +235,23 @@ func (db *Database) setHistoryIndexer() {
 func (db *Database) setStateGenerator() error {
 	// Load the state snapshot generation progress marker to prevent access
 	// to uncovered states.
-	generator, root, err := loadGenerator(db.diskdb, db.hasher)
+	generator, root, err := loadGenerator(db.statedb, db.trie.hashRoot)
 	if err != nil {
 		return err
 	}
-	// The partitioned binary tree cannot be walked back into flat state: it is
-	// complete only if accumulated from the empty tree, so mark that as done.
-	if generator == nil && db.isPBT && root == types.EmptyBinaryHash {
-		generator = &journalGenerator{Done: true}
-		if !db.readOnly {
-			journalProgress(db.diskdb, nil, nil)
+	// Some implementations can only accumulate flat state from an empty trie.
+	// In that case an empty trie starts with a complete flat state.
+	config := db.trie.config()
+	if generator == nil && config.completeEmptyState {
+		emptyRoot, err := db.trie.hashRoot(nil)
+		if err != nil {
+			return err
+		}
+		if root == emptyRoot {
+			generator = &journalGenerator{Done: true}
+			if !db.readOnly {
+				journalProgress(db.statedb, nil, nil)
+			}
 		}
 	}
 	if generator == nil {
@@ -290,13 +282,13 @@ func (db *Database) setStateGenerator() error {
 	// Disable the background snapshot building in these circumstances:
 	// - the database is opened in read only mode
 	// - the snapshot build is explicitly disabled
-	// - the database is opened in partitioned binary tree mode
-	noBuild := db.readOnly || db.config.SnapshotNoBuild || db.isPBT
+	// - the trie implementation cannot generate flat state
+	noBuild := db.readOnly || db.config.SnapshotNoBuild || !config.generateState
 
 	// Construct the generator and link it to the disk layer, ensuring that the
 	// generation progress is resolved to prevent accessing uncovered states
 	// regardless of whether background state snapshot generation is allowed.
-	dl.setGenerator(newGenerator(db.diskdb, noBuild, generator.Marker, stats))
+	dl.setGenerator(newGenerator(db.statedb, noBuild, generator.Marker, stats))
 
 	// Short circuit if the background generation is not permitted
 	if noBuild || db.waitSync {
@@ -332,7 +324,7 @@ func (db *Database) Update(root common.Hash, parentRoot common.Hash, block uint6
 		return err
 	}
 	var origins map[common.Hash]map[string][]byte
-	if db.config.TrienodeHistory >= 0 {
+	if db.trie.config().nodeHistory && db.config.TrienodeHistory >= 0 {
 		_, origins = nodes.NodeAndOrigins()
 	}
 	nodesWithOrigins := newNodeSetWithOrigin(newMergedNodeSet(nodes), origins)
@@ -394,7 +386,7 @@ func (db *Database) Disable() error {
 	}
 
 	// Write the initial sync flag to persist it across restarts.
-	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
+	rawdb.WriteSnapSyncStatusFlag(db.statedb, rawdb.StateSyncRunning)
 	log.Info("Disabled trie database due to state sync")
 	return nil
 }
@@ -403,7 +395,7 @@ func (db *Database) Disable() error {
 // Enable and AdoptSyncedState.
 func (db *Database) resetForReactivation(root common.Hash) error {
 	// Ensure the provided state root matches the stored one.
-	stored, err := db.hasher(rawdb.ReadAccountTrieNode(db.diskdb, nil))
+	stored, err := db.trie.hashRoot(rawdb.ReadAccountTrieNode(db.statedb, nil))
 	if err != nil {
 		return err
 	}
@@ -434,7 +426,7 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	}
 	// Drop the stale state journal marker and the journal in the key-value
 	// store, and reset the persistent state id back to zero.
-	batch := db.diskdb.NewBatch()
+	batch := db.statedb.NewBatch()
 	rawdb.DeleteSnapshotRoot(batch)
 	rawdb.WritePersistentStateID(batch, 0)
 	if err := batch.Write(); err != nil {
@@ -446,12 +438,12 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	if err := db.waitWrites(); err != nil {
 		return err
 	}
-	purgeHistory(db.stateFreezer, db.diskdb, typeStateHistory)
-	purgeHistory(db.trienodeFreezer, db.diskdb, typeTrienodeHistory)
+	purgeHistory(db.stateFreezer, db.statedb, typeStateHistory)
+	purgeHistory(db.trienodeFreezer, db.statedb, typeTrienodeHistory)
 
 	// Re-enable the database as the final bookkeeping step.
 	db.waitSync = false
-	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncFinished)
+	rawdb.WriteSnapSyncStatusFlag(db.statedb, rawdb.StateSyncFinished)
 	return nil
 }
 
@@ -469,7 +461,7 @@ func (db *Database) Enable(root common.Hash) error {
 	}
 	// Re-construct a new disk layer backed by persistent state and schedule
 	// the state snapshot generation if it's permitted.
-	db.tree.init(generateSnapshot(db, root, db.isPBT || db.config.SnapshotNoBuild))
+	db.tree.init(generateSnapshot(db, root, !db.trie.config().generateState || db.config.SnapshotNoBuild))
 
 	// After snap sync, the state of the database may have changed completely.
 	// The indexers of the old state were stopped before the purge: start new
@@ -498,7 +490,7 @@ func (db *Database) AdoptSyncedState(root common.Hash) error {
 
 	// Tell the snapshot subsystem the flat state is good by writing the new root
 	// and a "done" marker (nil journal) so the next boot doesn't try to rebuild it.
-	batch := db.diskdb.NewBatch()
+	batch := db.statedb.NewBatch()
 	rawdb.WriteSnapshotRoot(batch, root)
 	journalProgress(batch, nil, nil)
 	if err := batch.Write(); err != nil {
@@ -529,6 +521,9 @@ func (db *Database) Recover(root common.Hash) error {
 	// Short circuit if rollback operation is not supported
 	if err := db.modifyAllowed(); err != nil {
 		return err
+	}
+	if !db.trie.config().recoverState {
+		return errStateUnrecoverable
 	}
 	if db.stateFreezer == nil {
 		return errors.New("state rollback is non-supported")
@@ -564,7 +559,7 @@ func (db *Database) Recover(root common.Hash) error {
 	// recent key-value writes are lost due to an application panic, while
 	// the associated state histories have already been removed, resulting
 	// in the inability to perform a state rollback.
-	if err := db.diskdb.SyncKeyValue(); err != nil {
+	if err := db.statedb.SyncKeyValue(); err != nil {
 		return err
 	}
 	_, err := truncateFromHead(db.stateFreezer, typeStateHistory, dl.stateID())
@@ -585,8 +580,8 @@ func (db *Database) Recover(root common.Hash) error {
 //
 // The supplied root must be a valid trie hash value.
 func (db *Database) Recoverable(root common.Hash) bool {
-	// Nothing is recoverable while a state sync is in progress.
-	if db.waitSync {
+	// Recovery also requires a trie implementation that can replay state history.
+	if db.waitSync || !db.trie.config().recoverState {
 		return false
 	}
 	// Ensure the requested state is a known state. The lookup and the history
@@ -594,7 +589,7 @@ func (db *Database) Recoverable(root common.Hash) bool {
 	if err := db.waitWrites(); err != nil {
 		return false
 	}
-	id := rawdb.ReadStateID(db.diskdb, root)
+	id := rawdb.ReadStateID(db.statedb, root)
 	if id == nil {
 		return false
 	}
@@ -697,13 +692,7 @@ func (db *Database) journalPath() string {
 	if db.config.JournalDirectory == "" {
 		return ""
 	}
-	var fname string
-	if db.isPBT {
-		fname = "pbt.journal"
-	} else {
-		fname = fmt.Sprintf("merkle.journal")
-	}
-	return filepath.Join(db.config.JournalDirectory, fname)
+	return filepath.Join(db.config.JournalDirectory, db.trie.config().journalName)
 }
 
 // AccountHistory inspects the account history within the specified range.

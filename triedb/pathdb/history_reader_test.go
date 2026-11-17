@@ -32,7 +32,7 @@ import (
 func waitIndexing(db *Database) {
 	for {
 		// The metadata is persisted before the indexer reports inited, so check both
-		metadata := loadIndexMetadata(db.diskdb, typeStateHistory)
+		metadata := loadIndexMetadata(db.statedb, typeStateHistory)
 		if metadata != nil && metadata.Last >= db.tree.bottom().stateID() && db.stateIndexer.inited() {
 			return
 		}
@@ -59,13 +59,13 @@ func checkHistoricalState(env *tester, root common.Hash, id uint64, hr *stateHis
 	}
 
 	// Short circuit if the historical state is no longer available
-	if rawdb.ReadStateID(env.db.diskdb, root) == nil {
+	if rawdb.ReadStateID(env.db.statedb, root) == nil {
 		return fmt.Errorf("state not found %d %x", id, root)
 	}
 
 	var (
 		dl       = env.db.tree.bottom()
-		stateID  = rawdb.ReadStateID(env.db.diskdb, root)
+		stateID  = rawdb.ReadStateID(env.db.statedb, root)
 		accounts = env.snapAccounts[root]
 		storages = env.snapStorages[root]
 	)
@@ -160,7 +160,7 @@ func testHistoryReader(t *testing.T, historyLimit uint64) {
 	var (
 		roots = env.roots
 		dl    = env.db.tree.bottom()
-		hr    = newStateHistoryReader(env.db.diskdb, env.db.stateFreezer, nil)
+		hr    = newStateHistoryReader(env.db.statedb, env.db.stateFreezer, nil)
 	)
 	for i, root := range roots {
 		if root == dl.rootHash() {
@@ -203,7 +203,7 @@ func TestHistoricalStateReader(t *testing.T) {
 
 	// non-canonical state
 	fakeRoot := testrand.Hash()
-	rawdb.WriteStateID(env.db.diskdb, fakeRoot, 10)
+	rawdb.WriteStateID(env.db.statedb, fakeRoot, 10)
 
 	_, err := env.db.HistoricReader(fakeRoot)
 	if err == nil {
@@ -252,7 +252,7 @@ func TestHistoricalStateReaderPendingWrites(t *testing.T) {
 		t.Fatalf("Failed to stall the writer: %v", err)
 	}
 	env.extend(1)
-	if meta := loadIndexMetadata(env.db.diskdb, typeStateHistory); meta.Last >= env.db.tree.bottom().stateID() {
+	if meta := loadIndexMetadata(env.db.statedb, typeStateHistory); meta.Last >= env.db.tree.bottom().stateID() {
 		t.Fatalf("Unexpected indexed histories, indexed: %d, disk: %d", meta.Last, env.db.tree.bottom().stateID())
 	}
 	time.AfterFunc(100*time.Millisecond, resume)
@@ -279,7 +279,7 @@ func TestHistoricalStateReaderPendingWrites(t *testing.T) {
 	if err := env.db.waitWrites(); err != nil {
 		t.Fatalf("Failed to write histories: %v", err)
 	}
-	hr := newStateHistoryReader(env.db.diskdb, env.db.stateFreezer, nil)
+	hr := newStateHistoryReader(env.db.statedb, env.db.stateFreezer, nil)
 	for addrHash, want := range env.snapAccounts[root] {
 		blob, err := hr.read(newAccountIdentQuery(env.accountPreimage(addrHash), addrHash), reader.id, dl.stateID(), latest[addrHash])
 		if err != nil {

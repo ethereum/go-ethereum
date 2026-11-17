@@ -380,7 +380,7 @@ func syncHistory(stores ...ethdb.AncientWriter) error {
 // persistent state may appear if the trienode history was disabled during the
 // previous run. This process detects and resolves such gaps, preventing
 // unexpected panics.
-func repairHistory(db ethdb.Database, readOnly bool, stateID uint64, enableTrienode bool) (ethdb.ResettableAncientStore, ethdb.ResettableAncientStore, error) {
+func repairHistory(db ethdb.Database, readOnly bool, stateID uint64, enableTrienode bool, config trieConfig) (ethdb.ResettableAncientStore, ethdb.ResettableAncientStore, error) {
 	ancient, err := db.AncientDatadir()
 	if err != nil {
 		// TODO error out if ancient store is disabled. A tons of unit tests
@@ -388,9 +388,9 @@ func repairHistory(db ethdb.Database, readOnly bool, stateID uint64, enableTrien
 		// all of them. Fix the tests first.
 		return nil, nil, nil
 	}
-	// State history is mandatory as it is the key component that ensures
-	// resilience to deep reorgs.
-	states, err := rawdb.NewStateFreezer(ancient, readOnly)
+	// Flat state history is shared in format, but stored independently for
+	// each trie database. It supports historical reads even without trie replay.
+	states, err := rawdb.NewStateFreezer(ancient, config.stateHistoryName, readOnly)
 	if err != nil {
 		log.Crit("Failed to open state history freezer", "err", err)
 	}
@@ -399,7 +399,7 @@ func repairHistory(db ethdb.Database, readOnly bool, stateID uint64, enableTrien
 	// node with state proofs.
 	var trienodes ethdb.ResettableAncientStore
 	if enableTrienode {
-		trienodes, err = rawdb.NewTrienodeFreezer(ancient, readOnly)
+		trienodes, err = rawdb.NewTrienodeFreezer(ancient, config.nodeHistoryName, readOnly)
 		if err != nil {
 			log.Crit("Failed to open trienode history freezer", "err", err)
 		}

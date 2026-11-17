@@ -395,7 +395,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 	it := head.(*diffLayer).newBinaryAccountIterator(common.Hash{})
 	for it.Next() {
 		hash := it.Hash()
-		want, err := r.(*reader).AccountRLP(hash)
+		want, err := r.(*stateReader).AccountRLP(hash)
 		if err != nil {
 			t.Fatalf("failed to retrieve expected account: %v", err)
 		}
@@ -409,7 +409,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 	it, _ = db.AccountIterator(common.HexToHash("0x09"), common.Hash{})
 	for it.Next() {
 		hash := it.Hash()
-		want, err := r.(*reader).AccountRLP(hash)
+		want, err := r.(*stateReader).AccountRLP(hash)
 		if err != nil {
 			t.Fatalf("failed to retrieve expected account: %v", err)
 		}
@@ -428,7 +428,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 	it = head.(*diffLayer).newBinaryAccountIterator(common.Hash{})
 	for it.Next() {
 		hash := it.Hash()
-		want, err := r.(*reader).AccountRLP(hash)
+		want, err := r.(*stateReader).AccountRLP(hash)
 		if err != nil {
 			t.Fatalf("failed to retrieve expected account: %v", err)
 		}
@@ -442,7 +442,7 @@ func TestAccountIteratorTraversalValues(t *testing.T) {
 	it, _ = db.AccountIterator(common.HexToHash("0x09"), common.Hash{})
 	for it.Next() {
 		hash := it.Hash()
-		want, err := r.(*reader).AccountRLP(hash)
+		want, err := r.(*stateReader).AccountRLP(hash)
 		if err != nil {
 			t.Fatalf("failed to retrieve expected account: %v", err)
 		}

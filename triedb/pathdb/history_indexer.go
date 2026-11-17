@@ -367,9 +367,9 @@ type indexIniter struct {
 	wg sync.WaitGroup
 }
 
-func newIndexIniter(disk ethdb.Database, freezer ethdb.AncientStore, typ historyType, lastID uint64, noWait bool) *indexIniter {
+func newIndexIniter(disk ethdb.Database, chainReader ethdb.Reader, freezer ethdb.AncientStore, typ historyType, lastID uint64, noWait bool) *indexIniter {
 	initer := &indexIniter{
-		state:     newIniterState(disk, noWait),
+		state:     newIniterState(chainReader, noWait),
 		disk:      disk,
 		freezer:   freezer,
 		interrupt: make(chan *interruptSignal),
@@ -770,11 +770,13 @@ func checkVersion(disk ethdb.KeyValueStore, typ historyType) {
 }
 
 // newHistoryIndexer constructs the history indexer and launches the background
-// initer to complete the indexing of any remaining state histories.
-func newHistoryIndexer(disk ethdb.Database, freezer ethdb.AncientStore, lastHistoryID uint64, typ historyType, noWait bool) *historyIndexer {
+// initer to complete the indexing of any remaining state histories. Chain sync
+// progress is read from chainReader. Index data and progress are read and
+// written exclusively through disk, within its state namespace.
+func newHistoryIndexer(disk ethdb.Database, chainReader ethdb.Reader, freezer ethdb.AncientStore, lastHistoryID uint64, typ historyType, noWait bool) *historyIndexer {
 	checkVersion(disk, typ)
 	return &historyIndexer{
-		initer:  newIndexIniter(disk, freezer, typ, lastHistoryID, noWait),
+		initer:  newIndexIniter(disk, chainReader, freezer, typ, lastHistoryID, noWait),
 		pruner:  newIndexPruner(disk, typ),
 		typ:     typ,
 		disk:    disk,

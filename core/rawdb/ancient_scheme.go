@@ -122,42 +122,54 @@ var trienodeFreezerTableConfigs = map[string]freezerTableConfig{
 
 // The list of identifiers of ancient stores.
 var (
-	ChainFreezerName          = "chain"    // the folder name of chain segment ancient store.
-	MerkleStateFreezerName    = "state"    // the folder name of state history ancient store.
-	MerkleTrienodeFreezerName = "trienode" // the folder name of trienode history ancient store.
+	ChainFreezerName          = "chain"        // the folder name of chain segment ancient store.
+	MerkleStateFreezerName    = "state"        // the folder name of MPT state history ancient store.
+	PBTStateFreezerName       = "state_pbt"    // the folder name of PBT state history ancient store.
+	MerkleTrienodeFreezerName = "trienode"     // the folder name of MPT trienode history ancient store.
+	PBTTrienodeFreezerName    = "trienode_pbt" // the folder name of PBT trienode history ancient store.
 )
 
 // freezers the collections of all builtin freezers.
 var freezers = []string{
 	ChainFreezerName,
 	MerkleStateFreezerName,
+	PBTStateFreezerName,
 	MerkleTrienodeFreezerName,
+	PBTTrienodeFreezerName,
 }
 
-// NewStateFreezer initializes the ancient store for state history.
+// NewStateFreezer initializes the named ancient store for MPT or PBT state history.
 //
 //   - if the empty directory is given, initializes the pure in-memory
 //     state freezer (e.g. dev mode).
 //   - if non-empty directory is given, initializes the regular file-based
 //     state freezer.
-func NewStateFreezer(ancientDir string, readOnly bool) (ethdb.ResettableAncientStore, error) {
+func NewStateFreezer(ancientDir, freezerName string, readOnly bool) (ethdb.ResettableAncientStore, error) {
 	if ancientDir == "" {
 		return NewMemoryFreezer(readOnly, stateFreezerTableConfigs), nil
 	}
-	name := filepath.Join(ancientDir, MerkleStateFreezerName)
-	return newResettableFreezer(name, "eth/db/state", readOnly, stateHistoryTableSize, stateFreezerTableConfigs)
+	namespace := "eth/db/state/mpt/"
+	if freezerName == PBTStateFreezerName {
+		namespace = "eth/db/state/pbt/"
+	}
+	name := filepath.Join(ancientDir, freezerName)
+	return newResettableFreezer(name, namespace, readOnly, stateHistoryTableSize, stateFreezerTableConfigs)
 }
 
-// NewTrienodeFreezer initializes the ancient store for trienode history.
+// NewTrienodeFreezer initializes the named ancient store for MPT or PBT trienode history.
 //
 //   - if the empty directory is given, initializes the pure in-memory
 //     trienode freezer (e.g. dev mode).
 //   - if non-empty directory is given, initializes the regular file-based
 //     trienode freezer.
-func NewTrienodeFreezer(ancientDir string, readOnly bool) (ethdb.ResettableAncientStore, error) {
+func NewTrienodeFreezer(ancientDir, freezerName string, readOnly bool) (ethdb.ResettableAncientStore, error) {
 	if ancientDir == "" {
 		return NewMemoryFreezer(readOnly, trienodeFreezerTableConfigs), nil
 	}
-	name := filepath.Join(ancientDir, MerkleTrienodeFreezerName)
-	return newResettableFreezer(name, "eth/db/trienode", readOnly, stateHistoryTableSize, trienodeFreezerTableConfigs)
+	namespace := "eth/db/trienode/mpt/"
+	if freezerName == PBTTrienodeFreezerName {
+		namespace = "eth/db/trienode/pbt/"
+	}
+	name := filepath.Join(ancientDir, freezerName)
+	return newResettableFreezer(name, namespace, readOnly, stateHistoryTableSize, trienodeFreezerTableConfigs)
 }
