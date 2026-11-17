@@ -718,41 +718,15 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		msg              = st.msg
 		rules            = st.evm.ChainConfig().Rules(st.evm.Context.BlockNumber, st.evm.Context.Random != nil, st.evm.Context.Time)
 		contractCreation = msg.To == nil
-		floorDataGas     uint64
 	)
 	// Validate the message and pre-pay gas.
 	if err := st.preCheck(rules); err != nil {
 		return nil, err
 	}
-	// Calculate the intrinsic gas of this transaction and make sure the gas limit
-	// is sufficient to cover that.
-	intrinsicGas, err := IntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, rules)
+	intrinsicGas, floorDataGas, err := CheckIntrinsicGas(msg.Data, msg.AccessList, msg.SetCodeAuthorizations, msg.From, msg.To, msg.Value, msg.GasLimit, rules, msg.skipExecutionGasCap)
 	if err != nil {
 		return nil, err
 	}
-	if msg.GasLimit < intrinsicGas {
-		return nil, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, msg.GasLimit, intrinsicGas)
-	}
-	// Validate the EIP-7623 calldata floor against the gas limit. The floor inflates
-	// the total gas usage at tx end, so the gas limit must be sufficient to cover that.
-	if rules.IsPrague {
-		floorDataGas, err = FloorDataGas(rules, msg.From, msg.To, msg.Value, msg.Data, msg.AccessList)
-		if err != nil {
-			return nil, err
-		}
-		// Make sure the transaction has sufficient gas allowance to
-		// pay the floor cost.
-		if msg.GasLimit < floorDataGas {
-			return nil, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, msg.GasLimit, floorDataGas)
-		}
-	}
-	// In Amsterdam, the transaction gas limit is allowed to exceed
-	// params.MaxTxGas, but the intrinsic cost and calldata floor
-	// cost is still capped by it.
-	if rules.IsAmsterdam && !msg.skipExecutionGasCap && max(intrinsicGas, floorDataGas) > params.MaxTxGas {
-		return nil, fmt.Errorf("%w: intrinsic cost %v, floor: %v", ErrFloorDataGas, intrinsicGas, floorDataGas)
-	}
-
 	// Top-call affordability, the sender must still be able to cover the value
 	// transfer of the top frame after gas pre-pay.
 	value := msg.Value
@@ -814,6 +788,41 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		Err:        vmerr,
 		ReturnData: ret,
 	}, nil
+}
+
+// CheckIntrinsicGas computes the intrinsic gas and calldata floor and checks them
+// against the gas limit and the protocol's execution gas cap.
+func CheckIntrinsicGas(data []byte, accessList types.AccessList, authList []types.SetCodeAuthorization, from common.Address, to *common.Address, value *uint256.Int, gasLimit uint64, rules params.Rules, skipExecutionGasCap bool) (uint64, uint64, error) {
+	// Calculate the intrinsic gas of this transaction and make sure the gas limit
+	// is sufficient to cover that.
+	intrinsicGas, err := IntrinsicGas(data, accessList, authList, from, to, value, rules)
+	if err != nil {
+		return 0, 0, err
+	}
+	if gasLimit < intrinsicGas {
+		return 0, 0, fmt.Errorf("%w: have %d, want %d", ErrIntrinsicGas, gasLimit, intrinsicGas)
+	}
+	// Validate the EIP-7623 calldata floor against the gas limit. The floor inflates
+	// the total gas usage at tx end, so the gas limit must be sufficient to cover that.
+	var floorDataGas uint64
+	if rules.IsPrague {
+		floorDataGas, err = FloorDataGas(rules, from, to, value, data, accessList)
+		if err != nil {
+			return 0, 0, err
+		}
+		// Make sure the transaction has sufficient gas allowance to
+		// pay the floor cost.
+		if gasLimit < floorDataGas {
+			return 0, 0, fmt.Errorf("%w: have %d, want %d", ErrFloorDataGas, gasLimit, floorDataGas)
+		}
+	}
+	// In Amsterdam, the transaction gas limit is allowed to exceed
+	// params.MaxTxGas, but the intrinsic cost and calldata floor
+	// cost is still capped by it.
+	if rules.IsAmsterdam && !skipExecutionGasCap && max(intrinsicGas, floorDataGas) > params.MaxTxGas {
+		return 0, 0, fmt.Errorf("%w: intrinsic cost %v, floor: %v", ErrFloorDataGas, intrinsicGas, floorDataGas)
+	}
+	return intrinsicGas, floorDataGas, nil
 }
 
 // executeCreate runs the top-level frame of a contract-creation transaction
