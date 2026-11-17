@@ -63,6 +63,7 @@ type Tracer struct {
 	state       tracing.StateDB
 	pre         map[common.Address]*accountState // nil unless stateDiff is selected
 	table       vm.JumpTable
+	amsterdam   bool
 	precompiles vm.PrecompiledContracts
 	frames      []*Frame
 	scopes      []*frameScope
@@ -78,6 +79,7 @@ type frameScope struct {
 	frame   *Frame
 	hidden  bool
 	target  common.Address
+	gas     uint64
 	vm      *VMTrace
 	pending *pendingOp
 	last    *VMOp
@@ -141,12 +143,12 @@ func New(config Config, chainConfig *params.ChainConfig, precompiles vm.Precompi
 
 // Hooks returns the tracing hooks of the selected output families.
 func (t *Tracer) Hooks() *tracing.Hooks {
-	h := &tracing.Hooks{OnTxStart: t.txStart, OnEnter: t.enter, OnExit: t.exit}
+	h := &tracing.Hooks{OnTxStart: t.txStart, OnEnterV2: t.enter, OnExitV2: t.exit}
 	if t.config.VMTrace || t.pre != nil {
-		h.OnOpcode = t.opcode
+		h.OnOpcodeV2 = t.opcode
 	}
 	if t.config.VMTrace {
-		h.OnFault = t.fault
+		h.OnFaultV2 = t.fault
 	}
 	if t.pre != nil {
 		// Accounts are discovered before they change. Should a change still
@@ -185,6 +187,7 @@ func (t *Tracer) txStart(env *tracing.VMContext, tx *types.Transaction, from com
 	t.state = env.StateDB
 	rules := t.chainConfig.Rules(env.BlockNumber, env.Random != nil, env.Time)
 	t.table, _ = vm.LookupInstructionSet(rules)
+	t.amsterdam = rules.IsAmsterdam
 	if t.precompiles == nil {
 		t.precompiles = vm.ActivePrecompiledContracts(rules)
 	}
@@ -238,7 +241,7 @@ func (t *Tracer) reserve(size int) bool {
 	return t.err == nil
 }
 
-func (t *Tracer) enter(depth int, typ byte, from, to common.Address, input []byte, gas uint64, value *big.Int) {
+func (t *Tracer) enter(depth int, typ byte, from, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
 	if t.halted() {
 		return
 	}
@@ -256,7 +259,7 @@ func (t *Tracer) enter(depth int, typ byte, from, to common.Address, input []byt
 	case vm.CREATE, vm.CREATE2:
 		if len(t.scopes) > 0 {
 			if pending := t.scopes[len(t.scopes)-1].pending; pending != nil {
-				pending.op.Cost += gas
+				pending.op.Cost += gas.Execution
 			}
 		}
 	}
@@ -281,11 +284,20 @@ func (t *Tracer) enter(depth int, typ byte, from, to common.Address, input []byt
 	if value != nil {
 		amount.Set(value)
 	}
+	var reservoir *hexutil.Uint64
+	if t.amsterdam {
+		initial := hexutil.Uint64(gas.State)
+		reservoir = &initial
+	}
 	switch vm.OpCode(typ) {
 	case vm.CREATE, vm.CREATE2:
 		frame.Type = "create"
 		if t.config.Trace {
-			frame.Action = CreateAction{from, hexutil.Uint64(gas), common.CopyBytes(input), (*hexutil.Big)(amount), strings.ToLower(vm.OpCode(typ).String())}
+			frame.Action = CreateAction{
+				From: from, Gas: hexutil.Uint64(gas.Execution), StateGasReservoir: reservoir,
+				Init: common.CopyBytes(input), Value: (*hexutil.Big)(amount),
+				CreationMethod: strings.ToLower(vm.OpCode(typ).String()),
+			}
 		}
 	case vm.SELFDESTRUCT:
 		frame.Type = "suicide"
@@ -294,7 +306,11 @@ func (t *Tracer) enter(depth int, typ byte, from, to common.Address, input []byt
 		}
 	default:
 		if t.config.Trace {
-			frame.Action = CallAction{strings.ToLower(vm.OpCode(typ).String()), from, to, hexutil.Uint64(gas), common.CopyBytes(input), (*hexutil.Big)(amount)}
+			frame.Action = CallAction{
+				CallType: strings.ToLower(vm.OpCode(typ).String()), From: from, To: to,
+				Gas: hexutil.Uint64(gas.Execution), StateGasReservoir: reservoir,
+				Input: common.CopyBytes(input), Value: (*hexutil.Big)(amount),
+			}
 		}
 	}
 	if t.config.Trace && !hidden {
@@ -303,10 +319,10 @@ func (t *Tracer) enter(depth int, typ byte, from, to common.Address, input []byt
 		}
 		t.frames = append(t.frames, frame)
 	}
-	t.scopes = append(t.scopes, &frameScope{frame: frame, target: to, hidden: hidden})
+	t.scopes = append(t.scopes, &frameScope{frame: frame, target: to, hidden: hidden, gas: gas.Execution})
 }
 
-func (t *Tracer) exit(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+func (t *Tracer) exit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
 	if t.halted() || len(t.scopes) == 0 {
 		return
 	}
@@ -329,16 +345,24 @@ func (t *Tracer) exit(depth int, output []byte, gasUsed uint64, err error, rever
 		return
 	}
 	frame := scope.frame
+	var gasUsed uint64
+	var stateGasUsed string
+	if t.amsterdam {
+		gasUsed = gasLeft.UsedExecution
+		stateGasUsed = hexutil.EncodeBig(big.NewInt(gasLeft.UsedState))
+	} else if scope.gas > gasLeft.Execution {
+		gasUsed = scope.gas - gasLeft.Execution
+	}
 	if err != nil && reverted {
 		_, precompile := t.precompiles[scope.target]
 		frame.Error = errorLabel(err, precompile && frame.Type == "call")
 		if frame.Error == "Reverted" {
-			frame.Result = CallResult{hexutil.Uint64(gasUsed), common.CopyBytes(output)}
+			frame.Result = CallResult{hexutil.Uint64(gasUsed), stateGasUsed, common.CopyBytes(output)}
 		}
 	} else if frame.Type == "create" {
-		frame.Result = CreateResult{hexutil.Uint64(gasUsed), scope.target, common.CopyBytes(t.state.GetCode(scope.target))}
+		frame.Result = CreateResult{hexutil.Uint64(gasUsed), stateGasUsed, scope.target, common.CopyBytes(t.state.GetCode(scope.target))}
 	} else if frame.Type == "call" {
-		frame.Result = CallResult{hexutil.Uint64(gasUsed), common.CopyBytes(output)}
+		frame.Result = CallResult{hexutil.Uint64(gasUsed), stateGasUsed, common.CopyBytes(output)}
 	}
 	t.reserve(len(output))
 }
@@ -454,7 +478,7 @@ func (t *Tracer) stateDiff() map[common.Address]*AccountDiff {
 	return result
 }
 
-func (t *Tracer) opcode(pc uint64, op byte, gas, cost uint64, context tracing.OpContext, returnData []byte, depth int, err error) {
+func (t *Tracer) opcode(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, context tracing.OpContext, returnData []byte, depth int, err error) {
 	// A selfdestruct credits its beneficiary before its frame is entered.
 	if t.pre != nil && vm.OpCode(op) == vm.SELFDESTRUCT {
 		if stack := context.StackData(); len(stack) > 0 {
@@ -478,17 +502,25 @@ func (t *Tracer) opcode(pc uint64, op byte, gas, cost uint64, context tracing.Op
 	if !t.reserve(0) {
 		return
 	}
-	step := &VMOp{PC: pc, Cost: cost, Op: vm.OpCode(op).String()}
+	step := &VMOp{PC: pc, Cost: cost.Execution, StateGasCost: cost.State, Op: vm.OpCode(op).String()}
 	scope.vm.Ops = append(scope.vm.Ops, step)
 	scope.last = step
-	if err != nil || cost > gas {
+	if err != nil || cost.Execution > gas.Execution {
 		return
 	}
 	// Terminal instructions have no pushed values or writes. Capture them while
 	// the interpreter still owns its stack; OnExit runs after those pools are freed.
 	switch vm.OpCode(op) {
 	case vm.STOP, vm.RETURN, vm.REVERT, vm.SELFDESTRUCT:
-		step.Ex = &VMEffects{Used: gas - cost, Push: []*hexutil.Big{}}
+		// Terminal instructions do not refill state gas. SELFDESTRUCT may
+		// charge for a new beneficiary and spill into the execution budget.
+		remaining := gas.Execution - cost.Execution
+		stateCost := uint64(max(cost.State, 0))
+		fromReservoir := min(stateCost, gas.State)
+		step.Ex = &VMEffects{
+			Used: remaining - (stateCost - fromReservoir), StateUsed: gas.State - fromReservoir,
+			Push: []*hexutil.Big{},
+		}
 		return
 	}
 	stack := context.StackData()
@@ -561,7 +593,7 @@ func (t *Tracer) openVM(code []byte) bool {
 	return true
 }
 
-func (t *Tracer) finishOp(scope *frameScope, context tracing.OpContext, gas uint64) {
+func (t *Tracer) finishOp(scope *frameScope, context tracing.OpContext, gas tracing.Gas) {
 	pending := scope.pending
 	if pending == nil {
 		return
@@ -572,7 +604,7 @@ func (t *Tracer) finishOp(scope *frameScope, context tracing.OpContext, gas uint
 		t.err = errors.New("invalid trace stack transition")
 		return
 	}
-	effects := &VMEffects{Used: gas, Push: []*hexutil.Big{}, Store: pending.store}
+	effects := &VMEffects{Used: gas.Execution, StateUsed: gas.State, Push: []*hexutil.Big{}, Store: pending.store}
 	for i := pending.stackBase; i < len(stack); i++ {
 		effects.Push = append(effects.Push, (*hexutil.Big)(stack[i].ToBig()))
 	}
@@ -588,7 +620,7 @@ func (t *Tracer) finishOp(scope *frameScope, context tracing.OpContext, gas uint
 	t.reserve(len(effects.Push) * 32)
 }
 
-func (t *Tracer) fault(pc uint64, op byte, gas, cost uint64, context tracing.OpContext, depth int, err error) {
+func (t *Tracer) fault(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, context tracing.OpContext, depth int, err error) {
 	if t.halted() || len(t.scopes) == 0 {
 		return
 	}

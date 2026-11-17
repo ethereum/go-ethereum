@@ -51,21 +51,23 @@ type Location struct {
 
 // CallAction is the action of a call frame.
 type CallAction struct {
-	CallType string         `json:"callType"`
-	From     common.Address `json:"from"`
-	To       common.Address `json:"to"`
-	Gas      hexutil.Uint64 `json:"gas"`
-	Input    hexutil.Bytes  `json:"input"`
-	Value    *hexutil.Big   `json:"value"`
+	CallType          string          `json:"callType"`
+	From              common.Address  `json:"from"`
+	To                common.Address  `json:"to"`
+	Gas               hexutil.Uint64  `json:"gas"`
+	StateGasReservoir *hexutil.Uint64 `json:"stateGasReservoir,omitempty"`
+	Input             hexutil.Bytes   `json:"input"`
+	Value             *hexutil.Big    `json:"value"`
 }
 
 // CreateAction is the action of a create frame.
 type CreateAction struct {
-	From           common.Address `json:"from"`
-	Gas            hexutil.Uint64 `json:"gas"`
-	Init           hexutil.Bytes  `json:"init"`
-	Value          *hexutil.Big   `json:"value"`
-	CreationMethod string         `json:"creationMethod"`
+	From              common.Address  `json:"from"`
+	Gas               hexutil.Uint64  `json:"gas"`
+	StateGasReservoir *hexutil.Uint64 `json:"stateGasReservoir,omitempty"`
+	Init              hexutil.Bytes   `json:"init"`
+	Value             *hexutil.Big    `json:"value"`
+	CreationMethod    string          `json:"creationMethod"`
 }
 
 // SuicideAction is the action of a selfdestruct frame.
@@ -77,15 +79,17 @@ type SuicideAction struct {
 
 // CallResult is the result of a successful or reverted call frame.
 type CallResult struct {
-	GasUsed hexutil.Uint64 `json:"gasUsed"`
-	Output  hexutil.Bytes  `json:"output"`
+	GasUsed      hexutil.Uint64 `json:"gasUsed"`
+	StateGasUsed string         `json:"stateGasUsed,omitempty"`
+	Output       hexutil.Bytes  `json:"output"`
 }
 
 // CreateResult is the result of a successful create frame.
 type CreateResult struct {
-	GasUsed hexutil.Uint64 `json:"gasUsed"`
-	Address common.Address `json:"address"`
-	Code    hexutil.Bytes  `json:"code"`
+	GasUsed      hexutil.Uint64 `json:"gasUsed"`
+	StateGasUsed string         `json:"stateGasUsed,omitempty"`
+	Address      common.Address `json:"address"`
+	Code         hexutil.Bytes  `json:"code"`
 }
 
 // AccountDiff is the transition of an account, each field a change marker.
@@ -104,19 +108,21 @@ type VMTrace struct {
 
 // VMOp is one executed instruction, with the trace of the frame it entered.
 type VMOp struct {
-	PC   uint64     `json:"pc"`
-	Cost uint64     `json:"cost"`
-	Ex   *VMEffects `json:"ex"`
-	Sub  *VMTrace   `json:"sub"`
-	Op   string     `json:"op"`
+	PC           uint64     `json:"pc"`
+	Cost         uint64     `json:"cost"`
+	StateGasCost int64      `json:"stateGasCost,omitempty"`
+	Ex           *VMEffects `json:"ex"`
+	Sub          *VMTrace   `json:"sub"`
+	Op           string     `json:"op"`
 }
 
 // VMEffects are the effects of an instruction that completed.
 type VMEffects struct {
-	Used  uint64         `json:"used"`
-	Push  []*hexutil.Big `json:"push"`
-	Mem   *MemoryWrite   `json:"mem"`
-	Store *StorageWrite  `json:"store"`
+	Used      uint64         `json:"used"`
+	StateUsed uint64         `json:"stateUsed,omitempty"`
+	Push      []*hexutil.Big `json:"push"`
+	Mem       *MemoryWrite   `json:"mem"`
+	Store     *StorageWrite  `json:"store"`
 }
 
 // MemoryWrite is the memory range an instruction designates, after it ran.

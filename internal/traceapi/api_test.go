@@ -148,13 +148,15 @@ func TestVMFailingOps(t *testing.T) {
 		name, code string
 		ops        []string // opcodes in the trace; the last one halted if halted is set
 		halted     bool
+		haltCost   uint64
 	}{
 		// Operations rejected before execution are omitted.
-		{"undefined opcode", "60010c", []string{"PUSH1"}, false},
-		{"stack underflow", "600101", []string{"PUSH1"}, false},
-		// Operations that began executing keep their cost with ex and sub null.
-		{"bad jump", "600556", []string{"PUSH1", "JUMP"}, true},
-		{"out of gas", "6001600155", []string{"PUSH1", "PUSH1", "SSTORE"}, true},
+		{"undefined opcode", "60010c", []string{"PUSH1"}, false, 0},
+		{"stack underflow", "600101", []string{"PUSH1"}, false, 0},
+		// A fault after metering keeps the cost reported before execution.
+		{"bad jump", "600556", []string{"PUSH1", "JUMP"}, true, 8},
+		// An opcode that ran out of gas during metering has no reported cost.
+		{"out of gas", "6001600155", []string{"PUSH1", "PUSH1", "SSTORE"}, true, 0},
 	} {
 		api, _ := newTestAPI(t, common.FromHex(tc.code), nil)
 		args := testCallArgs(&testTarget, nil)
@@ -168,7 +170,7 @@ func TestVMFailingOps(t *testing.T) {
 		for i, op := range result.VMTrace.Ops {
 			ops = append(ops, op.Op)
 			last := i == len(result.VMTrace.Ops)-1
-			if halted := last && tc.halted; (op.Ex == nil) != halted || op.Sub != nil || op.Cost == 0 && halted {
+			if halted := last && tc.halted; (op.Ex == nil) != halted || op.Sub != nil || halted && op.Cost != tc.haltCost {
 				t.Errorf("%s: %s ex %+v sub %+v cost %d", tc.name, op.Op, op.Ex, op.Sub, op.Cost)
 			}
 		}

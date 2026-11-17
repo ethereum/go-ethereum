@@ -19,6 +19,7 @@ package parity
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"testing"
@@ -113,9 +114,9 @@ func TestDirectoryTracerStop(t *testing.T) {
 	hooks := *tracer.Hooks
 	started := make(chan struct{})
 	var once sync.Once
-	hooks.OnOpcode = func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+	hooks.OnOpcodeV2 = func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 		once.Do(func() { close(started) })
-		tracer.OnOpcode(pc, op, gas, cost, scope, rData, depth, err)
+		tracer.OnOpcodeV2(pc, op, gas, cost, scope, rData, depth, err)
 	}
 	loop := []byte{byte(vm.JUMPDEST), byte(vm.PUSH1), 0, byte(vm.JUMP)}
 	done := make(chan struct{})
@@ -176,5 +177,87 @@ func TestVMTraceImmediateDepth(t *testing.T) {
 		if !slices.Equal(have, test.push) {
 			t.Errorf("%s: push %v, want %v", name, have, test.push)
 		}
+	}
+}
+
+// Funding a state charge from execution gas must not change the frame's
+// reported execution usage or the SSTORE execution cost.
+func TestAmsterdamStateGas(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	config.AmsterdamTime = new(uint64)
+	code := []byte{byte(vm.PUSH1), 1, byte(vm.PUSH1), 0, byte(vm.SSTORE), byte(vm.STOP)}
+	executionCost := params.ColdStorageAccessAmsterdam + params.StorageWriteAmsterdam
+	stateCost := uint64(params.StorageCreationSize * params.CostPerStateByte)
+	for _, limit := range []uint64{1_000_000, 30_000_000} {
+		tracer := New(Config{Trace: true, VMTrace: true}, &config, nil)
+		if err := runContract(tracer.Hooks(), &config, code, limit); err != nil {
+			t.Fatalf("gas limit %d: %v", limit, err)
+		}
+		result, err := tracer.Result()
+		if err != nil {
+			t.Fatal(err)
+		}
+		action := result.Trace[0].Action.(CallAction)
+		frame := result.Trace[0].Result.(CallResult)
+		reservoir := limit - min(limit, params.MaxTxGas)
+		if action.StateGasReservoir == nil || uint64(*action.StateGasReservoir) != reservoir {
+			t.Fatalf("gas limit %d: entry reservoir %v, want %d", limit, action.StateGasReservoir, reservoir)
+		}
+		if uint64(frame.GasUsed) != 6+executionCost || frame.StateGasUsed != fmt.Sprintf("0x%x", stateCost) {
+			t.Errorf("gas limit %d: gas used %d/%v, want %d/%d", limit, frame.GasUsed, frame.StateGasUsed, 6+executionCost, stateCost)
+		}
+		step := result.VMTrace.Ops[2]
+		fromReservoir := min(reservoir, stateCost)
+		if step.Cost != executionCost || step.StateGasCost != int64(stateCost) ||
+			step.Ex.StateUsed != reservoir-fromReservoir ||
+			step.Ex.Used != uint64(action.Gas)-6-executionCost-(stateCost-fromReservoir) {
+			t.Errorf("gas limit %d: SSTORE cost %d/%d, remaining %d/%d", limit, step.Cost, step.StateGasCost, step.Ex.Used, step.Ex.StateUsed)
+		}
+	}
+}
+
+// A child can refill a charge paid by its parent. The refund affects the
+// child's signed state usage and survives serialization.
+func TestAmsterdamNegativeStateGas(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	config.AmsterdamTime = new(uint64)
+	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := common.HexToAddress("0x1234")
+	// Store 1, then DELEGATECALL the child to clear the same slot.
+	statedb.SetCode(contract, common.FromHex("60015f555f5f5f5f6112345af400"), tracing.CodeChangeUnspecified)
+	statedb.SetCode(child, common.FromHex("5f5f5500"), tracing.CodeChangeUnspecified)
+	tracer := New(Config{Trace: true, VMTrace: true}, &config, nil)
+	_, _, err = runtime.Call(contract, nil, &runtime.Config{
+		ChainConfig: &config, GasLimit: 1_000_000, State: statedb, EVMConfig: vm.Config{Tracer: tracer.Hooks()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := tracer.Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Trace) != 2 {
+		t.Fatalf("have %d frames, want 2", len(result.Trace))
+	}
+	root := result.Trace[0].Result.(CallResult)
+	sub := result.Trace[1].Result.(CallResult)
+	want := fmt.Sprintf("-0x%x", params.StorageCreationSize*params.CostPerStateByte)
+	if root.StateGasUsed != "0x0" || sub.StateGasUsed != want {
+		t.Fatalf("root/child state usage = %s/%s, want 0x0/%s", root.StateGasUsed, sub.StateGasUsed, want)
+	}
+	wire, err := json.Marshal(sub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded CallResult
+	if err := json.Unmarshal(wire, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.StateGasUsed != want {
+		t.Fatalf("decoded stateGasUsed = %q, want %q", decoded.StateGasUsed, want)
 	}
 }
