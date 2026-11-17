@@ -76,6 +76,10 @@ var (
 		Name:  "human",
 		Usage: "\"Human-readable\" output",
 	}
+	NDJSONFlag = &cli.BoolFlag{
+		Name:  "ndjson",
+		Usage: "Output one JSON result per line as tests complete (streaming)",
+	}
 	StatDumpFlag = &cli.BoolFlag{
 		Name:  "statdump",
 		Usage: "displays stack and heap memory information",
@@ -214,6 +218,7 @@ func init() {
 	app.Commands = []*cli.Command{
 		runCommand,
 		blockTestCommand,
+		engineTestCommand,
 		stateTestCommand,
 		stateTransitionCommand,
 		transactionCommand,
