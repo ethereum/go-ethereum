@@ -77,16 +77,18 @@ func (q *receiptQueue) request(peer *peerConnection, req *fetchRequest, resCh ch
 		q.receiptFetchHook(req.Headers)
 	}
 	var (
+		numbers    = make([]uint64, 0, len(req.Headers))
 		gasUsed    = make([]uint64, 0, len(req.Headers))
 		timestamps = make([]uint64, 0, len(req.Headers))
 		hashes     = make([]common.Hash, 0, len(req.Headers))
 	)
 	for _, header := range req.Headers {
 		hashes = append(hashes, header.Hash())
+		numbers = append(numbers, header.Number.Uint64())
 		gasUsed = append(gasUsed, header.GasUsed)
 		timestamps = append(timestamps, header.Time)
 	}
-	return peer.peer.RequestReceipts(hashes, gasUsed, timestamps, resCh)
+	return peer.peer.RequestReceipts(hashes, numbers, gasUsed, timestamps, resCh)
 }
 
 // deliver is responsible for taking a generic response packet from the concurrent
