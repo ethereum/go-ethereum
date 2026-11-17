@@ -204,7 +204,13 @@ type stateTracer struct {
 }
 
 type tracedOpcodeLog struct {
+	Type    string            `json:"type,omitempty"`
+	Pc      uint64            `json:"pc"`
 	Op      string            `json:"op"`
+	GasCost *uint64           `json:"gasCost,omitempty"`
+	Depth   int               `json:"depth"`
+	Error   string            `json:"error,omitempty"`
+	Stack   []string          `json:"stack,omitempty"`
 	Refund  *uint64           `json:"refund,omitempty"`
 	Storage map[string]string `json:"storage,omitempty"`
 }
@@ -1215,6 +1221,10 @@ func TestTraceTransactionFailureReturnValues(t *testing.T) {
 		name            string
 		code            []byte
 		wantReturnValue string
+		wantOp          vm.OpCode
+		wantCost        uint64
+		wantEntries     int
+		wantFault       bool
 	}{
 		{
 			name: "revert preserves return data",
@@ -1227,6 +1237,8 @@ func TestTraceTransactionFailureReturnValues(t *testing.T) {
 				byte(vm.REVERT),
 			},
 			wantReturnValue: "0x000000000000000000000000000000000000000000000000000000000000002a",
+			wantOp:          vm.REVERT,
+			wantEntries:     6,
 		},
 		{
 			name: "hard failure clears return data",
@@ -1234,6 +1246,18 @@ func TestTraceTransactionFailureReturnValues(t *testing.T) {
 				byte(vm.INVALID),
 			},
 			wantReturnValue: "0x",
+			wantOp:          vm.INVALID,
+			wantEntries:     2,
+			wantFault:       true,
+		},
+		{
+			name:            "invalid jump keeps opcode and adds fault",
+			code:            common.Hex2Bytes("600056"),
+			wantReturnValue: "0x",
+			wantOp:          vm.JUMP,
+			wantCost:        vm.GasMidStep,
+			wantEntries:     3,
+			wantFault:       true,
 		},
 	}
 	for _, tc := range tests {
@@ -1280,8 +1304,25 @@ func TestTraceTransactionFailureReturnValues(t *testing.T) {
 			if traced.ReturnValue != tc.wantReturnValue {
 				t.Fatalf("unexpected returnValue: have %s want %s", traced.ReturnValue, tc.wantReturnValue)
 			}
-			if len(traced.StructLogs) == 0 {
-				t.Fatal("expected failing trace to still include structLogs")
+			if len(traced.StructLogs) != tc.wantEntries {
+				t.Fatalf("got %d structLogs, want %d", len(traced.StructLogs), tc.wantEntries)
+			}
+			opcodeIndex := len(traced.StructLogs) - 1
+			if tc.wantFault {
+				opcodeIndex--
+			}
+			opcode := traced.StructLogs[opcodeIndex]
+			if opcode.Type != "" || opcode.Op != tc.wantOp.String() || opcode.GasCost == nil || *opcode.GasCost != tc.wantCost || opcode.Error != "" {
+				t.Fatalf("ordinary opcode changed: %+v", opcode)
+			}
+			if tc.wantFault {
+				fault := traced.StructLogs[opcodeIndex+1]
+				if fault.Type != "fault" || fault.Pc != opcode.Pc || fault.Op != opcode.Op || fault.Depth != opcode.Depth || fault.Error == "" || fault.GasCost != nil || fault.Stack != nil {
+					t.Fatalf("missing correlated compact fault: %+v", fault)
+				}
+				if tc.wantOp == vm.JUMP && !slices.Equal(opcode.Stack, []string{"0x0"}) {
+					t.Fatalf("JUMP lost its pre-execution stack: %v", opcode.Stack)
+				}
 			}
 		})
 	}

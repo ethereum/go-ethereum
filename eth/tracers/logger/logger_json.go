@@ -60,11 +60,12 @@ func (c *callFrame) Type() string {
 }
 
 type jsonLogger struct {
-	encoder *json.Encoder
-	cfg     *Config
-	env     *tracing.VMContext
-	hooks   *tracing.Hooks
-	written *countingWriter
+	encoder    *json.Encoder
+	cfg        *Config
+	env        *tracing.VMContext
+	hooks      *tracing.Hooks
+	written    *countingWriter
+	lastOpcode opcodeLog
 
 	callFrames bool          // whether entered frames are written out
 	frames     []tracing.Gas // entry budgets of the open frames
@@ -115,11 +116,22 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 }
 
 func (l *jsonLogger) OnFault(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
-	// TODO: Add rData to this interface as well
-	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, err)
+	if err == nil || !l.lastOpcode.matches(pc, op, depth) {
+		return
+	}
+	l.lastOpcode.captured = false
+
+	l.encoder.Encode(faultLog{
+		Type:  "fault",
+		Pc:    pc,
+		Op:    vm.OpCode(op),
+		Depth: depth,
+		Error: err.Error(),
+	})
 }
 
 func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+	l.lastOpcode = opcodeLog{}
 	if l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
 		return
 	}
@@ -148,9 +160,14 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.
 		log.ReturnData = rData
 	}
 	l.encoder.Encode(log)
+	if err == nil {
+		l.lastOpcode = opcodeLog{pc: pc, op: op, depth: depth, captured: true}
+	}
 }
 
 func (l *jsonLogger) onSystemCallStart(*tracing.VMContext) {
+	l.lastOpcode = opcodeLog{}
+
 	// Process no events while in system call.
 	hooks := *l.hooks
 	*l.hooks = tracing.Hooks{
@@ -182,6 +199,8 @@ func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common
 }
 
 func (l *jsonLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
+	l.lastOpcode = opcodeLog{}
+
 	var gasUsed uint64
 	if n := len(l.frames); n > 0 {
 		if entry := l.frames[n-1]; entry.Execution > gasLeft.Execution {
@@ -206,4 +225,5 @@ func (l *jsonLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err e
 
 func (l *jsonLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
 	l.env = env
+	l.lastOpcode = opcodeLog{}
 }

@@ -64,6 +64,42 @@ func (c *countingWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// opcodeLog identifies the last captured, error-free opcode event.
+type opcodeLog struct {
+	pc       uint64
+	op       byte
+	depth    int
+	captured bool
+}
+
+func (r opcodeLog) matches(pc uint64, op byte, depth int) bool {
+	return r.captured && r.pc == pc && r.op == op && r.depth == depth
+}
+
+// faultLog reports the exceptional halt of the immediately preceding opcode record.
+type faultLog struct {
+	Type  string    `json:"type"`
+	Pc    uint64    `json:"pc"`
+	Op    vm.OpCode `json:"op"`
+	Depth int       `json:"depth"`
+	Error string    `json:"error"`
+}
+
+func (f faultLog) toLegacyJSON() json.RawMessage {
+	entry, _ := json.Marshal(struct {
+		Type  string `json:"type"`
+		Pc    uint64 `json:"pc"`
+		Op    string `json:"op"`
+		Depth int    `json:"depth"`
+		Error string `json:"error"`
+	}{f.Type, f.Pc, f.Op.String(), f.Depth, f.Error})
+	return entry
+}
+
+func (f faultLog) Write(writer io.Writer) {
+	fmt.Fprintf(writer, "%-16spc=%08d op=%s depth=%d ERROR: %s\n\n", "FAULT", f.Pc, f.Op, f.Depth, f.Error)
+}
+
 //go:generate go run github.com/fjl/gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
 
 // StructLog is emitted to the EVM each cycle and lists information about the
@@ -259,6 +295,7 @@ type StructLogger struct {
 	writer     io.Writer         // If set, the logger will stream instead of store logs
 	logs       []json.RawMessage // buffer of json-encoded logs
 	resultSize int               // total bytes of trace output
+	lastOpcode opcodeLog         // opcode to which a subsequent fault belongs
 
 	interrupt atomic.Bool           // Atomic flag to signal execution interruption
 	reason    atomic.Pointer[error] // Reason for the interruption, populated by Stop
@@ -292,6 +329,7 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 		OnSystemCallEnd:     l.OnSystemCallEnd,
 		OnExitV2:            l.OnExit,
 		OnOpcodeV2:          l.OnOpcode,
+		OnFaultV2:           l.OnFault,
 	}
 }
 
@@ -299,6 +337,8 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 //
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
 func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+	l.lastOpcode.captured = false
+
 	// If tracing was interrupted, exit
 	if l.interrupt.Load() {
 		return
@@ -341,8 +381,9 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tr
 	}
 
 	// Copy a snapshot of the current storage to a new container
+	// A step that halts with an error does not execute the opcode,
+	// so it records no storage.
 	var storage Storage
-	// A step that halts with an error does not execute the opcode, so it records no storage.
 	if !l.cfg.DisableStorage && err == nil && (op == vm.SLOAD || op == vm.SSTORE) {
 		// initialise new changed values storage container for this contract
 		// if not present.
@@ -369,6 +410,13 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tr
 	}
 	log.Storage = storage
 
+	// cache the last log
+	l.lastOpcode = opcodeLog{
+		pc:       pc,
+		op:       opcode,
+		depth:    depth,
+		captured: err == nil,
+	}
 	// create a log
 	if l.writer == nil {
 		entry := log.toLegacyJSON()
@@ -380,8 +428,34 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tr
 	l.resultSize = l.writer.(*countingWriter).n
 }
 
+// OnFault emits a separate result for the preceding captured opcode.
+func (l *StructLogger) OnFault(pc uint64, opcode byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
+	if l.skip || l.interrupt.Load() || err == nil || !l.lastOpcode.matches(pc, opcode, depth) {
+		return
+	}
+	l.lastOpcode.captured = false
+
+	fault := faultLog{
+		Type:  "fault",
+		Pc:    pc,
+		Op:    vm.OpCode(opcode),
+		Depth: depth,
+		Error: err.Error(),
+	}
+	if l.writer == nil {
+		entry := fault.toLegacyJSON()
+		l.resultSize += len(entry)
+		l.logs = append(l.logs, entry)
+		return
+	}
+	fault.Write(l.writer)
+	l.resultSize = l.writer.(*countingWriter).n
+}
+
 // OnExit is called a call frame finishes processing.
 func (l *StructLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
+	l.lastOpcode.captured = false
+
 	if depth != 0 {
 		return
 	}
@@ -425,9 +499,11 @@ func (l *StructLogger) Stop(err error) {
 }
 
 func (l *StructLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	l.lastOpcode.captured = false
 	l.env = env
 }
 func (l *StructLogger) OnSystemCallStart(env *tracing.VMContext) {
+	l.lastOpcode.captured = false
 	l.skip = true
 }
 
@@ -601,9 +677,9 @@ func (t *mdLogger) OnFault(pc uint64, op byte, gas tracing.Gas, cost tracing.OpC
 	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
 }
 
-// ExecutionResult groups all structured logs emitted by the EVM
-// while replaying a transaction in debug mode as well as transaction
-// execution status, the amount of gas used and the return value
+// ExecutionResult groups opcode snapshots and typed fault records emitted while
+// replaying a transaction in debug mode, as well as the transaction execution
+// status, the amount of gas used and the return value.
 type ExecutionResult struct {
 	Gas         uint64            `json:"gas"`
 	Failed      bool              `json:"failed"`

@@ -17,6 +17,7 @@
 package vm
 
 import (
+	"bytes"
 	"errors"
 	"math"
 	"math/big"
@@ -183,10 +184,23 @@ func TestTracedFaultCost(t *testing.T) {
 		wantState int64
 		wantErr   error
 	}{
-		{name: "invalid jump", code: []byte{byte(PUSH1), 0, byte(JUMP)}, wantErr: ErrInvalidJump},
-		{name: "create state out of gas", code: []byte{byte(PUSH0), byte(PUSH0), byte(PUSH0), byte(CREATE)}, wantState: stateGasNewAccount, wantErr: ErrOutOfGas},
-		{name: "create2 state out of gas", code: []byte{byte(PUSH0), byte(PUSH0), byte(PUSH0), byte(PUSH0), byte(CREATE2)}, wantState: stateGasNewAccount, wantErr: ErrOutOfGas},
-		{name: "revert", code: []byte{byte(PUSH1), 32, byte(PUSH0), byte(REVERT)}, wantErr: ErrExecutionReverted},
+		{
+			name:    "invalid jump",
+			code:    []byte{byte(PUSH1), 0, byte(JUMP)},
+			wantErr: ErrInvalidJump,
+		},
+		{
+			name:      "create state out of gas",
+			code:      []byte{byte(PUSH0), byte(PUSH0), byte(PUSH0), byte(CREATE)},
+			wantState: stateGasNewAccount,
+			wantErr:   ErrOutOfGas,
+		},
+		{
+			name:      "create2 state out of gas",
+			code:      []byte{byte(PUSH0), byte(PUSH0), byte(PUSH0), byte(PUSH0), byte(CREATE2)},
+			wantState: stateGasNewAccount,
+			wantErr:   ErrOutOfGas,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			self := common.BytesToAddress([]byte("self"))
@@ -221,6 +235,106 @@ func TestTracedFaultCost(t *testing.T) {
 				t.Errorf("opcode/fault events = %d/%d, want 1/1", opcodes, faults)
 			}
 		})
+	}
+}
+
+func TestTracedRevertEvents(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		gas      uint64
+		wantCost uint64
+		wantLeft uint64
+		wantErr  error
+	}{
+		{
+			name:     "explicit rollback",
+			gas:      100,
+			wantCost: 3, // REVERT expands memory by one word.
+			wantLeft: 91,
+			wantErr:  ErrExecutionReverted,
+		},
+		{
+			name:    "memory expansion out of gas",
+			gas:     7,
+			wantErr: ErrOutOfGas,
+		},
+	} {
+		for _, version := range []string{"legacy", "v2"} {
+			t.Run(tc.name+"/"+version, func(t *testing.T) {
+				self := common.BytesToAddress([]byte("self"))
+				statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+				statedb.CreateAccount(self)
+				statedb.SetCode(self, common.FromHex("60206000fd"), tracing.CodeChangeUnspecified)
+				statedb.Finalise(params.Rules{IsEIP158: true})
+				evm := amsterdam8037EVM(statedb)
+				defer evm.Release()
+
+				var opcodes, faults, exits int
+				onOpcode := func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+					if OpCode(op) != REVERT {
+						return
+					}
+					opcodes++
+					if pc != 4 || depth != 1 || gas != (tracing.Gas{Execution: tc.gas - 6}) || cost != (tracing.OpCost{Execution: tc.wantCost}) {
+						t.Errorf("REVERT opcode: pc %d, depth %d, gas %v, cost %v", pc, depth, gas, cost)
+					}
+					stack := scope.StackData()
+					if len(stack) != 2 || stack[0].Uint64() != 32 || !stack[1].IsZero() || len(scope.MemoryData()) != 0 {
+						t.Errorf("REVERT lost its pre-execution state: stack %v, memory %x", stack, scope.MemoryData())
+					}
+					if tc.wantErr == ErrExecutionReverted {
+						if err != nil {
+							t.Errorf("explicit REVERT opcode error = %v, want nil", err)
+						}
+					} else if !errors.Is(err, tc.wantErr) {
+						t.Errorf("REVERT opcode error = %v, want %v", err, tc.wantErr)
+					}
+				}
+				onFault := func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
+					faults++
+					t.Errorf("unexpected fault event for %s: %v", OpCode(op), err)
+				}
+				onExit := func(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
+					exits++
+					if depth != 0 || !reverted || !errors.Is(err, tc.wantErr) || gasLeft != (tracing.Gas{Execution: tc.wantLeft}) {
+						t.Errorf("exit: depth %d, reverted %v, error %v, gas left %v", depth, reverted, err, gasLeft)
+					}
+					if tc.wantErr == ErrExecutionReverted {
+						if !bytes.Equal(output, make([]byte, 32)) {
+							t.Errorf("revert output = %x, want 32 zero bytes", output)
+						}
+					} else if len(output) != 0 {
+						t.Errorf("out-of-gas output = %x, want empty", output)
+					}
+				}
+				if version == "v2" {
+					evm.Config.Tracer = &tracing.Hooks{
+						OnOpcodeV2: onOpcode,
+						OnFaultV2:  onFault,
+						OnExitV2:   onExit,
+					}
+				} else {
+					evm.Config.Tracer = &tracing.Hooks{
+						OnOpcode: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, rData []byte, depth int, err error) {
+							onOpcode(pc, op, tracing.Gas{Execution: gas}, tracing.OpCost{Execution: cost}, scope, rData, depth, err)
+						},
+						OnFault: func(pc uint64, op byte, gas, cost uint64, scope tracing.OpContext, depth int, err error) {
+							onFault(pc, op, tracing.Gas{Execution: gas}, tracing.OpCost{Execution: cost}, scope, depth, err)
+						},
+						OnExit: func(depth int, output []byte, gasUsed uint64, err error, reverted bool) {
+							onExit(depth, output, tracing.Gas{Execution: tc.gas - gasUsed}, err, reverted)
+						},
+					}
+				}
+				_, left, err := evm.Call(common.Address{}, self, nil, NewGasBudget(tc.gas, 0), new(uint256.Int))
+				if !errors.Is(err, tc.wantErr) || left.ExecutionGas != tc.wantLeft {
+					t.Errorf("call error = %v, gas left = %d; want %v, %d", err, left.ExecutionGas, tc.wantErr, tc.wantLeft)
+				}
+				if opcodes != 1 || faults != 0 || exits != 1 {
+					t.Errorf("opcode/fault/exit events = %d/%d/%d, want 1/0/1", opcodes, faults, exits)
+				}
+			})
+		}
 	}
 }
 

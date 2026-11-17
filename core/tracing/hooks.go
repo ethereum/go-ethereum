@@ -177,22 +177,26 @@ type (
 	// hooks are set, only V2 is invoked; register at most one.
 	ExitHookV2 = func(depth int, output []byte, gasLeft Gas, err error, reverted bool)
 
-	// OpcodeHook is invoked just prior to the execution of an opcode.
-	// If err is non-nil, cost is zero.
+	// OpcodeHook is invoked after stack validation and upfront gas charging, before
+	// executing an opcode or expanding its memory. If a precheck fails, the hook
+	// is invoked with that error and zero cost instead, and the opcode is not executed.
 	OpcodeHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
 
-	// FaultHook is invoked when an error occurs during the execution of an opcode.
-	// Cost is zero; a preceding OpcodeHook may already have reported the computed cost.
+	// FaultHook is invoked on an exceptional halt during the execution of an opcode,
+	// after an opcode hook reported the same pc, op and depth with a nil error.
+	// An explicit REVERT is a rollback reported by ExitHook, not a fault.
+	// Cost is zero; the preceding opcode hook reported the computed cost.
 	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 
 	// OpcodeHookV2 is the multi-dimensional successor to OpcodeHook: gas is the
 	// budget before the opcode and cost its two-dimensional cost. If both hooks
 	// are set, only V2 is invoked; register at most one.
-	// If err is non-nil, cost is empty, matching OpcodeHook's zero cost.
+	// It has the same timing as OpcodeHook. If err is non-nil, cost is empty.
 	OpcodeHookV2 = func(pc uint64, op byte, gas Gas, cost OpCost, scope OpContext, rData []byte, depth int, err error)
 
 	// FaultHookV2 is the multi-dimensional successor to FaultHook. See OpcodeHookV2
-	// for how the two dimensions relate. Cost is always empty.
+	// for how the two dimensions relate. It has the same timing and REVERT
+	// exclusion as FaultHook. Cost is always empty.
 	FaultHookV2 = func(pc uint64, op byte, gas Gas, cost OpCost, scope OpContext, depth int, err error)
 
 	// GasChangeHook reports changes to the execution gas. Tracers
