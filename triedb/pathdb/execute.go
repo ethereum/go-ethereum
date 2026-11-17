@@ -124,6 +124,12 @@ func revertAccounts(ctx *context, db database.NodeDatabase) ([]*accountRevert, e
 			return nil, err
 		}
 		reverts = append(reverts, r)
+
+		// The storage trie is unchanged if the account has no storage diffs.
+		if len(ctx.storages[addr]) == 0 {
+			r.root = postStorageRoot
+			continue
+		}
 		workers.Go(func() error {
 			return revertStorage(ctx, db, r, postStorageRoot)
 		})
