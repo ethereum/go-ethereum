@@ -269,7 +269,7 @@ func assertFramePoolConsistent(t *testing.T, p *FramePool) {
 		if p.all[hash] != entry || p.evict[entry.index] != entry {
 			t.Fatal("live transaction missing from lookup or eviction heap")
 		}
-		used += numSlots(entry.tx)
+		used += numSlots(entry)
 		usage := usages[entry.payer]
 		if usage == nil {
 			usage = &payerUsage{txs: make(map[common.Hash]*frameTx)}
@@ -342,6 +342,50 @@ func TestValidateTxBasics(t *testing.T) {
 		t.Fatalf("stateless validation consulted pending authorizations: %v", err)
 	}
 	addPoolTx(t, pool, valid, txpool.ErrInflightTxLimitReached)
+}
+
+func TestConfiguredMaxVerifyGas(t *testing.T) {
+	for _, tc := range []struct{ provided, want uint64 }{
+		{0, MaxVerifyGas},
+		{MaxVerifyGas - 1, MaxVerifyGas},
+		{MaxVerifyGas, MaxVerifyGas},
+		{2 * MaxVerifyGas, 2 * MaxVerifyGas},
+	} {
+		conf := DefaultConfig
+		conf.MaxVerifyGas = tc.provided
+		if got := conf.sanitize().MaxVerifyGas; got != tc.want {
+			t.Errorf("provided %d: got %d, want %d", tc.provided, got, tc.want)
+		}
+	}
+	pool, _, _ := setupFramePool(t, 10, nil)
+	tx := signedPoolTx(t, 1, 0, 0, 20, 2, nil, func(tx *types.FrameTx) { tx.Frames[0].GasLimits.Execution = MaxVerifyGas })
+	if err := pool.ValidateTxBasics(tx); !errors.Is(err, ErrPrefixGasLimit) {
+		t.Fatalf("default cap: got %v, want %v", err, ErrPrefixGasLimit)
+	}
+	pool.config.MaxVerifyGas = 2 * MaxVerifyGas
+	if err := pool.ValidateTxBasics(tx); err != nil {
+		t.Fatalf("raised cap: %v", err)
+	}
+}
+
+func TestVerifyGasSlots(t *testing.T) {
+	for _, tc := range []struct {
+		gas uint64
+		fit int
+	}{{MaxVerifyGas, 3}, {txSlotVerifyGas, 10}} {
+		pool, _, _ := setupFramePool(t, 10, nil)
+		for id := 1; id <= tc.fit+1; id++ {
+			tx := signedPoolTx(t, id, 0, 0, 20, 2, nil, func(tx *types.FrameTx) {
+				tx.Frames[0].GasLimits.Execution = tc.gas - types.FrameTxSignatureGas(&tx.Signatures[0])
+			})
+			var want error
+			if id > tc.fit {
+				want = txpool.ErrUnderpriced
+			}
+			addPoolTx(t, pool, tx, want)
+		}
+		assertFramePoolConsistent(t, pool)
+	}
 }
 
 func TestForgedAdmissionAndReplacement(t *testing.T) {

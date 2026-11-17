@@ -29,7 +29,7 @@ import (
 
 // Public-mempool policy limits from EIP-8141 (not consensus parameters).
 const (
-	MaxVerifyGas                            uint64 = 100_000
+	MaxVerifyGas                            uint64 = 300_000
 	MaxVerifyStateGas                       uint64 = 500_000
 	MaxPendingTxsUsingNonCanonicalPaymaster        = 1
 )
@@ -67,6 +67,10 @@ type Prefix struct {
 // A deploy follows the optional expiry and recent-root verifiers. Later DEFAULT
 // frames are post-ops, not deploys.
 func ClassifyPrefix(frames []types.Frame, sender common.Address, signatures types.SignatureList) (Prefix, error) {
+	return classifyPrefix(frames, sender, signatures, MaxVerifyGas)
+}
+
+func classifyPrefix(frames []types.Frame, sender common.Address, signatures types.SignatureList, maxVerifyGas uint64) (Prefix, error) {
 	prefix := Prefix{ExpiryFrame: -1, RecentRootFrame: -1, DeployFrame: -1, VerifyFrame: -1, PayFrame: -1, End: -1}
 	invalid := func(reason string) (Prefix, error) {
 		return Prefix{}, fmt.Errorf("%w: %s", ErrInvalidPrefix, reason)
@@ -138,7 +142,7 @@ func ClassifyPrefix(frames []types.Frame, sender common.Address, signatures type
 			}
 			// Subtract before adding so even malicious uint64 budgets cannot
 			// wrap the totals. The running totals never exceed their caps.
-			if frames[i].GasLimits.Execution > MaxVerifyGas-prefix.ExecutionGas || frames[i].GasLimits.State > MaxVerifyStateGas-prefix.StateGas {
+			if frames[i].GasLimits.Execution > maxVerifyGas-prefix.ExecutionGas || frames[i].GasLimits.State > MaxVerifyStateGas-prefix.StateGas {
 				return Prefix{}, ErrPrefixGasLimit
 			}
 			prefix.ExecutionGas += frames[i].GasLimits.Execution
@@ -149,7 +153,7 @@ func ClassifyPrefix(frames []types.Frame, sender common.Address, signatures type
 	}
 	for i := range signatures {
 		gas := types.FrameTxSignatureGas(&signatures[i])
-		if gas > MaxVerifyGas-prefix.ExecutionGas {
+		if gas > maxVerifyGas-prefix.ExecutionGas {
 			return Prefix{}, ErrPrefixGasLimit
 		}
 		prefix.ExecutionGas += gas

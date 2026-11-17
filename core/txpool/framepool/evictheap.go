@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"cmp"
 	"container/heap"
-
-	"github.com/ethereum/go-ethereum/core/types"
 )
 
-func numSlots(tx *types.Transaction) uint64 {
-	return (tx.Size() + txSlotSize - 1) / txSlotSize
+func numSlots(entry *frameTx) uint64 {
+	size := (entry.tx.Size() + txSlotSize - 1) / txSlotSize
+	gas := (entry.prefix.ExecutionGas + txSlotVerifyGas - 1) / txSlotVerifyGas
+	return max(size, gas, 1)
 }
 
 // comparePriority orders the first eviction candidate before the most valuable
