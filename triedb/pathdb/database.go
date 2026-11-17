@@ -169,20 +169,20 @@ func newDatabase(diskdb ethdb.Database, config *Config, isPBT bool) *Database {
 		db.diskdb = rawdb.NewTable(diskdb, string(rawdb.PBTPrefix))
 		db.hasher = pbt.DeserializeAndHash
 	}
+	// Open the histories before loading the journal, which is checked against
+	// them. The partitioned binary tree keeps none: rolling back replays history
+	// through a merkle-patricia trie, which cannot revert it.
+	if !isPBT {
+		db.stateFreezer, db.trienodeFreezer = openHistory(db.diskdb, db.config.ReadOnly, db.config.TrienodeHistory >= 0)
+	}
 	// Construct the layer tree by resolving the in-disk singleton state
 	// and in-memory layer journal.
 	db.tree = newLayerTree(db.loadLayers())
 
 	// Repair the history, which might not be aligned with the persistent
-	// state in the key-value store due to an unclean shutdown. The partitioned
-	// binary tree keeps none: rolling back replays history through a
-	// merkle-patricia trie, which cannot revert it.
-	if !isPBT {
-		states, trienodes, err := repairHistory(db.diskdb, db.config.ReadOnly, db.tree.bottom().stateID(), db.config.TrienodeHistory >= 0)
-		if err != nil {
-			log.Crit("Failed to repair history", "err", err)
-		}
-		db.stateFreezer, db.trienodeFreezer = states, trienodes
+	// state in the key-value store due to an unclean shutdown.
+	if err := repairHistory(db.diskdb, db.stateFreezer, db.trienodeFreezer, db.tree.bottom().stateID()); err != nil {
+		log.Crit("Failed to repair history", "err", err)
 	}
 
 	// Disable database in case node is still in the initial state sync stage.
@@ -432,8 +432,8 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 			log.Debug("Removed stale journal", "path", path)
 		}
 	}
-	// Drop the stale state journal marker and the journal in the key-value
-	// store, and reset the persistent state id back to zero.
+	// Drop the stale state journal marker and reset the persistent state id
+	// back to zero.
 	batch := db.diskdb.NewBatch()
 	rawdb.DeleteSnapshotRoot(batch)
 	rawdb.WritePersistentStateID(batch, 0)

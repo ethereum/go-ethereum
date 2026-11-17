@@ -341,6 +341,18 @@ func (db *Database) Journal(root common.Hash) error {
 	return pdb.Journal(root)
 }
 
+// JournalLive writes the journal of the layers up to the given root as Journal
+// does, but leaves the database running, for a copy of the database to be taken
+// while the caller holds off the mutations. It returns the size of the journal.
+// It's only supported by path-based database and will return an error for others.
+func (db *Database) JournalLive(root common.Hash) (uint64, error) {
+	pdb, ok := db.backend.(*pathdb.Database)
+	if !ok {
+		return 0, errors.New("not supported")
+	}
+	return pdb.JournalLive(root)
+}
+
 // VerifyState traverses the flat states specified by the given state root and
 // ensures they are matched with each other.
 func (db *Database) VerifyState(root common.Hash) error {
