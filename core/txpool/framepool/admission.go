@@ -333,9 +333,9 @@ func (p *FramePool) bumped(old, next *uint256.Int) bool {
 func (p *FramePool) capacityVictims(entry, old *frameTx, collect bool) ([]*frameTx, error) {
 	used := p.slots
 	if old != nil {
-		used -= numSlots(old.tx)
+		used -= numSlots(old)
 	}
-	needed := numSlots(entry.tx)
+	needed := numSlots(entry)
 	if needed <= p.config.GlobalSlots-used {
 		return nil, nil
 	}
@@ -359,7 +359,7 @@ func (p *FramePool) capacityVictims(entry, old *frameTx, collect bool) ([]*frame
 		if collect {
 			victims = append(victims, victim)
 		}
-		needed -= min(needed, numSlots(victim.tx))
+		needed -= min(needed, numSlots(victim))
 	}
 	return victims, nil
 }

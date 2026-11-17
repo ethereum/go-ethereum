@@ -460,7 +460,7 @@ func (p *FramePool) clear() {
 func (p *FramePool) insert(entry *frameTx) {
 	hash := entry.tx.Hash()
 	p.txs[entry.sender], p.all[hash] = entry, entry
-	p.slots += numSlots(entry.tx)
+	p.slots += numSlots(entry)
 	heap.Push(&p.evict, entry)
 	usage := p.payers[entry.payer]
 	if usage == nil {
@@ -479,7 +479,7 @@ func (p *FramePool) remove(entry *frameTx, release bool) {
 	hash := entry.tx.Hash()
 	delete(p.txs, entry.sender)
 	delete(p.all, hash)
-	p.slots -= numSlots(entry.tx)
+	p.slots -= numSlots(entry)
 	heap.Remove(&p.evict, entry.index)
 	if usage := p.payers[entry.payer]; usage != nil && usage.txs[hash] != nil {
 		usage.reserved.Sub(&usage.reserved, &entry.maxCost)

@@ -21,9 +21,12 @@ import "github.com/ethereum/go-ethereum/log"
 // Slot accounting and the size cap match the legacy pool. Prefix simulation
 // charges the frame data through the signature hash, so the cap also bounds
 // that cost: a 128 KiB transaction adds about 1 ms to a ~3.5 ms worst case.
+// A transaction also takes one slot per 100k gas of validation prefix, so the
+// slot cap bounds revalidation CPU whatever MaxVerifyGas is.
 const (
-	txSlotSize = 32 * 1024
-	txMaxSize  = 4 * txSlotSize
+	txSlotSize      = 32 * 1024
+	txMaxSize       = 4 * txSlotSize
+	txSlotVerifyGas = 100_000
 )
 
 // Config contains the resource limits of the frame transaction pool. The pool
