@@ -132,13 +132,6 @@ func MergeBloom(receipts Receipts) Bloom {
 	return bin
 }
 
-// Bloom9 returns the bloom filter for the given data
-func Bloom9(data []byte) []byte {
-	var b Bloom
-	b.Add(data)
-	return b.Bytes()
-}
-
 // bloomValues returns the bytes (index-value pairs) to set for the given data
 func bloomValues(data []byte, hashbuf *[6]byte) (uint, byte, uint, byte, uint, byte) {
 	sha := hasherPool.Get().(crypto.KeccakState)
