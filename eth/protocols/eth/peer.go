@@ -561,7 +561,7 @@ func (p *Peer) bufferReceipts(requestId uint64, receiptLists []*ReceiptList, las
 	// Complete responses without buffered fragments can be verified by their
 	// receipt roots without applying the buffer bounds.
 	var logSize uint64
-	if lastBlockIncomplete || len(buffer.list) > 0 {
+	if lastBlockIncomplete {
 		var offset int
 		if len(buffer.list) > 0 {
 			offset = len(buffer.list) - 1
