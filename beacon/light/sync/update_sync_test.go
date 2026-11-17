@@ -17,8 +17,10 @@
 package sync
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/beacon/light"
 	"github.com/ethereum/go-ethereum/beacon/light/request"
 	"github.com/ethereum/go-ethereum/beacon/types"
 )
@@ -199,6 +201,59 @@ func TestUpdateSyncDifferentHeads(t *testing.T) {
 	ts.AddAllowance(testServer4, 1)
 	ts.Run(8)
 	chain.ExpNextSyncPeriod(t, 17)
+}
+
+// rejectingChain rejects the updates marked with rejectedProposer, with err.
+type rejectingChain struct {
+	*TestCommitteeChain
+	err error
+}
+
+const rejectedProposer = 0xbad
+
+func (c *rejectingChain) InsertUpdate(update *types.LightClientUpdate, nextCommittee *types.SerializedSyncCommittee) error {
+	if update.AttestedHeader.Header.ProposerIndex == rejectedProposer {
+		return c.err
+	}
+	return c.TestCommitteeChain.InsertUpdate(update, nextCommittee)
+}
+
+// TestUpdateSyncInvalidResponse checks that a response whose first update the chain
+// rejects (an invalid signature, say) doesn't hold up the sync: the server is failed and
+// the range is requested again.
+func TestUpdateSyncInvalidResponse(t *testing.T) {
+	for _, err := range []error{light.ErrInvalidUpdate, light.ErrWrongCommitteeRoot, light.ErrCannotReorg} {
+		t.Run(fmt.Sprint(err), func(t *testing.T) {
+			chain := &rejectingChain{TestCommitteeChain: &TestCommitteeChain{}, err: err}
+			chain.SetNextSyncPeriod(0)
+			updateSync := NewForwardUpdateSync(chain)
+			ts := NewTestScheduler(t, updateSync)
+			// add 2 servers, head at period 10; allow 1 request for each
+			ts.AddServer(testServer1, 1)
+			ts.ServerEvent(EvNewOptimisticUpdate, testServer1, types.OptimisticUpdate{SignatureSlot: 0x2000*10 + 0x1000})
+			ts.AddServer(testServer2, 1)
+			ts.ServerEvent(EvNewOptimisticUpdate, testServer2, types.OptimisticUpdate{SignatureSlot: 0x2000*10 + 0x1000})
+			ts.Run(1,
+				testServer1, ReqUpdates{FirstPeriod: 0, Count: 8},
+				testServer2, ReqUpdates{FirstPeriod: 8, Count: 2})
+
+			// server 1 answers request 1 with an update the chain rejects; expect the
+			// server failed and the range requested again from server 2
+			resp := testRespUpdate(ts.Request(1, 1)).(RespUpdates)
+			resp.Updates[0].AttestedHeader.Header.ProposerIndex = rejectedProposer
+			ts.RequestEvent(request.EvResponse, ts.Request(1, 1), resp)
+			ts.ExpFail(testServer1)
+			ts.AddAllowance(testServer2, 1)
+			ts.Run(2, testServer2, ReqUpdates{FirstPeriod: 0, Count: 8})
+			chain.ExpNextSyncPeriod(t, 0)
+
+			// valid answers from server 2; expect the chain synced
+			ts.RequestEvent(request.EvResponse, ts.Request(1, 2), testRespUpdate(ts.Request(1, 2)))
+			ts.RequestEvent(request.EvResponse, ts.Request(2, 1), testRespUpdate(ts.Request(2, 1)))
+			ts.Run(3)
+			chain.ExpNextSyncPeriod(t, 10)
+		})
+	}
 }
 
 func TestRangeLock(t *testing.T) {
