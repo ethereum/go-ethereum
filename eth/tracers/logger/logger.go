@@ -17,6 +17,7 @@
 package logger
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -47,6 +48,7 @@ type Config struct {
 	DisableStorage   bool // disable storage capture
 	EnableReturnData bool // enable return data capture
 	Limit            int  // maximum size of output, but zero means unlimited
+
 	// Chain overrides, can be used to execute a trace using future fork rules
 	Overrides *params.ChainConfig `json:"overrides,omitempty"`
 }
@@ -62,6 +64,22 @@ func (c *countingWriter) Write(p []byte) (int, error) {
 	n, err := c.w.Write(p)
 	c.n += n
 	return n, err
+}
+
+// pendingTextLog holds one text record. Its header can be updated on fault
+// while its encoded snapshot preserves the state captured before execution.
+type pendingTextLog struct {
+	header *textLogHeader
+	body   bytes.Buffer
+}
+
+type textLogHeader struct {
+	pc    uint64
+	op    vm.OpCode
+	gas   tracing.Gas
+	cost  tracing.OpCost
+	depth int
+	err   error
 }
 
 //go:generate go run github.com/fjl/gencodec -type StructLog -field-override structLogMarshaling -out gen_structlog.go
@@ -120,15 +138,39 @@ func (s *StructLog) ErrorString() string {
 
 // Write writes the human-readable log data into the supplied writer.
 func (s *StructLog) Write(writer io.Writer) {
-	fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", s.Op, s.Pc, s.Gas, s.GasCost)
-	if s.StateGasCost != 0 || s.StateGasReservoir != 0 {
-		fmt.Fprintf(writer, " stateCost=%v reservoir=%v", s.StateGasCost, s.StateGasReservoir)
+	s.textHeader().write(writer)
+	s.writeSnapshot(writer)
+}
+
+func (s *StructLog) textHeader() *textLogHeader {
+	return &textLogHeader{
+		pc: s.Pc,
+		op: s.Op,
+		gas: tracing.Gas{
+			Execution: s.Gas,
+			State:     s.StateGasReservoir,
+		},
+		cost: tracing.OpCost{
+			Execution: s.GasCost,
+			State:     s.StateGasCost,
+		},
+		depth: s.Depth,
+		err:   s.Err,
 	}
-	if s.Err != nil {
-		fmt.Fprintf(writer, " ERROR: %v", s.Err)
+}
+
+func (h textLogHeader) write(writer io.Writer) {
+	fmt.Fprintf(writer, "%-16spc=%08d gas=%v cost=%v", h.op, h.pc, h.gas.Execution, h.cost.Execution)
+	if h.cost.State != 0 || h.gas.State != 0 {
+		fmt.Fprintf(writer, " stateCost=%v reservoir=%v", h.cost.State, h.gas.State)
+	}
+	if h.err != nil {
+		fmt.Fprintf(writer, " ERROR: %v", h.err)
 	}
 	fmt.Fprintln(writer)
+}
 
+func (s *StructLog) writeSnapshot(writer io.Writer) {
 	if len(s.Stack) > 0 {
 		fmt.Fprintln(writer, "Stack:")
 		for i := len(s.Stack) - 1; i >= 0; i-- {
@@ -245,8 +287,8 @@ func (s *StructLog) toLegacyJSON() json.RawMessage {
 // a track record of modified storage which is used in reporting snapshots of the
 // contract their storage.
 //
-// A StructLogger can either yield it's output immediately (streaming) or store for
-// later output.
+// A StructLogger can stream text with one pending opcode or store JSON logs for
+// later retrieval.
 type StructLogger struct {
 	cfg Config
 	env *tracing.VMContext
@@ -259,6 +301,8 @@ type StructLogger struct {
 	writer     io.Writer         // If set, the logger will stream instead of store logs
 	logs       []json.RawMessage // buffer of json-encoded logs
 	resultSize int               // total bytes of trace output
+	canUpdate  bool              // latest opcode has an entry eligible for a fault update
+	text       *pendingTextLog   // used in writer mode
 
 	interrupt atomic.Bool           // Atomic flag to signal execution interruption
 	reason    atomic.Pointer[error] // Reason for the interruption, populated by Stop
@@ -269,6 +313,7 @@ type StructLogger struct {
 func NewStreamingStructLogger(cfg *Config, writer io.Writer) *StructLogger {
 	l := NewStructLogger(cfg)
 	l.writer = &countingWriter{w: writer}
+	l.text = new(pendingTextLog)
 	return l
 }
 
@@ -290,8 +335,10 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 		OnTxEnd:             l.OnTxEnd,
 		OnSystemCallStartV2: l.OnSystemCallStart,
 		OnSystemCallEnd:     l.OnSystemCallEnd,
+		OnEnterV2:           l.OnEnter,
 		OnExitV2:            l.OnExit,
 		OnOpcodeV2:          l.OnOpcode,
+		OnFaultV2:           l.OnFault,
 	}
 }
 
@@ -299,6 +346,8 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 //
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
 func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+	l.finishOpcode()
+
 	// If tracing was interrupted, exit
 	if l.interrupt.Load() {
 		return
@@ -334,15 +383,16 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tr
 		log.Memory = memory
 	}
 	if !l.cfg.DisableStack {
-		log.Stack = scope.StackData()
+		log.Stack = stack
 	}
 	if l.cfg.EnableReturnData {
 		log.ReturnData = rData
 	}
 
 	// Copy a snapshot of the current storage to a new container
+	// A step that halts with an error does not execute the opcode,
+	// so it records no storage.
 	var storage Storage
-	// A step that halts with an error does not execute the opcode, so it records no storage.
 	if !l.cfg.DisableStorage && err == nil && (op == vm.SLOAD || op == vm.SSTORE) {
 		// initialise new changed values storage container for this contract
 		// if not present.
@@ -368,6 +418,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tr
 		}
 	}
 	log.Storage = storage
+	l.canUpdate = err == nil
 
 	// create a log
 	if l.writer == nil {
@@ -376,12 +427,89 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tr
 		l.logs = append(l.logs, entry)
 		return
 	}
-	log.Write(l.writer)
+	log.writeSnapshot(&l.text.body)
+	l.text.header = log.textHeader()
+}
+
+// Flush writes the pending text entry. Frame and transaction callbacks flush
+// it automatically. Call Flush after a direct EVM.Run without those callbacks.
+func (l *StructLogger) Flush() {
+	if l.text == nil || l.text.header == nil {
+		return
+	}
+	l.text.header.write(l.writer)
+	l.writer.Write(l.text.body.Bytes())
+	l.text.body.Reset()
+	l.text.header = nil
+	l.canUpdate = false
 	l.resultSize = l.writer.(*countingWriter).n
+}
+
+// finishOpcode writes any pending text and invalidates the last opcode for fault updates.
+func (l *StructLogger) finishOpcode() {
+	if l.text != nil {
+		l.Flush()
+	}
+	l.canUpdate = false
+}
+
+// OnFault records the exceptional halt on the captured opcode snapshot. The
+// costs in the trace are cleared while the pre-execution state is preserved.
+func (l *StructLogger) OnFault(pc uint64, opcode byte, _ tracing.Gas, _ tracing.OpCost, _ tracing.OpContext, depth int, err error) {
+	if !l.canUpdate || l.skip || l.interrupt.Load() || err == nil {
+		return
+	}
+	l.canUpdate = false
+
+	op := vm.OpCode(opcode)
+	if l.writer != nil {
+		l.updateTextFault(pc, op, depth, err)
+	} else {
+		l.updateCachedFault(pc, op, depth, err)
+	}
+}
+
+func (l *StructLogger) updateTextFault(pc uint64, op vm.OpCode, depth int, err error) {
+	header := l.text.header
+	if header.pc != pc || header.op != op || header.depth != depth {
+		return
+	}
+	header.err = err
+	header.cost = tracing.OpCost{}
+	l.Flush()
+}
+
+func (l *StructLogger) updateCachedFault(pc uint64, op vm.OpCode, depth int, err error) {
+	var (
+		last  = len(l.logs) - 1
+		entry = l.logs[last]
+		log   structLogLegacy
+	)
+	if err := json.Unmarshal(entry, &log); err != nil {
+		return
+	}
+	if log.Pc != pc || log.Op != op.String() || log.Depth != depth {
+		return
+	}
+	log.Error = err.Error()
+	log.GasCost = 0
+	log.StateGasCost = 0
+	updated, _ := json.Marshal(&log)
+	l.resultSize += len(updated) - len(entry)
+	l.logs[last] = updated
+}
+
+// OnEnter writes the pending parent opcode before the child frame's steps.
+func (l *StructLogger) OnEnter(int, byte, common.Address, common.Address, []byte, tracing.Gas, *big.Int) {
+	if l.writer != nil {
+		l.Flush()
+	}
 }
 
 // OnExit is called a call frame finishes processing.
 func (l *StructLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
+	l.finishOpcode()
+
 	if depth != 0 {
 		return
 	}
@@ -425,9 +553,11 @@ func (l *StructLogger) Stop(err error) {
 }
 
 func (l *StructLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	l.canUpdate = false
 	l.env = env
 }
 func (l *StructLogger) OnSystemCallStart(env *tracing.VMContext) {
+	l.finishOpcode()
 	l.skip = true
 }
 
@@ -436,6 +566,8 @@ func (l *StructLogger) OnSystemCallEnd() {
 }
 
 func (l *StructLogger) OnTxEnd(receipt *types.Receipt, err error) {
+	l.finishOpcode()
+
 	if err != nil {
 		// Don't override vm error
 		if l.err == nil {
