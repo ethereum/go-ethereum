@@ -48,6 +48,7 @@ type BuildPayloadArgs struct {
 	BeaconRoot     *common.Hash          // The provided beaconRoot (Cancun)
 	SlotNum        *uint64               // The provided slotNumber (Amsterdam)
 	TargetGasLimit *uint64               // The provided target gas limit (Amsterdam)
+	InclusionList  [][]byte              // The inclusion list the payload must satisfy (Bogota)
 	Version        engine.PayloadVersion // Versioning byte for payload id calculation.
 }
 
@@ -68,6 +69,9 @@ func (args *BuildPayloadArgs) Id() engine.PayloadID {
 	if args.TargetGasLimit != nil {
 		binary.Write(hasher, binary.BigEndian, *args.TargetGasLimit)
 	}
+	if args.InclusionList != nil {
+		rlp.Encode(hasher, args.InclusionList)
+	}
 	var out engine.PayloadID
 	copy(out[:], hasher.Sum(nil)[:8])
 	out[0] = byte(args.Version)
@@ -83,6 +87,7 @@ type Payload struct {
 	id           engine.PayloadID
 	empty        *types.Block
 	emptyWitness *stateless.Witness
+	emptyPending bool // The empty block doesn't hold the inclusion list yet
 
 	full            *types.Block
 	fullReceipts    []*types.Receipt
@@ -162,6 +167,23 @@ func (payload *Payload) update(r *newPayloadResult, elapsed time.Duration) (resu
 	return
 }
 
+// updateEmpty replaces the empty block with the one holding the inclusion list.
+func (payload *Payload) updateEmpty(r *newPayloadResult) {
+	payload.lock.Lock()
+	defer payload.lock.Unlock()
+
+	// If it failed, the empty block without the list is still deliverable.
+	if r.err != nil {
+		log.Warn("Failed to build empty payload with inclusion list", "id", payload.id, "err", r.err)
+	} else {
+		payload.empty = r.block
+		payload.emptyRequests = r.requests
+		payload.emptyWitness = r.witness
+	}
+	payload.emptyPending = false
+	payload.cond.Broadcast()
+}
+
 // FullBlockAndReceipts returns the latest built full block together with the
 // receipts produced during its construction and the transactions that were
 // tried-and-reverted during building.
@@ -182,6 +204,10 @@ func (payload *Payload) Resolve() *engine.ExecutionPayloadEnvelope {
 	case <-payload.stop:
 	default:
 		close(payload.stop)
+	}
+	// Without a full block, wait for the empty one to hold the inclusion list.
+	for payload.full == nil && payload.emptyPending {
+		payload.cond.Wait()
 	}
 	if payload.full != nil {
 		envelope := engine.BlockToExecutableData(payload.full, payload.fullFees, payload.sidecars, payload.requests)
@@ -205,6 +231,10 @@ func (payload *Payload) ResolveEmpty() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
+	for payload.emptyPending {
+		payload.cond.Wait()
+	}
+
 	envelope := engine.BlockToExecutableData(payload.empty, big.NewInt(0), nil, payload.emptyRequests)
 	if payload.emptyWitness != nil {
 		envelope.Witness = new(hexutil.Bytes)
@@ -219,7 +249,7 @@ func (payload *Payload) ResolveFull() *engine.ExecutionPayloadEnvelope {
 	payload.lock.Lock()
 	defer payload.lock.Unlock()
 
-	if payload.full == nil {
+	for payload.full == nil {
 		select {
 		case <-payload.stop:
 			return nil
@@ -292,6 +322,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 	}
 	// Construct a payload object for return.
 	payload := newPayload(empty.block, empty.requests, empty.witness, payloadID)
+	payload.emptyPending = len(args.InclusionList) > 0
 
 	// Spin up a routine for updating the payload in background. This strategy
 	// can maximum the revenue for including transactions with highest fee.
@@ -315,6 +346,13 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 		// by the timestamp parameter.
 		endTimer := time.NewTimer(time.Second * 12)
 
+		// The empty block has to satisfy the inclusion list too. Executing the
+		// list can take a while, so it's done here and not before returning.
+		if len(args.InclusionList) > 0 {
+			listParams := *emptyParams
+			listParams.inclusionList = args.InclusionList
+			payload.updateEmpty(miner.generateWork(bCtx, &listParams, witness))
+		}
 		fullParams := &generateParams{
 			timestamp:      args.Timestamp,
 			forceTime:      true,
@@ -325,6 +363,7 @@ func (miner *Miner) buildPayload(ctx context.Context, args *BuildPayloadArgs, wi
 			beaconRoot:     args.BeaconRoot,
 			slotNum:        args.SlotNum,
 			targetGasLimit: args.TargetGasLimit,
+			inclusionList:  args.InclusionList,
 			noTxs:          false,
 		}
 		for {
