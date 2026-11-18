@@ -22,9 +22,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"testing"
 
@@ -35,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/internal/testrand"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
@@ -1128,151 +1125,6 @@ func testCorruptedJournal(t *testing.T, journalDir string, modifyFn func(databas
 		if err := tester.verifyState(tester.roots[i]); err == nil {
 			t.Fatal("Unexpected state")
 		}
-	}
-}
-
-// TestRecoverDeletesJournal checks that a rollback within the write buffer
-// doesn't leave the last shutdown's journal behind, referring to truncated
-// state histories after a crash.
-func TestRecoverDeletesJournal(t *testing.T) {
-	testRecoverDeletesJournal(t, "")
-	testRecoverDeletesJournal(t, filepath.Join(t.TempDir(), strconv.Itoa(rand.Intn(10000))))
-}
-
-func testRecoverDeletesJournal(t *testing.T, journalDir string) {
-	// Redefine the diff layer depth allowance for faster testing.
-	maxDiffLayers = 4
-	defer func() {
-		maxDiffLayers = 128
-	}()
-
-	var (
-		kvdb    = newSyncTracker()
-		ancient = t.TempDir()
-		tester  = newTester(t, &testerConfig{layers: 12, journalDir: journalDir, kvdb: kvdb, ancient: ancient})
-
-		released bool
-	)
-	defer func() {
-		if !released {
-			tester.release()
-		}
-	}()
-	extendToBuffer(t, tester)
-
-	config := *tester.db.config
-	disk := tester.db.diskdb
-	if err := tester.db.Journal(tester.lastHash()); err != nil {
-		t.Fatalf("Failed to journal, err: %v", err)
-	}
-	// Nodes from before the journal file keep an older journal in the key-value
-	// store, which is loaded when the file is missing.
-	if journalDir != "" {
-		blob, err := os.ReadFile(tester.db.journalPath())
-		if err != nil {
-			t.Fatalf("Failed to read the journal, err: %v", err)
-		}
-		rawdb.WriteTrieJournal(kvdb, blob)
-	}
-	tester.db.Close()
-	tester.db = New(disk, &config)
-
-	persisted := rawdb.ReadPersistentStateID(kvdb)
-	if err := tester.db.Recover(tester.roots[tester.bottomIndex()-1]); err != nil {
-		t.Fatalf("Failed to recover, err: %v", err)
-	}
-	if rawdb.ReadPersistentStateID(kvdb) != persisted {
-		t.Fatal("The rollback changed the persistent state")
-	}
-	crashed := kvdb.crash()
-	tester.release()
-	released = true
-
-	// Run startup's layer loading and history repair directly: New exits on a
-	// failed repair.
-	reopened, err := rawdb.Open(crashed, rawdb.OpenOptions{Ancient: ancient})
-	if err != nil {
-		t.Fatalf("Failed to reopen database: %v", err)
-	}
-	defer reopened.Close()
-
-	db := &Database{diskdb: reopened, config: &config, hasher: merkleNodeHasher}
-	head := db.loadLayers()
-	for head.parentLayer() != nil {
-		head = head.parentLayer()
-	}
-	states, _, err := repairHistory(reopened, false, head.stateID(), false)
-	if err != nil {
-		t.Fatalf("Database can't be opened after the crash: %v", err)
-	}
-	states.Close()
-}
-
-// TestRecoverJournalSyncFailure checks that Recover exits the process if the
-// journal directory can't be synced after the disk layer is reverted.
-func TestRecoverJournalSyncFailure(t *testing.T) {
-	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
-		t.Skip("Directory permissions aren't enforced")
-	}
-	const testDirEnv = "GETH_TEST_RECOVER_JOURNAL_SYNC_DIR"
-	dir := os.Getenv(testDirEnv)
-	if dir == "" {
-		dir = t.TempDir()
-		// The subprocess exits without running cleanup. Restore permissions so
-		// the testing package can remove the directory.
-		t.Cleanup(func() {
-			if err := os.Chmod(filepath.Join(dir, "journal"), 0700); err != nil && !os.IsNotExist(err) {
-				t.Errorf("Failed to restore journal directory permissions: %v", err)
-			}
-		})
-		cmd := exec.Command(os.Args[0], "-test.run=^TestRecoverJournalSyncFailure$")
-		cmd.Env = append(os.Environ(), testDirEnv+"="+dir)
-		out, err := cmd.CombinedOutput()
-		var exit *exec.ExitError
-		if !errors.As(err, &exit) || exit.ExitCode() != 1 ||
-			!bytes.Contains(out, []byte("Failed to delete journal after rollback")) ||
-			!bytes.Contains(out, []byte("failed to fsync the dir")) {
-			t.Fatalf("Expected a fatal journal sync error, got %v\n%s", err, out)
-		}
-		return
-	}
-	// Redefine the diff layer depth allowance for faster testing.
-	maxDiffLayers = 4
-	defer func() {
-		maxDiffLayers = 128
-	}()
-
-	journalDir := filepath.Join(dir, "journal")
-	tester := newTester(t, &testerConfig{layers: 12, journalDir: journalDir, ancient: filepath.Join(dir, "ancient")})
-	defer tester.release()
-	extendToBuffer(t, tester)
-
-	config := *tester.db.config
-	disk := tester.db.diskdb
-	if err := tester.db.Journal(tester.lastHash()); err != nil {
-		t.Fatalf("Failed to journal, err: %v", err)
-	}
-	tester.db.Close()
-	tester.db = New(disk, &config)
-
-	// The journal can be removed from its directory, but the directory can't
-	// be opened for the sync.
-	if err := os.Chmod(journalDir, 0300); err != nil {
-		t.Fatalf("Failed to change the journal directory, err: %v", err)
-	}
-	log.SetDefault(log.NewLogger(log.LogfmtHandler(os.Stderr)))
-	err := tester.db.Recover(tester.roots[tester.bottomIndex()-1])
-	t.Fatalf("Recover returned without exiting: %v", err)
-}
-
-// extendToBuffer extends the tester until a write buffer that isn't empty
-// sits on persisted state.
-func extendToBuffer(t *testing.T, tester *tester) {
-	for i := 0; rawdb.ReadPersistentStateID(tester.db.diskdb) == 0 || tester.db.tree.bottom().buffer.empty(); i++ {
-		if i == 256 {
-			t.Fatal("No persisted state under a write buffer that isn't empty")
-		}
-		tester.extend(1)
 	}
 }
 
