@@ -74,7 +74,7 @@ func TestStructLoggerFaults(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			logger := NewStructLogger(&Config{EnableMemory: true})
 			code := common.Hex2Bytes(tc.code)
-			evm, self := faultTestEVM(t, logger, code)
+			evm, self := faultTestEVM(t, logger.Hooks(), code)
 			defer evm.Release()
 
 			contract := vm.NewContract(common.Address{}, self, new(uint256.Int), vm.NewGasBudget(tc.gas, 0), nil)
@@ -117,7 +117,7 @@ func TestStructLoggerFaultLimit(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			logger := NewStructLogger(&Config{Limit: tc.limit})
 			code := common.Hex2Bytes(tc.code)
-			evm, self := faultTestEVM(t, logger, code)
+			evm, self := faultTestEVM(t, logger.Hooks(), code)
 			defer evm.Release()
 
 			contract := vm.NewContract(common.Address{}, self, new(uint256.Int), vm.NewGasBudget(1000, 0), nil)
@@ -141,7 +141,7 @@ func TestStructLoggerChildFault(t *testing.T) {
 
 	// Call the child, discard its result, and stop.
 	code := common.Hex2Bytes("6000600060006000600061dead5af15000")
-	evm, self := faultTestEVM(t, logger, code)
+	evm, self := faultTestEVM(t, logger.Hooks(), code)
 	defer evm.Release()
 	evm.StateDB.SetCode(child, common.Hex2Bytes("600056"), tracing.CodeChangeUnspecified)
 	_, _, err := evm.Call(common.Address{}, self, nil, vm.NewGasBudget(1000000, 0), new(uint256.Int))
@@ -210,7 +210,7 @@ func TestStreamingStructLoggerFaults(t *testing.T) {
 			var out bytes.Buffer
 			logger := NewStreamingStructLogger(nil, &out)
 			code := common.Hex2Bytes(tc.code)
-			evm, self := faultTestEVM(t, logger, code)
+			evm, self := faultTestEVM(t, logger.Hooks(), code)
 			defer evm.Release()
 
 			var (
@@ -248,6 +248,35 @@ func TestStreamingStructLoggerFaults(t *testing.T) {
 	}
 }
 
+func TestFormattedLoggerFaults(t *testing.T) {
+	for _, mode := range []string{"json", "markdown"} {
+		t.Run(mode, func(t *testing.T) {
+			var out bytes.Buffer
+			var hooks *tracing.Hooks
+			if mode == "json" {
+				hooks = NewJSONLogger(nil, &out)
+			} else {
+				hooks = NewMarkdownLogger(nil, &out).Hooks()
+			}
+			evm, self := faultTestEVM(t, hooks, common.Hex2Bytes("600056"))
+			defer evm.Release()
+
+			_, _, err := evm.Call(common.Address{}, self, nil, vm.NewGasBudget(100, 0), new(uint256.Int))
+			require.ErrorIs(t, err, vm.ErrInvalidJump)
+			require.Equal(t, 1, strings.Count(out.String(), "JUMP"))
+			if mode == "json" {
+				lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+				require.Len(t, lines, 3)
+				require.JSONEq(t, `{"pc":2,"op":86,"gas":"0x61","gasCost":"0x0","memSize":0,"stack":["0x0"],"depth":1,"refund":0,"opName":"JUMP","error":"invalid jump destination"}`, lines[1])
+				require.JSONEq(t, `{"output":"","gasUsed":"0x64","error":"invalid jump destination"}`, lines[2])
+			} else {
+				require.Regexp(t, `(?m)^\|\s*2\s*\|\s*JUMP\s*\|\s*0\s*\|\s*0\s*\|\s*0\s*\|\s*0\s*\|\s*\[0x0\]\s*\|\s*invalid jump destination\s*\|$`, out.String())
+				require.NotContains(t, out.String(), "Error: at pc=")
+			}
+		})
+	}
+}
+
 func faultTestStructLogs(t *testing.T, logger *StructLogger) []json.RawMessage {
 	t.Helper()
 	result, err := logger.GetResult()
@@ -267,7 +296,7 @@ func faultTestLog(t *testing.T, entry json.RawMessage) structLogLegacy {
 	return log
 }
 
-func faultTestEVM(t *testing.T, logger *StructLogger, code []byte) (*vm.EVM, common.Address) {
+func faultTestEVM(t *testing.T, hooks *tracing.Hooks, code []byte) (*vm.EVM, common.Address) {
 	t.Helper()
 	statedb, err := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
 	if err != nil {
@@ -283,7 +312,7 @@ func faultTestEVM(t *testing.T, logger *StructLogger, code []byte) (*vm.EVM, com
 		BlockNumber:      new(big.Int),
 		Random:           &common.Hash{},
 		CostPerStateByte: params.CostPerStateByte,
-	}, statedb, &config, vm.Config{Tracer: logger.Hooks()})
-	logger.OnTxStart(evm.GetVMContext(), nil, common.Address{})
+	}, statedb, &config, vm.Config{Tracer: hooks})
+	hooks.OnTxStart(evm.GetVMContext(), nil, common.Address{})
 	return evm, self
 }

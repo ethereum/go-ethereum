@@ -601,6 +601,13 @@ type mdLogger struct {
 	gas         tracing.Gas // budget the top-level frame was entered with
 	isAmsterdam bool        // whether gas has a state dimension (EIP-8037)
 	skip        bool
+	pending     *mdOpcode
+}
+
+type mdOpcode struct {
+	textLogHeader
+	refund uint64
+	stack  string
 }
 
 // NewMarkdownLogger creates a logger which outputs information in a format adapted
@@ -616,6 +623,7 @@ func NewMarkdownLogger(cfg *Config, writer io.Writer) *mdLogger {
 func (t *mdLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
 		OnTxStart:           t.OnTxStart,
+		OnTxEnd:             t.OnTxEnd,
 		OnSystemCallStartV2: t.OnSystemCallStart,
 		OnSystemCallEnd:     t.OnSystemCallEnd,
 		OnEnterV2:           t.OnEnter,
@@ -626,11 +634,17 @@ func (t *mdLogger) Hooks() *tracing.Hooks {
 }
 
 func (t *mdLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	t.flush()
 	t.env = env
 	t.isAmsterdam = env.Rules.IsAmsterdam
 }
 
+func (t *mdLogger) OnTxEnd(*types.Receipt, error) {
+	t.flush()
+}
+
 func (t *mdLogger) OnSystemCallStart(env *tracing.VMContext) {
+	t.flush()
 	t.skip = true
 }
 
@@ -642,6 +656,7 @@ func (t *mdLogger) OnEnter(depth int, typ byte, from common.Address, to common.A
 	if t.skip {
 		return
 	}
+	t.flush()
 	if depth != 0 {
 		return
 	}
@@ -664,13 +679,13 @@ func (t *mdLogger) OnEnter(depth int, typ byte, from common.Address, to common.A
 
 	if t.isAmsterdam {
 		fmt.Fprintf(t.out, `
-|  Pc   |      Op     | Cost | StateCost | Reservoir |   Refund  |   Stack   |
-|-------|-------------|------|-----------|-----------|-----------|-----------|
+|  Pc   |      Op     | Cost | StateCost | Reservoir |   Refund  |   Stack   | Error |
+|-------|-------------|------|-----------|-----------|-----------|-----------|-------|
 `)
 	} else {
 		fmt.Fprintf(t.out, `
-|  Pc   |      Op     | Cost |   Refund  |   Stack   |
-|-------|-------------|------|-----------|-----------|
+|  Pc   |      Op     | Cost |   Refund  |   Stack   | Error |
+|-------|-------------|------|-----------|-----------|-------|
 `)
 	}
 }
@@ -679,6 +694,7 @@ func (t *mdLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err err
 	if t.skip {
 		return
 	}
+	t.flush()
 	if depth == 0 {
 		var used uint64
 		if t.gas.Execution > gasLeft.Execution {
@@ -697,40 +713,65 @@ func (t *mdLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err err
 	}
 }
 
-// OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
-func (t *mdLogger) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+func (t *mdLogger) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, _ []byte, depth int, err error) {
 	if t.skip {
 		return
 	}
-	stack := scope.StackData()
-	if t.isAmsterdam {
-		fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10d |%10d |%10v |", pc, vm.OpCode(op).String(),
-			cost.Execution, cost.State, gas.State, t.env.StateDB.GetRefund())
-	} else {
-		fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10v |", pc, vm.OpCode(op).String(),
-			cost.Execution, t.env.StateDB.GetRefund())
-	}
+	t.flush()
 
-	if !t.cfg.DisableStack {
-		// format stack
-		var a []string
-		for _, elem := range stack {
-			a = append(a, elem.Hex())
-		}
-		b := fmt.Sprintf("[%v]", strings.Join(a, ","))
-		fmt.Fprintf(t.out, "%10v |", b)
+	t.pending = &mdOpcode{
+		textLogHeader: textLogHeader{
+			pc:    pc,
+			op:    vm.OpCode(op),
+			gas:   gas,
+			cost:  cost,
+			depth: depth,
+			err:   err,
+		},
+		refund: t.env.StateDB.GetRefund(),
 	}
-	fmt.Fprintln(t.out, "")
+	if !t.cfg.DisableStack {
+		stack := scope.StackData()
+		values := make([]string, len(stack))
+		for i, elem := range stack {
+			values[i] = elem.Hex()
+		}
+		t.pending.stack = "[" + strings.Join(values, ",") + "]"
+	}
 	if err != nil {
-		fmt.Fprintf(t.out, "Error: %v\n", err)
+		t.flush()
 	}
 }
 
-func (t *mdLogger) OnFault(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
-	if t.skip {
+func (t *mdLogger) OnFault(pc uint64, op byte, _ tracing.Gas, _ tracing.OpCost, _ tracing.OpContext, depth int, err error) {
+	log := t.pending
+	if log == nil || log.pc != pc || log.op != vm.OpCode(op) || log.depth != depth || err == nil {
 		return
 	}
-	fmt.Fprintf(t.out, "\nError: at pc=%d, op=%v: %v\n", pc, op, err)
+	log.err = err
+	log.cost = tracing.OpCost{}
+	t.flush()
+}
+
+var mdErrorEscaper = strings.NewReplacer("|", `\|`, "\r", " ", "\n", " ")
+
+func (t *mdLogger) flush() {
+	log := t.pending
+	if log == nil {
+		return
+	}
+	var message string
+	if log.err != nil {
+		message = mdErrorEscaper.Replace(log.err.Error())
+	}
+	if t.isAmsterdam {
+		fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10d |%10d |%10v |%10v | %s |\n",
+			log.pc, log.op, log.cost.Execution, log.cost.State, log.gas.State, log.refund, log.stack, message)
+	} else {
+		fmt.Fprintf(t.out, "| %4d  | %10v  |  %3d |%10v |%10v | %s |\n",
+			log.pc, log.op, log.cost.Execution, log.refund, log.stack, message)
+	}
+	t.pending = nil
 }
 
 // ExecutionResult groups all structured logs emitted by the EVM
