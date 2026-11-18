@@ -370,16 +370,23 @@ func syncHistory(stores ...ethdb.AncientWriter) error {
 	return nil
 }
 
-// openHistory opens the state history freezer and, if enableTrienode is set,
-// the trienode history freezer. Both are nil if the database has no ancient
-// store.
-func openHistory(db ethdb.Database, readOnly bool, enableTrienode bool) (ethdb.ResettableAncientStore, ethdb.ResettableAncientStore) {
+// repairHistory truncates any leftover history objects in either the state
+// history or the trienode history, which may occur due to an unclean shutdown
+// or other unexpected events.
+//
+// Additionally, this mechanism ensures that the state history and trienode
+// history remain aligned. Since the trienode history is optional and not
+// required by regular users, a gap between the trienode history and the
+// persistent state may appear if the trienode history was disabled during the
+// previous run. This process detects and resolves such gaps, preventing
+// unexpected panics.
+func repairHistory(db ethdb.Database, readOnly bool, stateID uint64, enableTrienode bool) (ethdb.ResettableAncientStore, ethdb.ResettableAncientStore, error) {
 	ancient, err := db.AncientDatadir()
 	if err != nil {
 		// TODO error out if ancient store is disabled. A tons of unit tests
 		// disable the ancient store thus the error here will immediately fail
 		// all of them. Fix the tests first.
-		return nil, nil
+		return nil, nil, nil
 	}
 	// State history is mandatory as it is the key component that ensures
 	// resilience to deep reorgs.
@@ -397,47 +404,31 @@ func openHistory(db ethdb.Database, readOnly bool, enableTrienode bool) (ethdb.R
 			log.Crit("Failed to open trienode history freezer", "err", err)
 		}
 	}
-	return states, trienodes
-}
 
-// repairHistory truncates any leftover history objects in either the state
-// history or the trienode history, which may occur due to an unclean shutdown
-// or other unexpected events.
-//
-// Additionally, this mechanism ensures that the state history and trienode
-// history remain aligned. Since the trienode history is optional and not
-// required by regular users, a gap between the trienode history and the
-// persistent state may appear if the trienode history was disabled during the
-// previous run. This process detects and resolves such gaps, preventing
-// unexpected panics.
-func repairHistory(db ethdb.Database, states, trienodes ethdb.ResettableAncientStore, stateID uint64) error {
-	if states == nil {
-		return nil
-	}
 	// Reset the both histories if the trie database is not initialized yet.
 	// This action is necessary because these histories are not expected
 	// to exist without an initialized trie database.
 	if stateID == 0 {
 		purgeHistory(states, db, typeStateHistory)
 		purgeHistory(trienodes, db, typeTrienodeHistory)
-		return nil
+		return states, trienodes, nil
 	}
 	// Truncate excessive history entries in either the state history or
 	// the trienode history, ensuring both histories remain aligned with
 	// the state.
 	shead, err := states.Ancients()
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	if stateID > shead { // Gap is not permitted in the state history
-		return fmt.Errorf("gap between state [#%d] and state history [#%d]", stateID, shead)
+		return nil, nil, fmt.Errorf("gap between state [#%d] and state history [#%d]", stateID, shead)
 	}
 	truncTo := min(shead, stateID)
 
 	if trienodes != nil {
 		thead, err := trienodes.Ancients()
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		if stateID <= thead {
 			truncTo = min(truncTo, thead)
@@ -445,11 +436,11 @@ func repairHistory(db ethdb.Database, states, trienodes ethdb.ResettableAncientS
 			if thead == 0 {
 				_, err = trienodes.TruncateTail(rawdb.DefaultHistoryGroup, stateID)
 				if err != nil {
-					return err
+					return nil, nil, err
 				}
 				log.Warn("Initialized trienode history")
 			} else {
-				return fmt.Errorf("gap between state [#%d] and trienode history [#%d]", stateID, thead)
+				return nil, nil, fmt.Errorf("gap between state [#%d] and trienode history [#%d]", stateID, thead)
 			}
 		}
 	}
@@ -469,5 +460,5 @@ func repairHistory(db ethdb.Database, states, trienodes ethdb.ResettableAncientS
 	}
 	truncate(states, typeStateHistory, truncTo)
 	truncate(trienodes, typeTrienodeHistory, truncTo)
-	return nil
+	return states, trienodes, nil
 }
