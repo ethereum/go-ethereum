@@ -18,9 +18,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -29,8 +31,16 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
 	"github.com/ethereum/go-ethereum/internal/reexec"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/tests"
 )
 
 func TestMain(m *testing.M) {
@@ -847,5 +857,58 @@ func TestEVMTracing(t *testing.T) {
 				//t.Logf("%v\n", want)
 			}
 		}
+	}
+}
+
+// TestT9nAmsterdamIntrinsicCap checks that t9n rejects an Amsterdam transaction
+// whose calldata floor exceeds params.MaxTxGas, as block execution does, and
+// still reports its intrinsic gas.
+func TestT9nAmsterdamIntrinsicCap(t *testing.T) {
+	t.Parallel()
+
+	config := tests.Forks["Amsterdam"]
+	key, _ := crypto.GenerateKey()
+	to := common.Address{0xaa}
+	data := bytes.Repeat([]byte{0x01}, 300_000)
+	tx := types.MustSignNewTx(key, types.LatestSigner(config), &types.DynamicFeeTx{
+		ChainID:   config.ChainID,
+		GasTipCap: big.NewInt(1),
+		GasFeeCap: big.NewInt(1),
+		Gas:       2 * params.MaxTxGas,
+		To:        &to,
+		Data:      data,
+	})
+	body, err := rlp.EncodeToBytes([]*types.Transaction{tx})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err := json.Marshal(hexutil.Bytes(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	txsFile := filepath.Join(t.TempDir(), "txs.rlp")
+	if err := os.WriteFile(txsFile, input, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tt := new(testT8n)
+	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
+	tt.Run("evm-test", "t9n", "--input.txs", txsFile, "--state.fork", "Amsterdam")
+	var results []struct {
+		Error        string         `json:"error"`
+		IntrinsicGas hexutil.Uint64 `json:"intrinsicGas"`
+	}
+	if err := json.Unmarshal(tt.Output(), &results); err != nil {
+		t.Fatalf("invalid t9n output: %v", err)
+	}
+	tt.WaitExit()
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if !strings.Contains(results[0].Error, core.ErrFloorDataGas.Error()) {
+		t.Fatalf("got error %q, want %q", results[0].Error, core.ErrFloorDataGas)
+	}
+	if results[0].IntrinsicGas == 0 {
+		t.Fatal("intrinsic gas not reported")
 	}
 }

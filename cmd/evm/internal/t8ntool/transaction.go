@@ -147,24 +147,10 @@ func Transaction(ctx *cli.Context) error {
 			continue
 		}
 		r.IntrinsicGas = cost
-		if tx.Gas() < cost {
-			r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrIntrinsicGas, tx.Gas(), cost)
+		if _, _, err := core.CheckIntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), r.Address, tx.To(), value, tx.Gas(), rules, false); err != nil {
+			r.Error = err
 			results = append(results, r)
 			continue
-		}
-		// For Prague txs, validate the floor data gas.
-		if rules.IsPrague {
-			floorDataGas, err := core.FloorDataGas(rules, r.Address, tx.To(), value, tx.Data(), tx.AccessList())
-			if err != nil {
-				r.Error = err
-				results = append(results, r)
-				continue
-			}
-			if tx.Gas() < floorDataGas {
-				r.Error = fmt.Errorf("%w: have %d, want %d", core.ErrFloorDataGas, tx.Gas(), floorDataGas)
-				results = append(results, r)
-				continue
-			}
 		}
 		// Validate <256bit fields
 		switch {
