@@ -24,22 +24,24 @@
 // landed. See pgo.go.
 //
 // The profile has to sit in a main package's directory, because -pgo=auto looks
-// nowhere else, so the default reaches out of core/vm to cmd/geth. -pgo names
-// another destination, relative to the repo root unless it is absolute, and an
-// empty value skips it.
+// nowhere else, so the default reaches out of core/vm to cmd/geth and cmd/evm.
+// -pgo names other destinations as a comma-separated list, relative to the repo
+// root unless absolute, and an empty value skips it.
 //
 // Usage: go generate ./core/vm/...
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func main() {
-	pgoOut := flag.String("pgo", pgoFile, "where to write the PGO profile, relative to the repo root unless absolute. Empty skips it")
+	pgoOut := flag.String("pgo", strings.Join(pgoFiles, ","), "comma-separated list of where to write the PGO profile, relative to the repo root unless absolute. Empty skips it")
 	flag.Parse()
 
 	formatted, err := generate()
@@ -62,20 +64,19 @@ func main() {
 	if err != nil {
 		fatalf("%v", err)
 	}
-	dest := *pgoOut
-	if !filepath.IsAbs(dest) {
-		// The repository root, two levels up from core/vm.
-		dest = filepath.Join(vmDir(), "..", "..", dest)
+	var buf bytes.Buffer
+	if err := prof.Write(&buf); err != nil {
+		fatalf("serialize profile: %v", err)
 	}
-	dest = filepath.Clean(dest)
-	f, err := os.Create(dest)
-	if err != nil {
-		fatalf("create %s: %v", dest, err)
+	for _, dest := range strings.Split(*pgoOut, ",") {
+		if !filepath.IsAbs(dest) {
+			// The repository root, two levels up from core/vm.
+			dest = filepath.Join(vmDir(), "..", "..", dest)
+		}
+		dest = filepath.Clean(dest)
+		if err := os.WriteFile(dest, buf.Bytes(), 0644); err != nil {
+			fatalf("write %s: %v", dest, err)
+		}
+		fmt.Fprintf(os.Stderr, "gen: wrote %s\n", dest)
 	}
-	if err := prof.Write(f); err != nil {
-		f.Close()
-		fatalf("write %s: %v", dest, err)
-	}
-	f.Close()
-	fmt.Fprintf(os.Stderr, "gen: wrote %s\n", dest)
 }

@@ -42,10 +42,14 @@ const (
 	dispatchFunc  = "execUntraced"
 	dispatchName  = "(*EVM)." + dispatchFunc
 	vmPkgPath     = "github.com/ethereum/go-ethereum/core/vm"
-	pgoFile       = "cmd/geth/default.pgo"
 	stackFile     = "stack.go"
 	stackLocal    = "stack" // the dispatch's stack, which a family's body calls into
 )
+
+// pgoFiles are the profiles written for each main package that runs the
+// interpreter, since -pgo=auto only reads default.pgo from the main package's
+// own directory.
+var pgoFiles = []string{"cmd/geth/default.pgo", "cmd/evm/default.pgo"}
 
 type generator struct {
 	specs [256]opSpec
