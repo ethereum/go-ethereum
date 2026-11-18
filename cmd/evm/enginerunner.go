@@ -23,13 +23,19 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/eth/catalyst"
+	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/tests"
 	"github.com/urfave/cli/v2"
@@ -123,22 +129,48 @@ func runEngineTest(ctx *cli.Context, fname string) ([]testResult, error) {
 	return results, nil
 }
 
+// engineBackend is the part of the eth service that the engine API needs to
+// import payloads and update the forkchoice: the chain, its database and an
+// idle full-sync downloader. Building payloads, serving blobs and updating
+// custody columns are not supported, so the pool, miner and blob methods
+// return nil.
+type engineBackend struct {
+	chain      *core.BlockChain
+	db         ethdb.Database
+	downloader *downloader.Downloader
+	synced     atomic.Bool
+}
+
+func (b *engineBackend) BlockChain() *core.BlockChain       { return b.chain }
+func (b *engineBackend) ChainDb() ethdb.Database            { return b.db }
+func (b *engineBackend) Downloader() *downloader.Downloader { return b.downloader }
+func (b *engineBackend) Synced() bool                       { return b.synced.Load() }
+func (b *engineBackend) SetSynced()                         { b.synced.Store(true) }
+func (b *engineBackend) EngineMaxReorgDepth() uint64        { return ethconfig.Defaults.EngineMaxReorgDepth }
+func (b *engineBackend) TxPool() *txpool.TxPool             { return nil }
+func (b *engineBackend) Miner() *miner.Miner                { return nil }
+func (b *engineBackend) BlobCache() *blobpool.Cache         { return nil }
+func (b *engineBackend) BlobFetcher() *fetcher.BlobFetcher  { return nil }
+
 // attachEngineAPI puts geth's engine API, eth/catalyst.ConsensusAPI, on a
-// test's chain and returns an in-process RPC client for it. The API is backed
-// by the chain alone (see eth.NewEngineBackend): no node, networking, RPC
-// transport or other services are started.
+// test's chain and returns an in-process RPC client for it. No node,
+// networking, RPC transport or other services are started.
 func attachEngineAPI(chain *core.BlockChain, db ethdb.Database) (*rpc.Client, func(), error) {
-	backend := eth.NewEngineBackend(chain, db)
+	backend := &engineBackend{
+		chain:      chain,
+		db:         db,
+		downloader: downloader.New(db, ethconfig.FullSync, chain, func(string) {}, func() {}, false),
+	}
 	server := rpc.NewServer()
 	if err := server.RegisterName("engine", catalyst.NewConsensusAPIWithoutHeartbeat(backend)); err != nil {
-		backend.Downloader().Terminate()
+		backend.downloader.Terminate()
 		return nil, nil, err
 	}
 	client := rpc.DialInProc(server)
 	release := func() {
 		client.Close()
 		server.Stop()
-		backend.Downloader().Terminate()
+		backend.downloader.Terminate()
 	}
 	return client, release, nil
 }
