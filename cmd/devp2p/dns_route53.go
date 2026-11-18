@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -258,8 +259,21 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 		}
 	}
 
-	// Iterate over the old records and delete anything stale.
-	deletions := makeDeletionChanges(existing, records)
+	// Iterate over the old records and delete anything stale, but retain the
+	// currently published tree for clients that still have its root cached.
+	existingValues := make(map[string]string, len(existing))
+	for path, set := range existing {
+		existingValues[strings.ToLower(path)] = unsplitTXT(strings.Join(set.values, ""))
+	}
+	keep := maps.Clone(records)
+	retained := 0
+	for path := range previousTreeRecords(name, existingValues) {
+		if _, ok := keep[path]; !ok {
+			keep[path] = existingValues[path]
+			retained++
+		}
+	}
+	deletions := makeDeletionChanges(existing, keep)
 	changes = append(changes, deletions...)
 
 	log.Info("Computed DNS changes",
@@ -267,6 +281,7 @@ func (c *route53Client) computeChanges(name string, records map[string]string, e
 		"inserts", inserts,
 		"skips", skips,
 		"deleted", len(deletions),
+		"retained", retained,
 		"upserts", upserts)
 	// Ensure changes are in the correct order.
 	sortChanges(changes)
@@ -421,6 +436,22 @@ func splitTXT(value string) string {
 		}
 		result.WriteString(strconv.Quote(value[:rlen]))
 		value = value[rlen:]
+	}
+	return result.String()
+}
+
+// unsplitTXT is the inverse of splitTXT. It concatenates a list of quoted strings.
+// Unquoted input is returned as-is.
+func unsplitTXT(value string) string {
+	var result strings.Builder
+	for rest := value; rest != ""; {
+		q, err := strconv.QuotedPrefix(rest)
+		if err != nil {
+			return value
+		}
+		s, _ := strconv.Unquote(q)
+		result.WriteString(s)
+		rest = rest[len(q):]
 	}
 	return result.String()
 }
