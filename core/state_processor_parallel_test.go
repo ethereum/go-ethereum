@@ -37,22 +37,22 @@ func TestSequentialExecutionReason(t *testing.T) {
 		block                    *types.Block
 		config                   *params.ChainConfig
 		witness, trace, disabled bool
-		want                     string
+		want                     error
 	}{
-		{"parallel", withList, amsterdam, false, false, false, ""},
-		{"disabled", withList, amsterdam, true, true, true, "disabled"},
-		{"tracer", withList, amsterdam, true, true, false, "tracer"},
-		{"witness", withList, amsterdam, true, false, false, "witness"},
-		{"no access list", noList, params.MergedTestChainConfig, false, false, false, "no-access-list"},
-		{"pre-amsterdam", withList, params.MergedTestChainConfig, false, false, false, "pre-amsterdam"},
+		{"parallel", withList, amsterdam, false, false, false, nil},
+		{"disabled", withList, amsterdam, true, true, true, errParallelDisabled},
+		{"tracer", withList, amsterdam, true, true, false, errParallelTracer},
+		{"witness", withList, amsterdam, true, false, false, errParallelWitness},
+		{"no access list", noList, params.MergedTestChainConfig, false, false, false, errNoAccessList},
+		{"pre-amsterdam", withList, params.MergedTestChainConfig, false, false, false, errPreAmsterdam},
 	}
 	for _, tt := range tests {
 		got := sequentialExecutionReason(tt.block, tt.config, tt.witness, tt.trace, tt.disabled)
 		if got != tt.want {
-			t.Errorf("%s: reason %q, want %q", tt.name, got, tt.want)
+			t.Errorf("%s: reason %v, want %v", tt.name, got, tt.want)
 		}
-		if parallel := supportsParallelExecution(tt.block, tt.config, tt.witness, tt.trace, tt.disabled); parallel != (tt.want == "") {
-			t.Errorf("%s: supportsParallelExecution %v, want %v", tt.name, parallel, tt.want == "")
+		if parallel := supportsParallelExecution(tt.block, tt.config, tt.witness, tt.trace, tt.disabled); parallel != (tt.want == nil) {
+			t.Errorf("%s: supportsParallelExecution %v, want %v", tt.name, parallel, tt.want == nil)
 		}
 	}
 }

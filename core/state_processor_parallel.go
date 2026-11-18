@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"sync"
@@ -44,40 +45,49 @@ var (
 	parallelTotalTimer      = metrics.NewRegisteredResettingTimer("chain/execution/parallel/total", nil)
 )
 
+// Conditions that rule out the BAL-driven parallel processor for a block.
+var (
+	errParallelDisabled = errors.New("disabled")
+	errParallelTracer   = errors.New("tracer")
+	errParallelWitness  = errors.New("witness")
+	errNoAccessList     = errors.New("no-access-list")
+	errPreAmsterdam     = errors.New("pre-amsterdam")
+)
+
 // supportsParallelExecution reports whether the block can be executed using the
 // BAL-driven parallel processor.
 func supportsParallelExecution(block *types.Block, config *params.ChainConfig, wantWitness bool, wantTrace bool, disableParallel bool) bool {
-	return sequentialExecutionReason(block, config, wantWitness, wantTrace, disableParallel) == ""
+	return sequentialExecutionReason(block, config, wantWitness, wantTrace, disableParallel) == nil
 }
 
 // sequentialExecutionReason returns the first condition that rules out the
-// BAL-driven parallel processor for the block, or "" if it can be used.
-func sequentialExecutionReason(block *types.Block, config *params.ChainConfig, wantWitness bool, wantTrace bool, disableParallel bool) string {
+// BAL-driven parallel processor for the block, or nil if it can be used.
+func sequentialExecutionReason(block *types.Block, config *params.ChainConfig, wantWitness bool, wantTrace bool, disableParallel bool) error {
 	// Parallel execution explicitly disabled via config (e.g. by tests that
 	// want to force the sequential path).
 	if disableParallel {
-		return "disabled"
+		return errParallelDisabled
 	}
 	// No tracer is attached (tracing requires the strict sequential
 	// ordering of state operations that parallel execution does not
 	// preserve).
 	if wantTrace {
-		return "tracer"
+		return errParallelTracer
 	}
 	// No witness is being collected (witness building must observe
 	// every state access alongside the proof).
 	if wantWitness {
-		return "witness"
+		return errParallelWitness
 	}
 	// Disable the parallel execution if either the Amsterdam hasn't been
 	// activated, or the accessList is not accessible.
 	if block.AccessList() == nil {
-		return "no-access-list"
+		return errNoAccessList
 	}
 	if !config.IsAmsterdam(block.Number(), block.Time()) {
-		return "pre-amsterdam"
+		return errPreAmsterdam
 	}
-	return ""
+	return nil
 }
 
 // txExecResult holds the per-transaction outcome of parallel execution.
