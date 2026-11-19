@@ -2890,3 +2890,77 @@ func TestForkRevalidation(t *testing.T) {
 		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 }
+
+// reorgTestChain is a test chain that serves the given blocks to pool resets.
+type reorgTestChain struct {
+	*testBlockChain
+	blocks map[common.Hash]*types.Block
+}
+
+func (bc *reorgTestChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	return bc.blocks[hash]
+}
+
+// Tests that the transactions reinjected by a reorg across a fork boundary are
+// checked against the rules of the new fork.
+func TestForkRevalidationReorg(t *testing.T) {
+	t.Parallel()
+
+	// Start on Osaka and activate Amsterdam at timestamp 10.
+	config := *params.MergedTestChainConfig
+	amsterdam := uint64(10)
+	config.AmsterdamTime = &amsterdam
+
+	pool, key := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	from := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, from, big.NewInt(1000000000))
+
+	// A transaction with enough gas for the Osaka calldata floor only.
+	tx := types.MustSignNewTx(key, types.LatestSigner(&config), &types.DynamicFeeTx{
+		ChainID:   config.ChainID,
+		Nonce:     0,
+		GasTipCap: big.NewInt(1),
+		GasFeeCap: big.NewInt(1),
+		Gas:       61000,
+		To:        &common.Address{0x01},
+		Data:      bytes.Repeat([]byte{0x01}, 1000),
+	})
+	// The old chain includes it in an Osaka block. The new chain replaces that
+	// block with an empty Amsterdam block, so the reorg reinjects it.
+	genesis := pool.currentHead.Load()
+	newBlock := func(time uint64, txs []*types.Transaction) *types.Block {
+		header := &types.Header{
+			ParentHash: genesis.Hash(),
+			Number:     big.NewInt(1),
+			Time:       time,
+			Difficulty: common.Big0,
+			GasLimit:   genesis.GasLimit,
+			BaseFee:    big.NewInt(1),
+		}
+		return types.NewBlock(header, &types.Body{Transactions: txs}, nil, trie.NewStackTrie(nil))
+	}
+	var (
+		oldBlock = newBlock(amsterdam-1, []*types.Transaction{tx})
+		newHead  = newBlock(amsterdam, nil)
+	)
+	pool.mu.Lock()
+	pool.chain = &reorgTestChain{
+		testBlockChain: pool.chain.(*testBlockChain),
+		blocks: map[common.Hash]*types.Block{
+			genesis.Hash():  types.NewBlockWithHeader(genesis),
+			oldBlock.Hash(): oldBlock,
+			newHead.Hash():  newHead,
+		},
+	}
+	pool.mu.Unlock()
+
+	<-pool.requestReset(oldBlock.Header(), newHead.Header())
+	if pending, queued := pool.Stats(); pending != 0 || queued != 0 {
+		t.Fatalf("pool stats mismatch after reorg: have %d pending %d queued, want 0 pending 0 queued", pending, queued)
+	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
