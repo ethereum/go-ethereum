@@ -65,6 +65,12 @@ type callFrame struct {
 	Value            *big.Int `json:"value,omitempty" rlp:"optional"`
 	revertedSnapshot bool
 
+	// EIP-8037 settlement of the transaction, set on the top-level frame from
+	// Amsterdam on. Not part of the RLP encoding.
+	RegularGasUsed *uint64 `json:"regularGasUsed,omitempty" rlp:"-"`
+	StateGasUsed   *uint64 `json:"stateGasUsed,omitempty" rlp:"-"`
+	GasRefund      *uint64 `json:"gasRefund,omitempty" rlp:"-"`
+
 	// StateGasReservoir is the EIP-8037 state gas reservoir the frame was
 	// entered with, set from Amsterdam on. Not part of the RLP encoding.
 	StateGasReservoir *uint64 `json:"stateGasReservoir,omitempty" rlp:"-"`
@@ -110,6 +116,9 @@ type callFrameMarshaling struct {
 	TypeString        string `json:"type"`
 	Gas               hexutil.Uint64
 	GasUsed           hexutil.Uint64
+	RegularGasUsed    *hexutil.Uint64
+	StateGasUsed      *hexutil.Uint64
+	GasRefund         *hexutil.Uint64
 	Value             *hexutil.Big
 	Input             hexutil.Bytes
 	Output            hexutil.Bytes
@@ -141,7 +150,7 @@ func newCallTracer(ctx *tracers.Context, cfg json.RawMessage, chainConfig *param
 	return &tracers.Tracer{
 		Hooks: &tracing.Hooks{
 			OnTxStart: t.OnTxStart,
-			OnTxEnd:   t.OnTxEnd,
+			OnTxEndV2: t.OnTxEnd,
 			OnEnterV2: t.OnEnter,
 			OnExitV2:  t.OnExit,
 			OnLog:     t.OnLog,
@@ -240,13 +249,18 @@ func (t *callTracer) OnTxStart(env *tracing.VMContext, tx *types.Transaction, fr
 	t.isAmsterdam = env.Rules.IsAmsterdam
 }
 
-func (t *callTracer) OnTxEnd(receipt *types.Receipt, err error) {
+func (t *callTracer) OnTxEnd(receipt *types.Receipt, usage *tracing.TxGasUsage, err error) {
 	// Error happened during tx validation.
 	if err != nil {
 		return
 	}
 	if receipt != nil {
 		t.callstack[0].GasUsed = receipt.GasUsed
+	}
+	if usage != nil {
+		t.callstack[0].RegularGasUsed = &usage.Block.Execution
+		t.callstack[0].StateGasUsed = &usage.Block.State
+		t.callstack[0].GasRefund = &usage.Refund
 	}
 	if t.config.WithLog {
 		// Logs are not emitted when the call fails

@@ -255,6 +255,7 @@ type StructLogger struct {
 	output  []byte
 	err     error
 	usedGas uint64
+	usage   *tracing.TxGasUsage // EIP-8037 settlement, nil before Amsterdam
 
 	writer     io.Writer         // If set, the logger will stream instead of store logs
 	logs       []json.RawMessage // buffer of json-encoded logs
@@ -287,7 +288,7 @@ func NewStructLogger(cfg *Config) *StructLogger {
 func (l *StructLogger) Hooks() *tracing.Hooks {
 	return &tracing.Hooks{
 		OnTxStart:           l.OnTxStart,
-		OnTxEnd:             l.OnTxEnd,
+		OnTxEndV2:           l.OnTxEnd,
 		OnSystemCallStartV2: l.OnSystemCallStart,
 		OnSystemCallEnd:     l.OnSystemCallEnd,
 		OnExitV2:            l.OnExit,
@@ -410,12 +411,18 @@ func (l *StructLogger) GetResult() (json.RawMessage, error) {
 	if failed && !errors.Is(l.err, vm.ErrExecutionReverted) {
 		returnData = []byte{}
 	}
-	return json.Marshal(&ExecutionResult{
+	res := &ExecutionResult{
 		Gas:         l.usedGas,
 		Failed:      failed,
 		ReturnValue: returnData,
 		StructLogs:  l.logs,
-	})
+	}
+	if l.usage != nil {
+		res.RegularGasUsed = &l.usage.Block.Execution
+		res.StateGasUsed = &l.usage.Block.State
+		res.GasRefund = &l.usage.Refund
+	}
+	return json.Marshal(res)
 }
 
 // Stop terminates execution of the tracer at the first opportune moment.
@@ -435,7 +442,7 @@ func (l *StructLogger) OnSystemCallEnd() {
 	l.skip = false
 }
 
-func (l *StructLogger) OnTxEnd(receipt *types.Receipt, err error) {
+func (l *StructLogger) OnTxEnd(receipt *types.Receipt, usage *tracing.TxGasUsage, err error) {
 	if err != nil {
 		// Don't override vm error
 		if l.err == nil {
@@ -446,6 +453,7 @@ func (l *StructLogger) OnTxEnd(receipt *types.Receipt, err error) {
 	if receipt != nil {
 		l.usedGas = receipt.GasUsed
 	}
+	l.usage = usage
 }
 
 // Error returns the VM error captured by the trace.
@@ -609,4 +617,9 @@ type ExecutionResult struct {
 	Failed      bool              `json:"failed"`
 	ReturnValue hexutil.Bytes     `json:"returnValue"`
 	StructLogs  []json.RawMessage `json:"structLogs"`
+
+	// EIP-8037 settlement of the transaction, present from Amsterdam on.
+	RegularGasUsed *uint64 `json:"regularGasUsed,omitempty"`
+	StateGasUsed   *uint64 `json:"stateGasUsed,omitempty"`
+	GasRefund      *uint64 `json:"gasRefund,omitempty"`
 }

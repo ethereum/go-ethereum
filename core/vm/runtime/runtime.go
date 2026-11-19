@@ -155,9 +155,7 @@ func Execute(code, input []byte, cfg *Config) ([]byte, *state.StateDB, error) {
 		vm.NewGasBudget(limit, cfg.GasLimit-limit),
 		uint256.MustFromBig(cfg.Value),
 	)
-	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
-		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - result.ExecutionGas}, err)
-	}
+	cfg.EVMConfig.Tracer.EmitTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - result.ExecutionGas}, nil, err)
 	return ret, cfg.State, err
 }
 
@@ -193,9 +191,7 @@ func Create(input []byte, cfg *Config) ([]byte, common.Address, uint64, error) {
 		vm.NewGasBudget(limit, cfg.GasLimit-limit),
 		uint256.MustFromBig(cfg.Value),
 	)
-	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
-		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - result.ExecutionGas}, err)
-	}
+	cfg.EVMConfig.Tracer.EmitTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - result.ExecutionGas}, nil, err)
 	return code, address, result.ExecutionGas, err
 }
 
@@ -232,8 +228,6 @@ func Call(address common.Address, input []byte, cfg *Config) ([]byte, uint64, er
 		vm.NewGasBudget(limit, cfg.GasLimit-limit),
 		uint256.MustFromBig(cfg.Value),
 	)
-	if cfg.EVMConfig.Tracer != nil && cfg.EVMConfig.Tracer.OnTxEnd != nil {
-		cfg.EVMConfig.Tracer.OnTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - result.ExecutionGas}, err)
-	}
+	cfg.EVMConfig.Tracer.EmitTxEnd(&types.Receipt{GasUsed: cfg.GasLimit - result.ExecutionGas}, nil, err)
 	return ret, result.ExecutionGas, err
 }
