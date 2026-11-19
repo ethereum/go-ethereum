@@ -199,6 +199,7 @@ func (c *Client) sendHTTP(ctx context.Context, op *requestOp, msg *jsonrpcMessag
 	if err := json.NewDecoder(respBody).Decode(&resp); err != nil {
 		return err
 	}
+	resp.dropNullError()
 	op.resp <- batch[:]
 	return nil
 }
@@ -214,6 +215,11 @@ func (c *Client) sendBatchHTTP(ctx context.Context, op *requestOp, msgs []*jsonr
 	var respmsgs []*jsonrpcMessage
 	if err := json.NewDecoder(respBody).Decode(&respmsgs); err != nil {
 		return err
+	}
+	for _, resp := range respmsgs {
+		if resp != nil {
+			resp.dropNullError()
+		}
 	}
 	op.resp <- respmsgs
 	return nil

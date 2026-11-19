@@ -109,6 +109,14 @@ func (msg *jsonrpcMessage) errorResponse(err error) *jsonrpcMessage {
 	return resp
 }
 
+// dropNullError clears an error member that is JSON null, which some servers
+// send along with the result.
+func (msg *jsonrpcMessage) dropNullError() {
+	if bytes.Equal(msg.Error, null) {
+		msg.Error = nil
+	}
+}
+
 // decodeError decodes the Error field into a jsonError struct.
 func (msg *jsonrpcMessage) decodeError() *jsonError {
 	if msg.Error == nil {
@@ -455,6 +463,7 @@ func fillMessage(input []byte, msg *jsonrpcMessage) {
 			// ignore unknown fields
 		}
 	})
+	msg.dropNullError()
 }
 
 // isBatch returns true when the first non-whitespace characters is '['
