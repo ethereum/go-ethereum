@@ -35,9 +35,14 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/fetcher"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
@@ -86,8 +91,22 @@ const (
 	beaconUpdateWarnFrequency = 5 * time.Minute
 )
 
+// Backend is the part of the eth service that the engine API uses.
+type Backend interface {
+	BlockChain() *core.BlockChain
+	ChainDb() ethdb.Database
+	Downloader() *downloader.Downloader
+	Synced() bool
+	SetSynced()
+	EngineMaxReorgDepth() uint64
+	TxPool() *txpool.TxPool
+	Miner() *miner.Miner
+	BlobCache() *blobpool.Cache
+	BlobFetcher() *fetcher.BlobFetcher
+}
+
 type ConsensusAPI struct {
-	eth *eth.Ethereum
+	eth Backend
 
 	// maxReorgDepth is the maximum reorg depth accepted via forkchoiceUpdated
 	// (0 = no limit). Configured via ethconfig.Config.EngineMaxReorgDepth.
@@ -134,15 +153,23 @@ type ConsensusAPI struct {
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 //
 // This function creates a long-lived object with an attached background thread.
-// For testing or other short-term use cases, please use newConsensusAPIWithoutHeartbeat.
-func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
+// For testing or other short-term use cases, please use NewConsensusAPIWithoutHeartbeat.
+func NewConsensusAPI(eth Backend) *ConsensusAPI {
 	api := newConsensusAPIWithoutHeartbeat(eth)
 	go api.heartbeat()
 	return api
 }
 
+// NewConsensusAPIWithoutHeartbeat creates a new consensus api for the given
+// backend without the background thread that watches for a beacon client, so
+// it can be dropped together with a short-lived backend, such as one built to
+// run an engine test fixture.
+func NewConsensusAPIWithoutHeartbeat(eth Backend) *ConsensusAPI {
+	return newConsensusAPIWithoutHeartbeat(eth)
+}
+
 // newConsensusAPIWithoutHeartbeat creates a new consensus api for the SimulatedBeacon Node.
-func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
+func newConsensusAPIWithoutHeartbeat(eth Backend) *ConsensusAPI {
 	if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
 		log.Warn("Engine API started but chain not configured for merge yet")
 	}
