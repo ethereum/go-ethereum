@@ -180,14 +180,18 @@ func (f *FilterMaps) processSingleEvent(blocking bool) bool {
 	if f.stop {
 		return false
 	}
+	// Serve matcher sync requests even while finished maps are being written.
+	// The temporary range that is in effect during the write covers only map
+	// data that is left untouched, so it is consistent with the indexed view.
+	// Searches fall back to unindexed mode for the section being rewritten
+	// instead of waiting for the entire write to complete.
+	//
 	// Note: acquiring the indexLock read lock is unnecessary here,
 	// as this function is always called within the indexLoop.
-	if !f.hasTempRange {
-		for _, mb := range f.matcherSyncRequests {
-			mb.synced()
-		}
-		f.matcherSyncRequests = nil
+	for _, mb := range f.matcherSyncRequests {
+		mb.synced()
 	}
+	f.matcherSyncRequests = nil
 	if blocking {
 		select {
 		case target := <-f.targetCh:
