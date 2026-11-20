@@ -446,22 +446,34 @@ type indexIterator struct {
 
 // newBlockIter initializes the block iterator with the specified block ID.
 func (r *indexReader) newBlockIter(id uint32, filter *extFilter) (*blockIterator, error) {
+	r.lock.RLock()
 	br, ok := r.readers[id]
+	r.lock.RUnlock()
 	if !ok {
-		var err error
-		br, err = newBlockReader(readStateIndexBlock(r.state, r.db, id), r.bitmapSize != 0)
-		if err != nil {
-			return nil, err
+		r.lock.Lock()
+		br, ok = r.readers[id]
+		if !ok {
+			var err error
+			br, err = newBlockReader(readStateIndexBlock(r.state, r.db, id), r.bitmapSize != 0)
+			if err != nil {
+				r.lock.Unlock()
+				return nil, err
+			}
+			r.readers[id] = br
 		}
-		r.readers[id] = br
+		r.lock.Unlock()
 	}
 	return br.newIterator(filter), nil
 }
 
 // newIterator initializes the index iterator with the specified extension filter.
 func (r *indexReader) newIterator(filter *extFilter) *indexIterator {
+	r.lock.RLock()
+	descList := r.descList
+	r.lock.RUnlock()
+
 	it := &indexIterator{
-		descList: r.descList,
+		descList: descList,
 		reader:   r,
 		filter:   filter,
 	}
