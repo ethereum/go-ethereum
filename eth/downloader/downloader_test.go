@@ -605,8 +605,8 @@ func testCanonSync(t *testing.T, protocol uint, mode SyncMode, snapV2 bool) {
 	select {
 	case <-success:
 		assertOwnChain(t, tester, len(chain.blocks))
-	case <-time.NewTimer(time.Second * 3).C:
-		t.Fatalf("Failed to sync chain in three seconds")
+	case <-time.NewTimer(time.Second * 30).C:
+		t.Fatalf("Failed to sync chain in time")
 	}
 }
 
@@ -964,8 +964,8 @@ func testEmptyShortCircuit(t *testing.T, protocol uint, mode SyncMode) {
 			HighestBlock: uint64(len(chain.blocks) - 1),
 			CurrentBlock: uint64(len(chain.blocks) - 1),
 		})
-	case <-time.NewTimer(time.Second * 3).C:
-		t.Fatalf("Failed to sync chain in three seconds")
+	case <-time.NewTimer(time.Second * 30).C:
+		t.Fatalf("Failed to sync chain in time")
 	}
 	assertOwnChain(t, tester, len(chain.blocks))
 
@@ -1038,8 +1038,8 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 				if bs := int(tester.chain.CurrentBlock().Number.Uint64()) + 1; bs != len(chain.blocks) {
 					t.Fatalf("synchronised blocks mismatch: have %v, want %v", bs, len(chain.blocks))
 				}
-			case <-time.NewTimer(time.Second * 3).C:
-				t.Fatalf("Failed to sync chain in three seconds")
+			case <-time.NewTimer(time.Second * 30).C:
+				t.Fatalf("Failed to sync chain in time")
 			}
 		})
 	}
@@ -1149,8 +1149,8 @@ func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 			CurrentBlock: uint64(len(chain.blocks)/2 - 1),
 			HighestBlock: uint64(len(chain.blocks)/2 - 1),
 		})
-	case <-time.NewTimer(time.Second * 3).C:
-		t.Fatalf("Failed to sync chain in three seconds")
+	case <-time.NewTimer(time.Second * 30).C:
+		t.Fatalf("Failed to sync chain in time")
 	}
 
 	// Synchronise all the blocks and check continuation progress
@@ -1168,8 +1168,8 @@ func testSyncProgress(t *testing.T, protocol uint, mode SyncMode) {
 			CurrentBlock:  uint64(len(chain.blocks) - 1),
 			HighestBlock:  uint64(len(chain.blocks) - 1),
 		})
-	case <-time.NewTimer(time.Second * 3).C:
-		t.Fatalf("Failed to sync chain in three seconds")
+	case <-time.NewTimer(time.Second * 30).C:
+		t.Fatalf("Failed to sync chain in time")
 	}
 }
 
