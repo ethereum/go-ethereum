@@ -18,6 +18,7 @@ package rpc
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net"
 	"net/http"
@@ -44,6 +45,29 @@ func TestWebsocketClientHeaders(t *testing.T) {
 	}
 	if header.Get("origin") != "https://example.com" {
 		t.Fatal("Origin not set")
+	}
+}
+
+// This test checks that URL credentials are sent decoded, like net/http does
+// for HTTP endpoints.
+func TestWebsocketClientHeadersEscapedAuth(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		url, want string
+	}{
+		{"wss://test%40user:pa!ss%2F@example.com", "test@user:pa!ss/"},
+		{"wss://testuser@example.com", "testuser:"},
+	}
+	for _, tt := range tests {
+		_, header, err := wsClientHeaders(tt.url, "")
+		if err != nil {
+			t.Fatalf("%s: wsClientHeaders failed: %v", tt.url, err)
+		}
+		want := "Basic " + base64.StdEncoding.EncodeToString([]byte(tt.want))
+		if got := header.Get("authorization"); got != want {
+			t.Errorf("%s: wrong authorization header %q, want %q", tt.url, got, want)
+		}
 	}
 }
 
