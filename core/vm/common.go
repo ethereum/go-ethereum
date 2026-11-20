@@ -45,7 +45,7 @@ func CheckMaxCodeSize(rules *params.Rules, size uint64) error {
 		if size > params.MaxCodeSizeAmsterdam {
 			return fmt.Errorf("%w: code size %v limit %v", ErrMaxCodeSizeExceeded, size, params.MaxCodeSizeAmsterdam)
 		}
-	} else if rules.IsEIP158 {
+	} else if rules.IsEIP170 {
 		if size > params.MaxCodeSize {
 			return fmt.Errorf("%w: code size %v limit %v", ErrMaxCodeSizeExceeded, size, params.MaxCodeSize)
 		}
