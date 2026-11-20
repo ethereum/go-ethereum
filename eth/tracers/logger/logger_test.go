@@ -69,6 +69,55 @@ func TestStoreCapture(t *testing.T) {
 	}
 }
 
+// Clear an existing slot and restore its original value. Both operations
+// change the refund while their dynamic gas cost is being calculated.
+func TestStructLoggerRefundBeforeOpcode(t *testing.T) {
+	code := []byte{
+		byte(vm.PUSH1), 0, byte(vm.PUSH1), 0, byte(vm.SSTORE),
+		byte(vm.PUSH1), 1, byte(vm.PUSH1), 0, byte(vm.SSTORE),
+		byte(vm.STOP),
+	}
+	const clearRefund = params.SstoreClearsScheduleRefundEIP3529
+	const restoreRefund = params.SstoreResetGasEIP2200 - params.ColdSloadCostEIP2929 - params.WarmStorageReadCostEIP2929
+	for _, tc := range []struct {
+		name string
+		gas  uint64
+		err  error
+		want []uint64
+	}{
+		{"clear and restore", 100_000, nil, []uint64{0, 0, 0, clearRefund, clearRefund, clearRefund, restoreRefund}},
+		{"insufficient gas for clear", 3000, vm.ErrOutOfGas, []uint64{0, 0, 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := common.HexToAddress("0xc0de")
+			st, err := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			if err != nil {
+				t.Fatal(err)
+			}
+			st.SetCode(addr, code, tracing.CodeChangeUnspecified)
+			st.SetState(addr, common.Hash{}, common.HexToHash("0x1"))
+			st.Finalise(params.Rules{})
+			logger := NewStructLogger(nil)
+			_, _, err = runtime.Call(addr, nil, &runtime.Config{
+				State: st, GasLimit: tc.gas, EVMConfig: vm.Config{Tracer: logger.Hooks()},
+			})
+			if !errors.Is(err, tc.err) {
+				t.Fatalf("execution error %v, want %v", err, tc.err)
+			}
+			logs := faultTestStructLogs(t, logger)
+			if len(logs) != len(tc.want) {
+				t.Fatalf("got %d steps, want %d", len(logs), len(tc.want))
+			}
+			for i, entry := range logs {
+				step := faultTestLog(t, entry)
+				if step.RefundCounter != tc.want[i] {
+					t.Errorf("step %d (%s): refund %d, want %d", i, step.Op, step.RefundCounter, tc.want[i])
+				}
+			}
+		})
+	}
+}
+
 // Tests that blank fields don't appear in logs when JSON marshalled, to reduce
 // logs bloat and confusion. See https://github.com/ethereum/go-ethereum/issues/24487
 func TestStructLogMarshalingOmitEmpty(t *testing.T) {
