@@ -25,7 +25,7 @@ import (
 
 // senderCacherOnce is used to ensure that the SenderCacher is initialized only once.
 var senderCacherOnce = sync.OnceValue(func() *txSenderCacher {
-	return newTxSenderCacher(runtime.NumCPU())
+	return newTxSenderCacher(runtime.GOMAXPROCS(0))
 })
 
 // SenderCacher returns the singleton instance of SenderCacher, initializing it if called for the first time.
