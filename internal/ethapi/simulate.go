@@ -529,6 +529,9 @@ func repairLogs(calls []simCallResult, hash common.Hash) {
 }
 
 func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, header *types.Header, gp *core.GasPool) (bool, error) {
+	if call.BlobHashes != nil && call.AuthorizationList != nil {
+		return false, &invalidParamsError{"both blobVersionedHashes and authorizationList specified"}
+	}
 	if call.Nonce == nil {
 		nonce := state.GetNonce(call.from())
 		call.Nonce = (*hexutil.Uint64)(&nonce)
@@ -552,6 +555,15 @@ func (sim *simulator) sanitizeCall(call *TransactionArgs, state vm.StateDB, head
 	gasCapped := gas < uint64(*call.Gas)
 	call.Gas = (*hexutil.Uint64)(&gas)
 
+	// Blob and set-code transactions have no gasPrice field. Carry the gas price in
+	// the fee caps so that the recorded transaction holds the list that the message
+	// executes. The message pays the same price either way. Before London the call
+	// is left as is, and the fork check of its list rejects it.
+	if call.GasPrice != nil && call.MaxFeePerGas == nil && call.MaxPriorityFeePerGas == nil &&
+		(call.BlobHashes != nil || call.AuthorizationList != nil) && sim.chainConfig.IsLondon(header.Number) {
+		call.MaxFeePerGas, call.MaxPriorityFeePerGas = call.GasPrice, call.GasPrice
+		call.GasPrice = nil
+	}
 	return gasCapped, call.CallDefaults(0, header.BaseFee, sim.chainConfig.ChainID)
 }
 
