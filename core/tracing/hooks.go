@@ -172,9 +172,10 @@ type (
 	// ExitHookV2 is the multi-dimensional successor to ExitHook. It reports the
 	// budget the frame leaves behind instead of the gas it used: under EIP-8037 a
 	// frame can be refilled more state-gas than it charged, so its state usage can
-	// be negative and does not fit ExitHook's unsigned difference. Usage is the
-	// difference against the gas reported by the matching EnterHookV2. If both
-	// hooks are set, only V2 is invoked; register at most one.
+	// be negative and does not fit ExitHook's unsigned difference. For an EVM
+	// frame, gasLeft also carries the net usage in each dimension. This accounts
+	// for state gas spilled into the execution budget. If both hooks are set,
+	// only V2 is invoked; register at most one.
 	ExitHookV2 = func(depth int, output []byte, gasLeft Gas, err error, reverted bool)
 
 	// OpcodeHook is invoked just prior to the execution of an opcode.
@@ -533,6 +534,11 @@ const (
 type Gas struct {
 	Execution uint64 // Execution is the budget for ordinary execution gas.
 	State     uint64 // State is the budget dedicated to state-access gas (zero pre-Amsterdam).
+
+	// Usage is set on frame exits. It includes descendants and excludes state
+	// charges from UsedExecution even when paid by the execution budget.
+	UsedExecution uint64
+	UsedState     int64
 }
 
 // OpCost is the two-dimensional cost of a single opcode (EIP-8037). State is

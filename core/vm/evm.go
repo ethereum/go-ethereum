@@ -759,7 +759,10 @@ func (evm *EVM) captureEnd(depth int, startGas GasBudget, leftOverGas GasBudget,
 	if !evm.chainRules.IsHomestead && errors.Is(err, ErrCodeStoreOutOfGas) {
 		reverted = false
 	}
-	tracer.EmitExit(depth, ret, startGas.AsTracing(), leftOverGas.AsTracing(), VMErrorFromErr(err), reverted)
+	exitGas := leftOverGas.AsTracing()
+	exitGas.UsedExecution = leftOverGas.UsedExecutionGas
+	exitGas.UsedState = leftOverGas.UsedStateGas
+	tracer.EmitExit(depth, ret, startGas.AsTracing(), exitGas, VMErrorFromErr(err), reverted)
 }
 
 // GetVMContext provides context about the block being executed as well as state
