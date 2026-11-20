@@ -309,6 +309,27 @@ func TestSignEncodeAndDecodeRandom(t *testing.T) {
 	}
 }
 
+// TestSchemeMapVerify checks that Verify reports an unregistered identity scheme
+// distinctly from a record whose signature is actually invalid. These are different
+// conditions: when the scheme is unknown, no signature has been checked at all.
+func TestSchemeMapVerify(t *testing.T) {
+	var r Record
+	require.NoError(t, signTest([]byte{5}, &r))
+
+	registered := SchemeMap{"test": testSig{}}
+	if err := registered.Verify(&r, r.Signature()); err != nil {
+		t.Fatalf("expected a valid signature to verify, got %#v", err)
+	}
+	if err := registered.Verify(&r, []byte("bogus")); err != ErrInvalidSig {
+		t.Fatalf("expected ErrInvalidSig for a bad signature, got %#v", err)
+	}
+
+	// The scheme is absent from the map, so the signature was never examined.
+	if err := (SchemeMap{}).Verify(&r, r.Signature()); err != ErrUnknownScheme {
+		t.Fatalf("expected ErrUnknownScheme for an unregistered scheme, got %#v", err)
+	}
+}
+
 type testSig struct{}
 
 type testID []byte
