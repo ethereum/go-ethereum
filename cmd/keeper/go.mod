@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/0xPolygonHermez/zisk/ziskasm/lang/go v0.0.0-20261103142117-f557332704da // indirect
 	github.com/VictoriaMetrics/fastcache v1.13.0 // indirect
 	github.com/bits-and-blooms/bitset v1.20.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
