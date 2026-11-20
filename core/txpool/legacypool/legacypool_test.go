@@ -17,6 +17,7 @@
 package legacypool
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"errors"
@@ -2799,5 +2800,167 @@ func BenchmarkMultiAccountBatchInsert(b *testing.B) {
 	b.ResetTimer()
 	for _, tx := range batches {
 		pool.addRemotesSync([]*types.Transaction{tx})
+	}
+}
+
+// Tests that the transactions made invalid by the rules of a new fork are
+// dropped from the pool when the fork activates.
+func TestForkRevalidation(t *testing.T) {
+	t.Parallel()
+
+	// Start on Osaka and activate Amsterdam at timestamp 10.
+	config := *params.MergedTestChainConfig
+	amsterdam := uint64(10)
+	config.AmsterdamTime = &amsterdam
+
+	pool, key := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	signer := types.LatestSigner(&config)
+	newTx := func(nonce uint64, gas uint64, data []byte) *types.Transaction {
+		return types.MustSignNewTx(key, signer, &types.DynamicFeeTx{
+			ChainID:   config.ChainID,
+			Nonce:     nonce,
+			GasTipCap: big.NewInt(1),
+			GasFeeCap: big.NewInt(1),
+			Gas:       gas,
+			To:        &common.Address{0x01},
+			Data:      data,
+		})
+	}
+	// Under Osaka, 1000 nonzero bytes of calldata have a floor of 61000 gas
+	// (EIP-7623). Under Amsterdam, the floor rises to 79000 (EIP-7976).
+	data := bytes.Repeat([]byte{0x01}, 1000)
+
+	from := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, from, big.NewInt(1000000000))
+
+	var (
+		valid   = newTx(0, 100000, nil) // enough gas under both forks
+		invalid = newTx(1, 61000, data) // enough gas under Osaka only
+		queued  = newTx(3, 61000, data) // queued behind a nonce gap
+	)
+	if errs := pool.Add([]*types.Transaction{valid, invalid, queued}, true); errs[0] != nil || errs[1] != nil || errs[2] != nil {
+		t.Fatalf("failed to add transactions: %v", errs)
+	}
+	if pending, queued := pool.Stats(); pending != 2 || queued != 1 {
+		t.Fatalf("pool stats mismatch before fork: have %d pending %d queued, want 2 pending 1 queued", pending, queued)
+	}
+	// A block that stays on Osaka keeps all transactions.
+	oldHead := pool.currentHead.Load()
+	newHead := &types.Header{
+		ParentHash: oldHead.Hash(),
+		Number:     big.NewInt(1),
+		Time:       amsterdam - 1,
+		Difficulty: common.Big0,
+		GasLimit:   oldHead.GasLimit,
+		BaseFee:    big.NewInt(1),
+	}
+	<-pool.requestReset(oldHead, newHead)
+	if pending, queued := pool.Stats(); pending != 2 || queued != 1 {
+		t.Fatalf("pool stats mismatch before fork: have %d pending %d queued, want 2 pending 1 queued", pending, queued)
+	}
+	// The block that activates Amsterdam drops the transactions below the new floor.
+	oldHead, newHead = newHead, &types.Header{
+		ParentHash: newHead.Hash(),
+		Number:     big.NewInt(2),
+		Time:       amsterdam,
+		Difficulty: common.Big0,
+		GasLimit:   oldHead.GasLimit,
+		BaseFee:    big.NewInt(1),
+	}
+	<-pool.requestReset(oldHead, newHead)
+	if pending, queued := pool.Stats(); pending != 1 || queued != 0 {
+		t.Fatalf("pool stats mismatch after fork: have %d pending %d queued, want 1 pending 0 queued", pending, queued)
+	}
+	if pool.Get(valid.Hash()) == nil {
+		t.Errorf("valid transaction dropped at fork")
+	}
+	if pool.Get(invalid.Hash()) != nil || pool.Get(queued.Hash()) != nil {
+		t.Errorf("transaction below the Amsterdam floor kept after fork")
+	}
+	if nonce := pool.Nonce(from); nonce != 1 {
+		t.Errorf("pending nonce mismatch: have %d, want 1", nonce)
+	}
+	// The same transaction is now rejected on admission too.
+	if err := pool.addRemoteSync(newTx(1, 61000, data)); !errors.Is(err, core.ErrFloorDataGas) {
+		t.Errorf("readmission error mismatch: have %v, want %v", err, core.ErrFloorDataGas)
+	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
+	}
+}
+
+// reorgTestChain is a test chain that serves the given blocks to pool resets.
+type reorgTestChain struct {
+	*testBlockChain
+	blocks map[common.Hash]*types.Block
+}
+
+func (bc *reorgTestChain) GetBlock(hash common.Hash, number uint64) *types.Block {
+	return bc.blocks[hash]
+}
+
+// Tests that the transactions reinjected by a reorg across a fork boundary are
+// checked against the rules of the new fork.
+func TestForkRevalidationReorg(t *testing.T) {
+	t.Parallel()
+
+	// Start on Osaka and activate Amsterdam at timestamp 10.
+	config := *params.MergedTestChainConfig
+	amsterdam := uint64(10)
+	config.AmsterdamTime = &amsterdam
+
+	pool, key := setupPoolWithConfig(&config)
+	defer pool.Close()
+
+	from := crypto.PubkeyToAddress(key.PublicKey)
+	testAddBalance(pool, from, big.NewInt(1000000000))
+
+	// A transaction with enough gas for the Osaka calldata floor only.
+	tx := types.MustSignNewTx(key, types.LatestSigner(&config), &types.DynamicFeeTx{
+		ChainID:   config.ChainID,
+		Nonce:     0,
+		GasTipCap: big.NewInt(1),
+		GasFeeCap: big.NewInt(1),
+		Gas:       61000,
+		To:        &common.Address{0x01},
+		Data:      bytes.Repeat([]byte{0x01}, 1000),
+	})
+	// The old chain includes it in an Osaka block. The new chain replaces that
+	// block with an empty Amsterdam block, so the reorg reinjects it.
+	genesis := pool.currentHead.Load()
+	newBlock := func(time uint64, txs []*types.Transaction) *types.Block {
+		header := &types.Header{
+			ParentHash: genesis.Hash(),
+			Number:     big.NewInt(1),
+			Time:       time,
+			Difficulty: common.Big0,
+			GasLimit:   genesis.GasLimit,
+			BaseFee:    big.NewInt(1),
+		}
+		return types.NewBlock(header, &types.Body{Transactions: txs}, nil, trie.NewStackTrie(nil))
+	}
+	var (
+		oldBlock = newBlock(amsterdam-1, []*types.Transaction{tx})
+		newHead  = newBlock(amsterdam, nil)
+	)
+	pool.mu.Lock()
+	pool.chain = &reorgTestChain{
+		testBlockChain: pool.chain.(*testBlockChain),
+		blocks: map[common.Hash]*types.Block{
+			genesis.Hash():  types.NewBlockWithHeader(genesis),
+			oldBlock.Hash(): oldBlock,
+			newHead.Hash():  newHead,
+		},
+	}
+	pool.mu.Unlock()
+
+	<-pool.requestReset(oldBlock.Header(), newHead.Header())
+	if pending, queued := pool.Stats(); pending != 0 || queued != 0 {
+		t.Fatalf("pool stats mismatch after reorg: have %d pending %d queued, want 0 pending 0 queued", pending, queued)
+	}
+	if err := validatePoolInternals(pool); err != nil {
+		t.Fatalf("pool internal state corrupted: %v", err)
 	}
 }
