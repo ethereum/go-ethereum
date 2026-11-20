@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"math/rand"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -111,6 +112,7 @@ func newTestTxFetcher() *TxFetcher {
 			return make([]error, len(txs))
 		},
 		func(string, []common.Hash) error { return nil },
+		nil,
 		nil,
 		nil,
 		newTestBlobBuffer(),
@@ -2260,6 +2262,7 @@ func TestTransactionForgotten(t *testing.T) {
 		func(string, []common.Hash) error { return nil },
 		func(string) {},
 		nil,
+		nil,
 		newTestBlobBuffer(),
 		mockClock,
 		mockTime,
@@ -2340,4 +2343,208 @@ func TestTransactionForgotten(t *testing.T) {
 	if size := fetcher.underpriced.Len(); size != 1 {
 		t.Errorf("wrong final underpriced cache size: got %d, want 1", size)
 	}
+}
+
+// resultRecorder is a thread-safe recorder for onRequestResult callbacks.
+type resultRecorder struct {
+	mu      sync.Mutex
+	samples []resultSample
+}
+
+type resultSample struct {
+	peer    string
+	latency time.Duration
+	timeout bool
+}
+
+func (r *resultRecorder) record(peer string, latency time.Duration, timeout bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.samples = append(r.samples, resultSample{peer, latency, timeout})
+}
+
+func (r *resultRecorder) snapshot() []resultSample {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.samples)
+}
+
+// TestTransactionFetcherRequestResultOnDelivery asserts that an in-time
+// direct delivery fires the onRequestResult callback with timeout=false and
+// the round trip to the reply's arrival: the time spent processing the reply
+// is not charged to the peer.
+func TestTransactionFetcherRequestResultOnDelivery(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			var f *TxFetcher
+			f = NewTxFetcher(
+				nil,
+				func(common.Hash, byte) error { return nil },
+				func(txs []*types.Transaction) []error {
+					// Model slow local processing of the reply.
+					f.clock.(*mclock.Simulated).Run(time.Second)
+					return make([]error, len(txs))
+				},
+				func(string, []common.Hash) error { return nil },
+				nil, nil, rec.record,
+				newTestBlobBuffer(),
+			)
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doWait{time: 200 * time.Millisecond, step: false},
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			doFunc(func() {
+				samples := rec.snapshot()
+				if len(samples) != 1 {
+					t.Fatalf("expected 1 sample, got %d (%v)", len(samples), samples)
+				}
+				if samples[0].peer != "A" {
+					t.Errorf("peer mismatch: got %q, want A", samples[0].peer)
+				}
+				if samples[0].latency != 200*time.Millisecond {
+					t.Errorf("latency mismatch: got %v, want 200ms", samples[0].latency)
+				}
+				if samples[0].timeout {
+					t.Error("expected timeout=false for delivery")
+				}
+			}),
+		},
+	})
+}
+
+// TestTransactionFetcherRequestResultProcessingPastTimeout asserts that a reply
+// which arrives in time, but whose processing outlasts the fetch timeout, is
+// recorded once, as a timeout: the timeout fires while the reply is still being
+// processed, and the eventual delivery adds no success sample on top.
+func TestTransactionFetcherRequestResultProcessingPastTimeout(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			var f *TxFetcher
+			f = NewTxFetcher(
+				nil,
+				func(common.Hash, byte) error { return nil },
+				func(txs []*types.Transaction) []error {
+					// Processing runs past the fetch timeout, which fires
+					// meanwhile; wait for the fetcher to handle it.
+					f.clock.(*mclock.Simulated).Run(txFetchTimeout)
+					<-f.step
+					return make([]error, len(txs))
+				},
+				func(string, []common.Hash) error { return nil },
+				nil, nil, rec.record,
+				newTestBlobBuffer(),
+			)
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doWait{time: 200 * time.Millisecond, step: false},
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			doFunc(func() {
+				samples := rec.snapshot()
+				if len(samples) != 1 || !samples[0].timeout {
+					t.Fatalf("expected exactly one timeout sample, got %v", samples)
+				}
+			}),
+		},
+	})
+}
+
+// TestTransactionFetcherRequestResultOnTimeout asserts that a timed-out
+// request fires onRequestResult exactly once, with timeout=true and the
+// timeout value: not again on later timeout ticks while the request stays
+// dangling, and not for the eventual late delivery.
+func TestTransactionFetcherRequestResultOnTimeout(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			f := newTestTxFetcher()
+			f.onRequestResult = rec.record
+			return f
+		},
+		steps: []interface{}{
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doWait{time: txFetchTimeout, step: true},
+			doFunc(func() {
+				samples := rec.snapshot()
+				if len(samples) != 1 {
+					t.Fatalf("expected 1 timeout sample, got %d (%v)", len(samples), samples)
+				}
+				if samples[0].peer != "A" {
+					t.Errorf("peer mismatch: got %q, want A", samples[0].peer)
+				}
+				if samples[0].latency != txFetchTimeout {
+					t.Errorf("latency mismatch: got %v, want %v", samples[0].latency, txFetchTimeout)
+				}
+				if !samples[0].timeout {
+					t.Error("expected timeout=true for timed-out request")
+				}
+			}),
+			// The dangling request re-arms the timer; another timeout window
+			// elapses. The sample count must not grow.
+			doWait{time: txFetchTimeout, step: true},
+			doFunc(func() {
+				if n := len(rec.snapshot()); n != 1 {
+					t.Fatalf("dangling request re-fired timeout sample: got %d, want 1", n)
+				}
+			}),
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0]}, direct: true},
+			doFunc(func() {
+				if len(rec.snapshot()) != 1 {
+					t.Fatalf("late delivery double-counted: got %d samples, want 1", len(rec.snapshot()))
+				}
+			}),
+		},
+	})
+}
+
+// TestTransactionFetcherRequestResultRequiresAcceptedRequest asserts that a
+// reply which delivers the requested hash only as a reject/duplicate while
+// getting an unrelated tx accepted records no latency sample — the accepted
+// tx must itself be one we requested. This also covers the simpler farming
+// attempts: a reply of only duplicates, or only unrequested valid txs.
+func TestTransactionFetcherRequestResultRequiresAcceptedRequest(t *testing.T) {
+	rec := &resultRecorder{}
+	testTransactionFetcherParallel(t, txFetcherTest{
+		init: func() *TxFetcher {
+			return NewTxFetcher(
+				nil,
+				func(common.Hash, byte) error { return nil },
+				func(txs []*types.Transaction) []error {
+					// Reject the requested hash as a duplicate; accept the rest.
+					errs := make([]error, len(txs))
+					for i, tx := range txs {
+						if tx.Hash() == testTxsHashes[0] {
+							errs[i] = txpool.ErrAlreadyKnown
+						}
+					}
+					return errs
+				},
+				func(string, []common.Hash) error { return nil },
+				nil, nil, rec.record,
+				newTestBlobBuffer(),
+			)
+		},
+		steps: []interface{}{
+			// Request goes out for tx[0]...
+			doTxNotify{peer: "A", hashes: []common.Hash{testTxsHashes[0]}, types: []byte{testTxs[0].Type()}, sizes: []uint32{uint32(testTxs[0].Size())}},
+			doWait{time: txArriveTimeout, step: true},
+			doWait{time: 200 * time.Millisecond, step: false},
+			// ...peer replies with requested tx[0] (rejected as duplicate) plus
+			// an unrequested tx[1] (accepted). No requested hash was accepted.
+			doTxEnqueue{peer: "A", txs: []*types.Transaction{testTxs[0], testTxs[1]}, direct: true},
+			doFunc(func() {
+				if samples := rec.snapshot(); len(samples) != 0 {
+					t.Fatalf("expected no sample when only an unrequested tx was accepted, got %d (%v)", len(samples), samples)
+				}
+			}),
+		},
+	})
 }
