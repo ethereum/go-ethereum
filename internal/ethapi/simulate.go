@@ -434,6 +434,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 
 		// EoA check is always skipped, even in validation mode.
 		sim.state.SetTxContext(txHash, i, uint32(i+1))
+		// Simulated transactions are unsigned, so an earlier call can have the same
+		// hash. The state keys logs by transaction hash and still holds the logs of
+		// that call. Count them, so that the receipt keeps only the logs of this call.
+		earlierLogs := len(sim.state.GetLogs(txHash, blockContext.BlockNumber.Uint64(), common.Hash{}, blockContext.Time))
 		msg := call.ToMessage(header.BaseFee, !sim.validate)
 		if !sim.validate {
 			msg.SkipExecutionGasCapCheck()
@@ -451,6 +455,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			root = sim.state.IntermediateRoot(evm.GetRules()).Bytes()
 		}
 		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, blockContext.Time, tx, gp.CumulativeUsed(), root)
+		if earlierLogs > 0 {
+			receipts[i].Logs = receipts[i].Logs[earlierLogs:]
+			receipts[i].Bloom = types.CreateBloom(receipts[i])
+		}
 		blobGasUsed += receipts[i].BlobGasUsed
 
 		// Make sure the gas cap is still enforced. It's only for
