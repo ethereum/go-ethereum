@@ -1,3 +1,5 @@
+github.com/0xPolygonHermez/zisk/ziskasm/lang/go v0.0.0-20261103142117-f557332704da h1:9Pree+vh/Iyw2hNM4uU1xyKHklDx/BNecITaUdVDisM=
+github.com/0xPolygonHermez/zisk/ziskasm/lang/go v0.0.0-20261103142117-f557332704da/go.mod h1:MkugAeT3E1UshcRX9u5F6/z5QLIZMZ+Z7FCTA6rhGCs=
 github.com/Azure/azure-sdk-for-go/sdk/azcore v1.7.0 h1:8q4SaHjFsClSvuVne0ID/5Ka8u3fcIHyqkLjcFpNRHQ=
 github.com/Azure/azure-sdk-for-go/sdk/azcore v1.7.0/go.mod h1:bjGvMhVMb+EEm3VRNQawDMUyMMjo+S5ewNjflkep/0Q=
 github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.0 h1:vcYCAze6p19qBW7MhZybIsqD8sMV8js0NyQM8JDnVtg=
