@@ -19,13 +19,14 @@ package jsre
 import (
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/dop251/goja"
-	"github.com/fatih/color"
+	"github.com/mattn/go-isatty"
 )
 
 const (
@@ -33,12 +34,28 @@ const (
 	indentString        = "  "
 )
 
+// colorEnabled mirrors the default color-enablement logic of common terminal
+// color libraries: colors are disabled when NO_COLOR is set, when TERM is
+// "dumb", or when stdout is not a terminal.
+var colorEnabled = os.Getenv("NO_COLOR") == "" &&
+	os.Getenv("TERM") != "dumb" &&
+	(isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd()))
+
+func colorize(code string) func(format string, args ...interface{}) string {
+	return func(format string, args ...interface{}) string {
+		if !colorEnabled {
+			return fmt.Sprintf(format, args...)
+		}
+		return "\x1b[" + code + "m" + fmt.Sprintf(format, args...) + "\x1b[0m"
+	}
+}
+
 var (
-	FunctionColor = color.New(color.FgMagenta).SprintfFunc()
-	SpecialColor  = color.New(color.Bold).SprintfFunc()
-	NumberColor   = color.New(color.FgRed).SprintfFunc()
-	StringColor   = color.New(color.FgGreen).SprintfFunc()
-	ErrorColor    = color.New(color.FgHiRed).SprintfFunc()
+	FunctionColor = colorize("35") // magenta
+	SpecialColor  = colorize("1")  // bold
+	NumberColor   = colorize("31") // red
+	StringColor   = colorize("32") // green
+	ErrorColor    = colorize("91") // hi-red
 )
 
 // these fields are hidden when printing objects.

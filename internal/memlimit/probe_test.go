@@ -19,7 +19,7 @@ package memlimit
 import "testing"
 
 // TestLimitSmoke asserts that Limit() returns a non-zero value,
-// exercising the real probe and the gopsutil fallback.
+// exercising the real probe and the system-memory fallback.
 func TestLimitSmoke(t *testing.T) {
 	bytes, src := Limit()
 	if bytes == 0 {
