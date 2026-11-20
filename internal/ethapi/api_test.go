@@ -2697,6 +2697,65 @@ func TestSimulateV1TxSender(t *testing.T) {
 	require.Equal(t, sender2, summary[1].Transactions[0].From, "sender address mismatch")
 }
 
+// TestSimulateV1TxType checks that a call with gasPrice and a blob or authorization
+// list is recorded with the type of its list, with gasPrice as both fee caps, and
+// that a call with both lists is rejected.
+func TestSimulateV1TxType(t *testing.T) {
+	var (
+		sender     = common.Address{0xaa, 0xaa}
+		recipient  = common.Address{0xbb, 0xbb}
+		gas        = hexutil.Uint64(100000)
+		gasPrice   = (*hexutil.Big)(big.NewInt(1))
+		accessList = types.AccessList{{Address: recipient}}
+		authList   = []types.SetCodeAuthorization{{Address: recipient}}
+		blobs      = []common.Hash{{0x01}}
+		gspec      = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc:  types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}},
+		}
+		ctx = context.Background()
+	)
+	backend := newTestBackend(t, 0, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+	stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(ctx, rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+	if err != nil {
+		t.Fatalf("failed to get state and header: %v", err)
+	}
+	sim := &simulator{
+		b:           backend,
+		state:       stateDB,
+		base:        baseHeader,
+		chainConfig: backend.ChainConfig(),
+		budget:      newGasBudget(0),
+		fullTx:      true,
+	}
+	_, err = sim.execute(ctx, []simBlock{{Calls: []TransactionArgs{
+		{From: &sender, To: &recipient, GasPrice: gasPrice, AuthorizationList: authList, BlobHashes: blobs},
+	}}})
+	var invalidParams *invalidParamsError
+	require.ErrorAs(t, err, &invalidParams)
+
+	results, err := sim.execute(ctx, []simBlock{{Calls: []TransactionArgs{
+		{From: &sender, To: &recipient, Gas: &gas, GasPrice: gasPrice, AccessList: &accessList, AuthorizationList: authList},
+		{From: &sender, To: &recipient, Gas: &gas, GasPrice: gasPrice, BlobHashes: blobs},
+	}}})
+	if err != nil {
+		t.Fatalf("simulation execution failed: %v", err)
+	}
+	block := results[0].Block
+	txs := block.Transactions()
+	require.Len(t, txs, 2)
+	require.Equal(t, uint8(types.SetCodeTxType), txs[0].Type())
+	require.Len(t, txs[0].SetCodeAuthorizations(), 1)
+	require.Equal(t, accessList, txs[0].AccessList())
+	require.Equal(t, uint8(types.BlobTxType), txs[1].Type())
+	require.Equal(t, blobs, txs[1].BlobHashes())
+	require.Equal(t, uint64(params.BlobTxBlobGasPerBlob), *block.BlobGasUsed())
+	for _, tx := range txs {
+		require.Equal(t, gasPrice.ToInt(), tx.GasFeeCap())
+		require.Equal(t, gasPrice.ToInt(), tx.GasTipCap())
+	}
+}
+
 // TestSimulateV1LogIndex checks that logs which are dropped because their call or call frame
 // failed do not use a log index, so the indices match the ones in receipts.
 func TestSimulateV1LogIndex(t *testing.T) {
