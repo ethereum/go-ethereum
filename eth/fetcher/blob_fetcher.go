@@ -363,7 +363,18 @@ func (f *BlobFetcher) loop() {
 				// Decide full or partial request
 				if _, ok := f.full[hash]; !ok {
 					if _, ok := f.partial[hash]; !ok {
-						// Not decided yet
+						// Not decided yet.
+						//
+						// Deciding a fetch only makes progress from an
+						// announcement that carries the full cell set: a full
+						// request needs an announcer holding all the cells, and
+						// the availability check that precedes a partial request
+						// is only started from a full-custody announcement
+						// below. Leave the tx undecided otherwise, so that no
+						// state is kept for an announcement we ignore.
+						if ann.cells != types.CustodyBitmapAll {
+							continue
+						}
 						var randomValue int
 						if f.rand == nil {
 							randomValue = rand.Intn(100)
@@ -372,12 +383,6 @@ func (f *BlobFetcher) loop() {
 						}
 						// For eager mode, always fetch immediately
 						if uint64(randomValue) < f.fetchProbability || f.custody.OneCount() >= kzg4844.DataPerBlob {
-							// A full request needs an announcer holding all the
-							// cells. Leave the tx undecided otherwise, so that
-							// no state is kept for an announcement we ignore.
-							if ann.cells != types.CustodyBitmapAll {
-								continue
-							}
 							f.full[hash] = struct{}{}
 						} else {
 							f.partial[hash] = struct{}{}
