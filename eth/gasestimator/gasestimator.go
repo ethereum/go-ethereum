@@ -48,8 +48,9 @@ type Options struct {
 }
 
 // Estimate returns the lowest possible gas limit that allows the transaction to
-// run successfully with the provided context options. It returns an error if the
-// transaction would always revert, or if there are unexpected failures.
+// run successfully with the provided context options, without more of its
+// nested calls failing than when it is given ample gas. It returns an error if
+// the transaction would always revert, or if there are unexpected failures.
 func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uint64) (uint64, []byte, error) {
 	// Binary search the gas limit, as it may need to be higher than the amount used
 	var (
@@ -124,7 +125,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	// tx field combos that bump the price up (e.g. unused access list items).
 	if len(call.Data) == 0 {
 		if call.To != nil && opts.State.GetCodeSize(*call.To) == 0 {
-			failed, result, err := execute(ctx, call, opts, params.TxGas)
+			failed, _, result, err := execute(ctx, call, opts, params.TxGas, -1)
 			if !failed && err == nil {
 				return result.UsedGas, nil, nil
 			}
@@ -132,7 +133,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	}
 	// We first execute the transaction at the highest allowable gas limit, since if this fails we
 	// can return error immediately.
-	failed, result, err := execute(ctx, call, opts, hi)
+	failed, failedCalls, result, err := execute(ctx, call, opts, hi, -1)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -141,6 +142,22 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 			return 0, result.Revert(), result.Err
 		}
 		return 0, nil, fmt.Errorf("gas required exceeds allowance (%d)", hi)
+	}
+	// A gas limit only counts as sufficient if no more nested calls fail than in
+	// a reference execution. Otherwise the search can settle on a limit where an
+	// inner call runs out of gas, the caller catches the failure and the
+	// transaction succeeds while doing something else than intended.
+	//
+	// After Amsterdam, gas above MaxTxGas only feeds the state gas reservoir. A
+	// call that completes an inner call only with a reservoir would otherwise be
+	// sized past MaxTxGas, so the execution at MaxTxGas is the reference when it
+	// succeeds.
+	allowedFailures := failedCalls
+	if isAmsterdam && hi > params.MaxTxGas {
+		cappedFailed, cappedCalls, _, cappedErr := execute(ctx, call, opts, params.MaxTxGas, -1)
+		if cappedErr == nil && !cappedFailed && cappedCalls > allowedFailures {
+			allowedFailures = cappedCalls
+		}
 	}
 	// For almost any transaction, the gas consumed by the unconstrained execution
 	// above lower-bounds the gas limit required for it to succeed. One exception
@@ -154,7 +171,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	// check that gas amount and use as a limit for the binary search.
 	optimisticGasLimit := (result.MaxUsedGas + params.CallStipend) * 64 / 63
 	if optimisticGasLimit < hi {
-		failed, _, err = execute(ctx, call, opts, optimisticGasLimit)
+		failed, _, _, err = execute(ctx, call, opts, optimisticGasLimit, allowedFailures)
 		if err != nil {
 			// This should not happen under normal conditions since if we make it this far the
 			// transaction had run without error at least once before.
@@ -185,7 +202,7 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 			// range here is skewed to favor the low side.
 			mid = lo * 2
 		}
-		failed, _, err = execute(ctx, call, opts, mid)
+		failed, _, _, err = execute(ctx, call, opts, mid, allowedFailures)
 		if err != nil {
 			// This should not happen under normal conditions since if we make it this far the
 			// transaction had run without error at least once before.
@@ -203,31 +220,34 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 
 // execute is a helper that executes the transaction under a given gas limit and
 // returns true if the transaction fails for a reason that might be related to
-// not enough gas. A non-nil error means execution failed due to reasons unrelated
-// to the gas limit.
-func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit uint64) (bool, *core.ExecutionResult, error) {
+// not enough gas: the transaction itself fails, or more than maxFailedCalls of
+// its nested calls fail (a negative maxFailedCalls skips that check). It also
+// returns how many nested calls failed. A non-nil error means execution failed
+// due to reasons unrelated to the gas limit.
+func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit uint64, maxFailedCalls int) (bool, int, *core.ExecutionResult, error) {
 	// Configure the call for this specific execution (and revert the change after)
 	defer func(gas uint64) { call.GasLimit = gas }(call.GasLimit)
 	call.GasLimit = gasLimit
 
 	// Execute the call and separate execution faults caused by a lack of gas or
 	// other non-fixable conditions
-	result, err := run(ctx, call, opts)
+	result, failedCalls, err := run(ctx, call, opts)
 	if err != nil {
 		if errors.Is(err, core.ErrIntrinsicGas) {
-			return true, nil, nil // Special case, raise gas limit
+			return true, 0, nil, nil // Special case, raise gas limit
 		}
 		if errors.Is(err, core.ErrGasLimitTooHigh) {
-			return true, nil, nil // Special case, lower gas limit
+			return true, 0, nil, nil // Special case, lower gas limit
 		}
-		return true, nil, err // Bail out
+		return true, 0, nil, err // Bail out
 	}
-	return result.Failed(), result, nil
+	failed := result.Failed() || (maxFailedCalls >= 0 && failedCalls > maxFailedCalls)
+	return failed, failedCalls, result, nil
 }
 
 // run assembles the EVM as defined by the consensus rules and runs the requested
-// call invocation.
-func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
+// call invocation. It also returns how many nested calls failed.
+func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, int, error) {
 	// Assemble the call and the call context
 	var (
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
@@ -260,10 +280,10 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	// Execute the call, returning a wrapped error or the result
 	result, err := core.ApplyMessage(evm, call, nil)
 	if vmerr := dirtyState.Error(); vmerr != nil {
-		return nil, vmerr
+		return nil, 0, vmerr
 	}
 	if err != nil {
-		return result, fmt.Errorf("failed with %d gas: %w", call.GasLimit, err)
+		return result, 0, fmt.Errorf("failed with %d gas: %w", call.GasLimit, err)
 	}
-	return result, nil
+	return result, evm.FailedCalls(), nil
 }

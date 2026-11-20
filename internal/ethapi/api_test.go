@@ -1038,6 +1038,104 @@ func TestEstimateGas(t *testing.T) {
 	}
 }
 
+// TestEstimateGasNestedCallFailures checks that eth_estimateGas does not return a
+// gas limit that starves a nested call which the caller catches, while a nested
+// call that fails at any gas limit leaves the estimate alone.
+func TestEstimateGasNestedCallFailures(t *testing.T) {
+	t.Parallel()
+	var (
+		accounts = newAccounts(1)
+		burner   = common.HexToAddress("0x000000000000000000000000000000000000b001")
+		catcher  = common.HexToAddress("0x000000000000000000000000000000000000ca01")
+		prober   = common.HexToAddress("0x000000000000000000000000000000000000ca02")
+		genesis  = &core.Genesis{
+			Config: params.MergedTestChainConfig,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+				// Loops 3000 times, about 78,000 gas:
+				//   PUSH2 3000 JUMPDEST PUSH1 1 SWAP1 SUB DUP1 PUSH1 3 JUMPI STOP
+				burner: {Code: common.FromHex("0x610bb85b600190038060035700")},
+				// Calls the burner with all gas left and returns whether it succeeded:
+				//   PUSH1 0 x5 PUSH20 burner GAS CALL PUSH1 0 MSTORE PUSH1 32 PUSH1 0 RETURN
+				catcher: {Code: common.FromHex("0x6000600060006000600073" + burner.Hex()[2:] + "5af160005260206000f3")},
+				// Calls the burner with 1,000 gas, which always runs out, and returns
+				// whether it succeeded:
+				//   PUSH1 0 x5 PUSH20 burner PUSH2 1000 CALL PUSH1 0 MSTORE PUSH1 32 PUSH1 0 RETURN
+				prober: {Code: common.FromHex("0x6000600060006000600073" + burner.Hex()[2:] + "6103e8f160005260206000f3")},
+			},
+		}
+		api    = NewBlockChainAPI(newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil))
+		latest = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		ok     = common.LeftPadBytes([]byte{1}, 32)
+	)
+	// The estimate must leave the burner enough gas to finish.
+	args := TransactionArgs{From: &accounts[0].addr, To: &catcher}
+	gas, err := api.EstimateGas(context.Background(), args, &latest, nil, nil)
+	if err != nil {
+		t.Fatalf("catcher: estimate failed: %v", err)
+	}
+	args.Gas = &gas
+	out, err := api.Call(context.Background(), args, &latest, nil, nil)
+	if err != nil {
+		t.Fatalf("catcher: call at estimate %d failed: %v", gas, err)
+	}
+	if !bytes.Equal(out, ok) {
+		t.Errorf("catcher: nested call fails at estimate %d", gas)
+	}
+
+	// A nested call that runs out of gas at every limit must not inflate the
+	// estimate.
+	args = TransactionArgs{From: &accounts[0].addr, To: &prober}
+	gas, err = api.EstimateGas(context.Background(), args, &latest, nil, nil)
+	if err != nil {
+		t.Fatalf("prober: estimate failed: %v", err)
+	}
+	if gas > 100_000 {
+		t.Errorf("prober: estimate %d inflated by a nested call that always fails", gas)
+	}
+}
+
+// TestEstimateGasNestedCallReservoirAmsterdam checks that after Amsterdam
+// (EIP-8037) a nested call that completes only with a state gas reservoir does
+// not push the estimate past params.MaxTxGas.
+func TestEstimateGasNestedCallReservoirAmsterdam(t *testing.T) {
+	t.Parallel()
+	const gasCap = 50_000_000
+	var (
+		accounts = newAccounts(1)
+		storer   = common.HexToAddress("0x000000000000000000000000000000000000b002")
+		catcher  = common.HexToAddress("0x000000000000000000000000000000000000ca03")
+		config   = *params.MergedTestChainConfig
+		genesis  = &core.Genesis{
+			Config:     &config,
+			Difficulty: common.Big0,
+			GasLimit:   60_000_000,
+			Alloc: types.GenesisAlloc{
+				accounts[0].addr: {Balance: new(big.Int).Mul(big.NewInt(10), big.NewInt(params.Ether))},
+				// Sets a fresh storage slot: PUSH1 1 PUSH1 0 SSTORE STOP
+				storer: {Code: common.FromHex("0x600160005500")},
+				// Calls the storer with 30,000 gas, too little for the new slot's
+				// state gas unless a reservoir pays it, and returns whether it
+				// succeeded:
+				//   PUSH1 0 x5 PUSH20 storer PUSH2 30000 CALL PUSH1 0 MSTORE PUSH1 32 PUSH1 0 RETURN
+				catcher: {Code: common.FromHex("0x6000600060006000600073" + storer.Hex()[2:] + "617530f160005260206000f3")},
+			},
+		}
+	)
+	config.AmsterdamTime = new(uint64)
+	backend := newTestBackend(t, 0, genesis, beacon.New(ethash.NewFaker()), nil)
+
+	args := TransactionArgs{From: &accounts[0].addr, To: &catcher}
+	latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+	gas, err := DoEstimateGas(context.Background(), backend, args, latest, nil, nil, gasCap)
+	if err != nil {
+		t.Fatalf("estimate failed: %v", err)
+	}
+	if uint64(gas) >= params.MaxTxGas {
+		t.Errorf("estimate %d reaches past MaxTxGas %d to fund the nested call from the reservoir", gas, params.MaxTxGas)
+	}
+}
+
 func TestCall(t *testing.T) {
 	t.Parallel()
 
