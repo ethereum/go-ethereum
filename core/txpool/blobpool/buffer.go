@@ -116,6 +116,7 @@ type BlobBufferFunctions struct {
 	ValidateTx func(*types.Transaction) error
 	AddToPool  func(*BlobTxForPool) error
 	DropPeer   func(string)
+	Refund     func(peer string, cells int)
 }
 
 func NewBlobBuffer(cb BlobBufferFunctions) *BlobBuffer {
@@ -293,6 +294,7 @@ func (b *BlobBuffer) storeCompleted(hash common.Hash, txe *txEntry, cells *cellE
 	b.completedCount.Add(1)
 	b.removeCells(hash)
 	b.removeTx(hash)
+	b.refundPeers(cells.deliveries)
 }
 
 func (b *BlobBuffer) HasTx(hash common.Hash) bool {
@@ -427,6 +429,15 @@ func (b *BlobBuffer) dropPeers(peers []string) {
 	}
 	for _, p := range peers {
 		b.cb.DropPeer(p)
+	}
+}
+
+func (b *BlobBuffer) refundPeers(deliveries map[string]*PeerDelivery) {
+	if b.cb.Refund == nil {
+		return
+	}
+	for peer, delivery := range deliveries {
+		b.cb.Refund(peer, len(delivery.Indices))
 	}
 }
 

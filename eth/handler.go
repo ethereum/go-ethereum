@@ -232,6 +232,9 @@ func newHandler(config *handlerConfig) (*handler, error) {
 		ValidateTx: h.blobpool.ValidateTxBasics,
 		AddToPool:  h.blobpool.AddPooledTx,
 		DropPeer:   h.removePeer,
+		Refund: func(peer string, cells int) {
+			h.blobFetcher.Refund(peer, cells)
+		},
 	})
 
 	addTxs := func(txs []*types.Transaction) []error {
