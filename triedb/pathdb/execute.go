@@ -19,6 +19,7 @@ package pathdb
 import (
 	"errors"
 	"fmt"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -27,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/ethereum/go-ethereum/trie/trienode"
 	"github.com/ethereum/go-ethereum/triedb/database"
+	"golang.org/x/sync/errgroup"
 )
 
 // context wraps all fields for executing state diffs.
@@ -41,6 +43,17 @@ type context struct {
 	// TODO (rjl493456442) abstract out the state hasher
 	// for supporting binary tree.
 	accountTrie *trie.Trie
+}
+
+// accountRevert holds an account's prev-state value and the result of its
+// storage revert.
+type accountRevert struct {
+	addr     common.Address
+	addrHash common.Hash
+	prev     *types.StateAccount // nil if the account is absent in prev-state
+
+	root  common.Hash       // storage root after the revert, set by the worker
+	nodes *trienode.NodeSet // modified storage trie nodes, set by the worker
 }
 
 // apply processes the given state diffs, updates the corresponding post-state
@@ -59,20 +72,23 @@ func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash,
 		rawStorageKey: rawStorageKey,
 		nodes:         trienode.NewMergedNodeSet(),
 	}
-	var deletes []common.Address
-	for addr, account := range accounts {
-		if len(account) == 0 {
-			deletes = append(deletes, addr)
+	reverts, err := revertAccounts(ctx, db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to revert state, err: %w", err)
+	}
+	// Write the accounts present in prev-state first and delete the others
+	// afterwards. The modified nodes depend on the order: a deletion can
+	// collapse a node that a later insertion recreates unchanged.
+	var updates, deletes []*accountRevert
+	for _, r := range reverts {
+		if r.prev == nil {
+			deletes = append(deletes, r)
 		} else {
-			err := updateAccount(ctx, db, addr)
-			if err != nil {
-				return nil, fmt.Errorf("failed to revert state, err: %w", err)
-			}
+			updates = append(updates, r)
 		}
 	}
-	for _, addr := range deletes {
-		err := deleteAccount(ctx, db, addr)
-		if err != nil {
+	for _, r := range append(updates, deletes...) {
+		if err := finishRevert(ctx, r); err != nil {
 			return nil, fmt.Errorf("failed to revert state, err: %w", err)
 		}
 	}
@@ -86,36 +102,95 @@ func apply(db database.NodeDatabase, prevRoot common.Hash, postRoot common.Hash,
 	return ctx.nodes.Nodes(), nil
 }
 
-// updateAccount the account was present in prev-state, and may or may not
-// existent in post-state. Apply the reverse diff and verify if the storage
-// root matches the one in prev-state account.
-func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) error {
-	// The account was present in prev-state, decode it from the
-	// 'slim-rlp' format bytes.
-	addrHash := crypto.Keccak256Hash(addr.Bytes())
-	prev, err := types.FullAccount(ctx.accounts[addr])
-	if err != nil {
-		return err
+// revertAccounts reads the accounts after resolving their paths in the account
+// trie in parallel, and reverts their storage tries concurrently.
+func revertAccounts(ctx *context, db database.NodeDatabase) ([]*accountRevert, error) {
+	keys := make([][]byte, 0, len(ctx.accounts))
+	for addr := range ctx.accounts {
+		keys = append(keys, crypto.Keccak256(addr.Bytes()))
 	}
-	// The account may or may not existent in post-state, try to
-	// load it and decode if it's found.
-	blob, err := ctx.accountTrie.Get(addrHash.Bytes())
+	if err := ctx.accountTrie.Prefetch(keys); err != nil {
+		return nil, err
+	}
+	var (
+		reverts = make([]*accountRevert, 0, len(ctx.accounts))
+		workers errgroup.Group
+	)
+	workers.SetLimit(runtime.GOMAXPROCS(0))
+	for addr := range ctx.accounts {
+		r, postStorageRoot, err := prepareRevert(ctx, addr)
+		if err != nil {
+			workers.Wait()
+			return nil, err
+		}
+		if r == nil {
+			continue
+		}
+		reverts = append(reverts, r)
+		workers.Go(func() error {
+			return revertStorage(ctx, db, r, postStorageRoot)
+		})
+	}
+	if err := workers.Wait(); err != nil {
+		return nil, err
+	}
+	return reverts, nil
+}
+
+// prepareRevert decodes the account's prev-state value and resolves its
+// post-state storage root. An account absent in prev-state must have only
+// storage deletions. If it is also absent in post-state, as can happen in a
+// merged history, nil is returned because there is nothing to revert.
+func prepareRevert(ctx *context, addr common.Address) (*accountRevert, common.Hash, error) {
+	r := &accountRevert{
+		addr:     addr,
+		addrHash: crypto.Keccak256Hash(addr.Bytes()),
+	}
+	if blob := ctx.accounts[addr]; len(blob) != 0 {
+		// The account was present in prev-state, decode it from the
+		// 'slim-rlp' format bytes.
+		prev, err := types.FullAccount(blob)
+		if err != nil {
+			return nil, common.Hash{}, err
+		}
+		r.prev = prev
+	}
+	blob, err := ctx.accountTrie.Get(r.addrHash.Bytes())
 	if err != nil {
-		return err
+		return nil, common.Hash{}, err
 	}
 	post := types.NewEmptyStateAccount()
 	if len(blob) != 0 {
 		if err := rlp.DecodeBytes(blob, &post); err != nil {
-			return err
+			return nil, common.Hash{}, err
 		}
 	}
-	// Apply all storage changes into the post-state storage trie.
-	st, err := trie.New(trie.StorageTrieID(ctx.postRoot, addrHash, post.Root), db)
+	if r.prev == nil {
+		for _, val := range ctx.storages[addr] {
+			if len(val) == 0 {
+				continue
+			}
+			if len(blob) == 0 {
+				return nil, common.Hash{}, fmt.Errorf("account is non-existent %#x", r.addrHash)
+			}
+			return nil, common.Hash{}, errors.New("expect storage deletion")
+		}
+		if len(blob) == 0 {
+			return nil, common.Hash{}, nil
+		}
+	}
+	return r, post.Root, nil
+}
+
+// revertStorage applies the account's storage diffs to its post-state storage
+// trie and commits it.
+func revertStorage(ctx *context, db database.NodeDatabase, r *accountRevert, postStorageRoot common.Hash) error {
+	st, err := trie.New(trie.StorageTrieID(ctx.postRoot, r.addrHash, postStorageRoot), db)
 	if err != nil {
 		return err
 	}
 	var deletes []common.Hash
-	for key, val := range ctx.storages[addr] {
+	for key, val := range ctx.storages[r.addr] {
 		tkey := key
 		if ctx.rawStorageKey {
 			tkey = crypto.Keccak256Hash(key.Bytes())
@@ -135,69 +210,35 @@ func updateAccount(ctx *context, db database.NodeDatabase, addr common.Address) 
 			return err
 		}
 	}
-	root, result := st.Commit(false)
-	if root != prev.Root {
+	r.root, r.nodes = st.Commit(false)
+	return nil
+}
+
+// finishRevert verifies the reverted storage root and writes the prev-state
+// account into the account trie, or deletes it if absent in prev-state.
+func finishRevert(ctx *context, r *accountRevert) error {
+	if r.prev == nil {
+		if r.root != types.EmptyRootHash {
+			return errors.New("failed to clear storage trie")
+		}
+	} else if r.root != r.prev.Root {
 		return errors.New("failed to reset storage trie")
 	}
 	// The returned set can be nil if storage trie is not changed
 	// at all.
-	if result != nil {
-		if err := ctx.nodes.Merge(result); err != nil {
+	if r.nodes != nil {
+		if err := ctx.nodes.Merge(r.nodes); err != nil {
 			return err
 		}
+	}
+	if r.prev == nil {
+		// Delete the post-state account from the main trie.
+		return ctx.accountTrie.Delete(r.addrHash.Bytes())
 	}
 	// Write the prev-state account into the main trie
-	full, err := rlp.EncodeToBytes(prev)
+	full, err := rlp.EncodeToBytes(r.prev)
 	if err != nil {
 		return err
 	}
-	return ctx.accountTrie.Update(addrHash.Bytes(), full)
-}
-
-// deleteAccount the account was not present in prev-state, and is expected
-// to be existent in post-state. Apply the reverse diff and verify if the
-// account and storage is wiped out correctly.
-func deleteAccount(ctx *context, db database.NodeDatabase, addr common.Address) error {
-	// The account must be existent in post-state, load the account.
-	addrHash := crypto.Keccak256Hash(addr.Bytes())
-	blob, err := ctx.accountTrie.Get(addrHash.Bytes())
-	if err != nil {
-		return err
-	}
-	if len(blob) == 0 {
-		return fmt.Errorf("account is non-existent %#x", addrHash)
-	}
-	var post types.StateAccount
-	if err := rlp.DecodeBytes(blob, &post); err != nil {
-		return err
-	}
-	st, err := trie.New(trie.StorageTrieID(ctx.postRoot, addrHash, post.Root), db)
-	if err != nil {
-		return err
-	}
-	for key, val := range ctx.storages[addr] {
-		if len(val) != 0 {
-			return errors.New("expect storage deletion")
-		}
-		tkey := key
-		if ctx.rawStorageKey {
-			tkey = crypto.Keccak256Hash(key.Bytes())
-		}
-		if err := st.Delete(tkey.Bytes()); err != nil {
-			return err
-		}
-	}
-	root, result := st.Commit(false)
-	if root != types.EmptyRootHash {
-		return errors.New("failed to clear storage trie")
-	}
-	// The returned set can be nil if storage trie is not changed
-	// at all.
-	if result != nil {
-		if err := ctx.nodes.Merge(result); err != nil {
-			return err
-		}
-	}
-	// Delete the post-state account from the main trie.
-	return ctx.accountTrie.Delete(addrHash.Bytes())
+	return ctx.accountTrie.Update(r.addrHash.Bytes(), full)
 }

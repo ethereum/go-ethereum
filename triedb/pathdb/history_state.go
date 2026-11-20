@@ -587,6 +587,73 @@ func readStateHistories(freezer ethdb.AncientReader, start uint64, count uint64)
 	return histories, nil
 }
 
+// readMergedStateHistory merges up to count state histories ending with the
+// specified one. Each entry keeps its original value from the oldest history
+// containing it, so that the range can be reverted at once. A storage key
+// format change or maxRevertBatchSize ends the merge early, but the specified
+// history is always included. It returns the merged history and the number of
+// histories merged.
+func readMergedStateHistory(freezer ethdb.AncientReader, last uint64, count uint64) (*stateHistory, uint64, error) {
+	var (
+		newest   *stateHistory
+		oldest   *stateHistory
+		size     int
+		n        uint64
+		accounts = make(map[common.Address][]byte)
+		storages = make(map[common.Address]map[common.Hash][]byte)
+	)
+	for ; n < count && n < last; n++ {
+		id := last - n
+		mData, accountIndexes, storageIndexes, accountData, storageData, err := rawdb.ReadStateHistory(freezer, id)
+		if err != nil {
+			return nil, 0, err
+		}
+		encoded := len(accountIndexes) + len(storageIndexes) + len(accountData) + len(storageData)
+		if n > 0 && size+encoded > maxRevertBatchSize {
+			break
+		}
+		var m meta
+		if err := m.decode(mData); err != nil {
+			return nil, 0, err
+		}
+		if n > 0 && (m.version != stateHistoryV0) != (newest.meta.version != stateHistoryV0) {
+			break
+		}
+		size += encoded
+		h := &stateHistory{meta: &m}
+		if err := h.decode(accountData, storageData, accountIndexes, storageIndexes); err != nil {
+			return nil, 0, err
+		}
+		if n == 0 {
+			newest = h
+		} else if h.meta.root != oldest.meta.parent {
+			return nil, 0, fmt.Errorf("state histories are not contiguous, id: %d", id)
+		}
+		oldest = h
+
+		// Going backwards, the original values of older histories replace
+		// those of newer ones.
+		for addr, blob := range h.accounts {
+			accounts[addr] = blob
+		}
+		for addr, slots := range h.storages {
+			merged, ok := storages[addr]
+			if !ok {
+				merged = make(map[common.Hash][]byte, len(slots))
+				storages[addr] = merged
+			}
+			for key, blob := range slots {
+				merged[key] = blob
+			}
+		}
+	}
+	if newest == nil {
+		return nil, 0, fmt.Errorf("no state history to merge, last: %d, count: %d", last, count)
+	}
+	log.Debug("Merged state histories", "last", last, "count", n, "size", common.StorageSize(size))
+	return newStateHistory(newest.meta.root, oldest.meta.parent, newest.meta.block, accounts, storages, newest.meta.version != stateHistoryV0), n, nil
+}
+
 // writeStateHistory persists the state history associated with the given diff layer.
 func writeStateHistory(writer ethdb.AncientWriter, dl *diffLayer) error {
 	// Short circuit if state set is not available.
