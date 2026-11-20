@@ -195,7 +195,7 @@ func TestTracedFaultCost(t *testing.T) {
 			statedb.SetCode(self, tc.code, tracing.CodeChangeUnspecified)
 			statedb.Finalise(params.Rules{IsEIP158: true})
 			evm := amsterdam8037EVM(statedb)
-			var opcodes, faults int
+			var opcodes, faults, exits int
 			evm.Config.Tracer = &tracing.Hooks{
 				OnOpcodeV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
 					if pc != uint64(len(tc.code)-1) {
@@ -205,6 +205,9 @@ func TestTracedFaultCost(t *testing.T) {
 					if err != nil || cost.Execution == 0 || cost.State != tc.wantState {
 						t.Errorf("pre-execution event: cost %v, error %v", cost, err)
 					}
+					if OpCode(op) == REVERT && cost.Execution != 3 {
+						t.Errorf("REVERT cost = %d, want 3", cost.Execution)
+					}
 				},
 				OnFaultV2: func(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
 					faults++
@@ -212,13 +215,26 @@ func TestTracedFaultCost(t *testing.T) {
 						t.Errorf("fault event: cost %v, error %v; want empty cost and %v", cost, err, tc.wantErr)
 					}
 				},
+				OnExitV2: func(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
+					exits++
+					if depth != 0 || !reverted || !errors.Is(err, tc.wantErr) {
+						t.Errorf("exit: depth %d, reverted %v, error %v", depth, reverted, err)
+					}
+					if tc.wantErr == ErrExecutionReverted && (len(output) != 32 || gasLeft.Execution != 99_992) {
+						t.Errorf("REVERT exit: output %x, gas left %v", output, gasLeft)
+					}
+				},
 			}
 			_, _, err := evm.Call(common.Address{}, self, nil, NewGasBudget(100_000, 0), new(uint256.Int))
 			if !errors.Is(err, tc.wantErr) {
 				t.Fatalf("error = %v, want %v", err, tc.wantErr)
 			}
-			if opcodes != 1 || faults != 1 {
-				t.Errorf("opcode/fault events = %d/%d, want 1/1", opcodes, faults)
+			wantFaults := 1
+			if tc.wantErr == ErrExecutionReverted {
+				wantFaults = 0
+			}
+			if opcodes != 1 || faults != wantFaults || exits != 1 {
+				t.Errorf("opcode/fault/exit events = %d/%d/%d, want 1/%d/1", opcodes, faults, exits, wantFaults)
 			}
 		})
 	}

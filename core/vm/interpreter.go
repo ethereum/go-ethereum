@@ -165,7 +165,8 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 	)
 	if debug {
 		defer func() { // this deferred method handles exit-with-error
-			if err == nil {
+			// REVERT reports its rollback through OnExit.
+			if err == nil || err == ErrExecutionReverted {
 				return
 			}
 			if !logged && evm.Config.Tracer.HasOpcodeHook() {

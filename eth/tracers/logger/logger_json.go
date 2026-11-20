@@ -65,9 +65,19 @@ type jsonLogger struct {
 	env     *tracing.VMContext
 	hooks   *tracing.Hooks
 	written *countingWriter
+	pending pendingJSONLog
 
 	callFrames bool          // whether entered frames are written out
 	frames     []tracing.Gas // entry budgets of the open frames
+}
+
+// pendingJSONLog owns an encoded pre-execution snapshot until it can be written
+// with the opcode's final outcome.
+type pendingJSONLog struct {
+	data  json.RawMessage
+	pc    uint64
+	op    byte
+	depth int
 }
 
 // NewJSONLogger creates a new EVM tracer that prints execution steps as JSON objects
@@ -80,6 +90,7 @@ func NewJSONLogger(cfg *Config, writer io.Writer) *tracing.Hooks {
 	}
 	l.hooks = &tracing.Hooks{
 		OnTxStart:           l.OnTxStart,
+		OnTxEnd:             l.OnTxEnd,
 		OnSystemCallStartV2: l.onSystemCallStart,
 		OnEnterV2:           l.OnEnter,
 		OnExitV2:            l.OnExit,
@@ -105,6 +116,7 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 	}
 	l.hooks = &tracing.Hooks{
 		OnTxStart:           l.OnTxStart,
+		OnTxEnd:             l.OnTxEnd,
 		OnSystemCallStartV2: l.onSystemCallStart,
 		OnEnterV2:           l.OnEnter,
 		OnExitV2:            l.OnExit,
@@ -114,12 +126,24 @@ func NewJSONLoggerWithCallFrames(cfg *Config, writer io.Writer) *tracing.Hooks {
 	return l.hooks
 }
 
-func (l *jsonLogger) OnFault(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, depth int, err error) {
-	// TODO: Add rData to this interface as well
-	l.OnOpcode(pc, op, gas, cost, scope, nil, depth, err)
+func (l *jsonLogger) OnFault(pc uint64, op byte, _ tracing.Gas, _ tracing.OpCost, _ tracing.OpContext, depth int, err error) {
+	if err == nil || l.pending.data == nil || l.pending.pc != pc || l.pending.op != op || l.pending.depth != depth {
+		return
+	}
+	var log StructLog
+	if json.Unmarshal(l.pending.data, &log) != nil {
+		return
+	}
+	log.Err = err
+	log.GasCost = 0
+	log.StateGasCost = 0
+	l.pending.data, _ = log.MarshalJSON()
+	l.flush()
 }
 
 func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.OpCost, scope tracing.OpContext, rData []byte, depth int, err error) {
+	l.flush()
+
 	if l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
 		return
 	}
@@ -147,10 +171,30 @@ func (l *jsonLogger) OnOpcode(pc uint64, op byte, gas tracing.Gas, cost tracing.
 	if l.cfg.EnableReturnData {
 		log.ReturnData = rData
 	}
-	l.encoder.Encode(log)
+	entry, _ := log.MarshalJSON()
+	l.pending = pendingJSONLog{
+		data:  entry,
+		pc:    pc,
+		op:    op,
+		depth: depth,
+	}
+	if err != nil {
+		l.flush()
+	}
+}
+
+func (l *jsonLogger) flush() {
+	if l.pending.data == nil {
+		return
+	}
+	entry := l.pending.data
+	l.pending.data = nil
+	l.encoder.Encode(entry)
 }
 
 func (l *jsonLogger) onSystemCallStart(*tracing.VMContext) {
+	l.flush()
+
 	// Process no events while in system call.
 	hooks := *l.hooks
 	*l.hooks = tracing.Hooks{
@@ -160,8 +204,9 @@ func (l *jsonLogger) onSystemCallStart(*tracing.VMContext) {
 	}
 }
 
-// OnEnter is not enabled by default.
+// OnEnter flushes the parent opcode before any child-frame output.
 func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common.Address, input []byte, gas tracing.Gas, value *big.Int) {
+	l.flush()
 	l.frames = append(l.frames, gas)
 
 	if !l.callFrames || l.cfg.Limit != 0 && l.written.n > l.cfg.Limit {
@@ -182,6 +227,8 @@ func (l *jsonLogger) OnEnter(depth int, typ byte, from common.Address, to common
 }
 
 func (l *jsonLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err error, reverted bool) {
+	l.flush()
+
 	var gasUsed uint64
 	if n := len(l.frames); n > 0 {
 		if entry := l.frames[n-1]; entry.Execution > gasLeft.Execution {
@@ -205,5 +252,10 @@ func (l *jsonLogger) OnExit(depth int, output []byte, gasLeft tracing.Gas, err e
 }
 
 func (l *jsonLogger) OnTxStart(env *tracing.VMContext, tx *types.Transaction, from common.Address) {
+	l.flush()
 	l.env = env
+}
+
+func (l *jsonLogger) OnTxEnd(_ *types.Receipt, _ error) {
+	l.flush()
 }
