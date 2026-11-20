@@ -183,8 +183,9 @@ func die(args ...interface{}) {
 func textToRlp(r io.Reader) ([]byte, error) {
 	// We're expecting the input to be well-formed, meaning that
 	// - each element is on a separate line
-	// - each line is either an (element OR a list start/end) + comma
-	// - an element is either hex-encoded bytes OR a quoted string
+	// - each line is either an element OR a list start/end, followed by a
+	//   comma if it is inside a list
+	// - an element is either hex-encoded bytes OR a Go-quoted string
 	var (
 		scanner = bufio.NewScanner(r)
 		obj     []interface{}
@@ -202,14 +203,19 @@ func textToRlp(r io.Reader) ([]byte, error) {
 		case "]", "],": // list end
 			parent := stack.Remove(stack.Front()).([]interface{})
 			obj = append(parent, obj)
-		case "[],": // empty list
+		case "[]", "[],": // empty list
 			obj = append(obj, make([]interface{}, 0))
 		default: // element
-			data := []byte(t)[:len(t)-1] // cut off comma
-			if data[0] == '"' {          // ascii string
-				data = []byte(t)[1 : len(data)-1]
+			t = strings.TrimSuffix(t, ",")
+			var data []byte
+			if strings.HasPrefix(t, `"`) { // ascii string, quoted as by rlpToText
+				s, err := strconv.Unquote(t)
+				if err != nil {
+					return nil, err
+				}
+				data = []byte(s)
 			} else { // hex data
-				data = common.FromHex(string(data))
+				data = common.FromHex(t)
 			}
 			obj = append(obj, data)
 		}
