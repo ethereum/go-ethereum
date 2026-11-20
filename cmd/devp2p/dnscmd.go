@@ -23,11 +23,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console/prompt"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/dnsdisc"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/urfave/cli/v2"
@@ -414,4 +416,44 @@ func writeTXTJSON(file string, txt map[string]string) {
 	if err := os.WriteFile(file, txtJSON, 0644); err != nil {
 		exit(err)
 	}
+}
+
+// previousTreeRecords returns the names of all records in 'existing' that belong to the
+// tree currently published at 'name', i.e. those reachable from its root record. The
+// 'existing' map must contain lowercase names and unquoted TXT record values.
+//
+// Deployers keep these records when publishing a new tree, because resolvers may cache
+// the previous root for up to rootTTL and clients walking it would otherwise hit
+// NXDOMAIN. The records are deleted by the next deployment, when they are no longer
+// reachable from the root it replaces.
+func previousTreeRecords(name string, existing map[string]string) map[string]bool {
+	name = strings.ToLower(name)
+	live := make(map[string]bool)
+	root, ok := existing[name]
+	if !ok {
+		return live
+	}
+	var eroot, lroot string
+	if _, err := fmt.Sscanf(root, "enrtree-root:v1 e=%s l=%s", &eroot, &lroot); err != nil {
+		log.Warn("Can't parse existing root record, not retaining previous tree", "name", name, "err", err)
+		return live
+	}
+	live[name] = true
+	queue := []string{eroot, lroot}
+	for len(queue) > 0 {
+		sub := strings.ToLower(queue[0]) + "." + name
+		queue = queue[1:]
+		if live[sub] {
+			continue
+		}
+		val, ok := existing[sub]
+		if !ok {
+			continue
+		}
+		live[sub] = true
+		if children, ok := strings.CutPrefix(val, "enrtree-branch:"); ok && children != "" {
+			queue = append(queue, strings.Split(children, ",")...)
+		}
+	}
+	return live
 }
