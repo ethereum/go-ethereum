@@ -293,7 +293,7 @@ func TestUnpackIndexedFuncTyLogIntoMap(t *testing.T) {
 	copy(functionTy[:], functionTyBytes[0:24])
 	topics := []common.Hash{
 		crypto.Keccak256Hash([]byte("received(function,address,uint256,bytes)")),
-		common.BytesToHash(functionTyBytes),
+		common.BytesToHash(common.RightPadBytes(functionTyBytes, 32)),
 	}
 	mockLog := newMockLog(topics, common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"))
 	abiString := `[{"anonymous":false,"inputs":[{"indexed":true,"name":"function","type":"function"},{"indexed":false,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"},{"indexed":false,"name":"memo","type":"bytes"}],"name":"received","type":"event"}]`
