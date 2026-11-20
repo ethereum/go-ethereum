@@ -2786,6 +2786,137 @@ func TestSimulateV1LogIndex(t *testing.T) {
 	}
 }
 
+// TestSimulateV1ReceiptsEqualHash checks that the receipt of a call holds only the logs
+// of that call when an earlier call has the same transaction hash. Each case runs twice:
+// with equal hashes, and with a different gas limit in the last call, which changes its
+// hash but not its receipt, because the gas used is the same. Both runs must give the
+// same receipts root and bloom.
+func TestSimulateV1ReceiptsEqualHash(t *testing.T) {
+	t.Parallel()
+
+	var (
+		accounts  = newAccounts(3)
+		sender1   = accounts[0].addr
+		sender2   = accounts[1].addr
+		recipient = accounts[2].addr
+		emitter   = common.HexToAddress("0xc0de000000000000000000000000000000000001")
+		reverter  = common.HexToAddress("0xc0de000000000000000000000000000000000002")
+		// CALLER PUSH0 PUSH0 LOG1 STOP
+		emitterCode = hex2Bytes("335f5fa100")
+		// CALLER PUSH0 PUSH0 LOG1, then REVERT if CALLER is sender2, else STOP
+		reverterCode = hex2Bytes("335f5fa13373" + strings.TrimPrefix(sender2.Hex(), "0x") + "14601f57005b5f5ffd")
+		value        = (*hexutil.Big)(big.NewInt(1000))
+		gas          = hexutil.Uint64(100_000)
+		amsterdam    = *params.MergedTestChainConfig
+	)
+	amsterdam.AmsterdamTime = new(uint64)
+
+	for _, tc := range []struct {
+		name   string
+		config *params.ChainConfig
+		// blocks returns the simulated blocks. The last call has the given gas limit.
+		blocks func(last *hexutil.Uint64) []simBlock
+		// lastStatus is the status of the last call.
+		lastStatus uint64
+	}{
+		{
+			name:   "one block",
+			config: params.MergedTestChainConfig,
+			blocks: func(last *hexutil.Uint64) []simBlock {
+				return []simBlock{{Calls: []TransactionArgs{
+					{From: &sender1, To: &emitter, Gas: &gas},
+					{From: &sender2, To: &emitter, Gas: last},
+				}}}
+			},
+			lastStatus: types.ReceiptStatusSuccessful,
+		},
+		{
+			name:   "two blocks",
+			config: params.MergedTestChainConfig,
+			blocks: func(last *hexutil.Uint64) []simBlock {
+				return []simBlock{
+					{Calls: []TransactionArgs{{From: &sender1, To: &emitter, Gas: &gas}}},
+					{Calls: []TransactionArgs{{From: &sender2, To: &emitter, Gas: last}}},
+				}
+			},
+			lastStatus: types.ReceiptStatusSuccessful,
+		},
+		{
+			name:   "second call reverts",
+			config: params.MergedTestChainConfig,
+			blocks: func(last *hexutil.Uint64) []simBlock {
+				return []simBlock{{Calls: []TransactionArgs{
+					{From: &sender1, To: &reverter, Gas: &gas},
+					{From: &sender2, To: &reverter, Gas: last},
+				}}}
+			},
+			lastStatus: types.ReceiptStatusFailed,
+		},
+		{
+			name:   "transfer logs after amsterdam",
+			config: &amsterdam,
+			blocks: func(last *hexutil.Uint64) []simBlock {
+				return []simBlock{{Calls: []TransactionArgs{
+					{From: &sender1, To: &recipient, Value: value, Gas: &gas},
+					{From: &sender2, To: &recipient, Value: value, Gas: last},
+				}}}
+			},
+			lastStatus: types.ReceiptStatusSuccessful,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gspec := &core.Genesis{
+				Config: tc.config,
+				Alloc: types.GenesisAlloc{
+					sender1:   {Balance: big.NewInt(params.Ether)},
+					sender2:   {Balance: big.NewInt(params.Ether)},
+					recipient: {Balance: big.NewInt(1)},
+				},
+			}
+			backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+			run := func(lastGas hexutil.Uint64) []*simBlockResult {
+				stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+				if err != nil {
+					t.Fatalf("failed to get state and header: %v", err)
+				}
+				sim := &simulator{
+					b:           backend,
+					state:       stateDB,
+					base:        baseHeader,
+					chainConfig: backend.ChainConfig(),
+					budget:      newGasBudget(0),
+				}
+				blocks := tc.blocks(&lastGas)
+				blocks[0].StateOverrides = &override.StateOverride{
+					emitter:  override.OverrideAccount{Code: emitterCode},
+					reverter: override.OverrideAccount{Code: reverterCode},
+				}
+				results, err := sim.execute(context.Background(), blocks)
+				if err != nil {
+					t.Fatalf("simulation execution failed: %v", err)
+				}
+				return results
+			}
+			var (
+				equal   = run(100_000)
+				control = run(100_001)
+				hashes  = make(map[common.Hash]struct{})
+			)
+			for i := range equal {
+				for _, tx := range equal[i].Block.Transactions() {
+					hashes[tx.Hash()] = struct{}{}
+				}
+				require.Equal(t, control[i].Block.ReceiptHash(), equal[i].Block.ReceiptHash(), "block %d receipts root", i)
+				require.Equal(t, control[i].Block.Bloom(), equal[i].Block.Bloom(), "block %d bloom", i)
+			}
+			require.Len(t, hashes, 1, "expected equal transaction hashes")
+			require.Len(t, equal[0].Calls[0].Logs, 1)
+			lastBlock := equal[len(equal)-1]
+			require.Equal(t, hexutil.Uint64(tc.lastStatus), lastBlock.Calls[len(lastBlock.Calls)-1].Status)
+		})
+	}
+}
+
 // TestSimulateV1WithdrawalsByFork verifies that withdrawals and withdrawalsRoot
 // are only emitted in the simulated block result when the simulated block is
 // post-Shanghai. Pre-Shanghai blocks must omit both fields, otherwise the
