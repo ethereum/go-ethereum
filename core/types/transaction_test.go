@@ -806,3 +806,35 @@ func TestEffectiveGasTipIntCmp(t *testing.T) {
 		}
 	}
 }
+
+// TestFeeCapsUint256 checks GasFeeCapUint256 and GasTipCapUint256 against
+// GasFeeCap and GasTipCap for every transaction type, and that caps beyond 256
+// bits are reported as overflowing.
+func TestFeeCapsUint256(t *testing.T) {
+	fee, tip := big.NewInt(3e9), big.NewInt(2e9)
+	for _, data := range []TxData{
+		&LegacyTx{GasPrice: fee},
+		&AccessListTx{GasPrice: fee},
+		&DynamicFeeTx{GasFeeCap: fee, GasTipCap: tip},
+		&BlobTx{GasFeeCap: uint256.MustFromBig(fee), GasTipCap: uint256.MustFromBig(tip), BlobFeeCap: uint256.NewInt(1)},
+		&SetCodeTx{GasFeeCap: uint256.MustFromBig(fee), GasTipCap: uint256.MustFromBig(tip)},
+	} {
+		tx := NewTx(data)
+		feeCap, feeOverflow := tx.GasFeeCapUint256()
+		tipCap, tipOverflow := tx.GasTipCapUint256()
+		if feeOverflow || tipOverflow || feeCap.ToBig().Cmp(tx.GasFeeCap()) != 0 || tipCap.ToBig().Cmp(tx.GasTipCap()) != 0 {
+			t.Errorf("type %d: fee cap %v (overflow %v), tip cap %v (overflow %v), want %v and %v",
+				tx.Type(), &feeCap, feeOverflow, &tipCap, tipOverflow, tx.GasFeeCap(), tx.GasTipCap())
+		}
+	}
+	huge := new(big.Int).Lsh(big.NewInt(1), 256)
+	for _, data := range []TxData{&LegacyTx{GasPrice: huge}, &DynamicFeeTx{GasFeeCap: huge, GasTipCap: huge}} {
+		tx := NewTx(data)
+		if _, overflow := tx.GasFeeCapUint256(); !overflow {
+			t.Errorf("type %d: a fee cap of 2^256 not reported as overflowing", tx.Type())
+		}
+		if _, overflow := tx.GasTipCapUint256(); !overflow {
+			t.Errorf("type %d: a tip cap of 2^256 not reported as overflowing", tx.Type())
+		}
+	}
+}
