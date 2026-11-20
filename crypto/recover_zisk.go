@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/0xPolygonHermez/zisk/ziskasm/lang/go"
+	zkvm "github.com/0xPolygonHermez/zisk/ziskasm/lang/go"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
