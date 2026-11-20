@@ -90,11 +90,8 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 			return err
 		}
 	}
-	if rules.IsOsaka && !rules.IsAmsterdam && tx.Gas() > params.MaxTxGas {
-		return fmt.Errorf("%w (cap: %d, tx: %d)", core.ErrGasLimitTooHigh, params.MaxTxGas, tx.Gas())
-	}
-	if rules.IsAmsterdam && tx.Gas() > params.MaxTxTotalGas {
-		return fmt.Errorf("%w (cap: %d, tx: %d)", core.ErrGasLimitTooHigh, params.MaxTxTotalGas, tx.Gas())
+	if err := core.CheckGasLimitCap(tx.Gas(), rules); err != nil {
+		return err
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur for transactions created using the RPC.
@@ -143,8 +140,8 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return validateBlobSidecar(tx, head, opts)
 	}
 	if tx.Type() == types.SetCodeTxType {
-		if len(tx.SetCodeAuthorizations()) == 0 {
-			return errors.New("set code tx must have at least one authorization tuple")
+		if err := core.CheckSetCodeTx(tx.To(), tx.SetCodeAuthorizations()); err != nil {
+			return err
 		}
 	}
 	return nil

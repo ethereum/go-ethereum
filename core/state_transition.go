@@ -589,11 +589,8 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 	}
 	if !msg.skipGasLimitCapCheck {
 		// Verify tx gas limit does not exceed the EIP-8037 total cap, or the EIP-7825 cap before it.
-		if rules.IsAmsterdam && msg.GasLimit > params.MaxTxTotalGas {
-			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxTotalGas, msg.GasLimit)
-		}
-		if !rules.IsAmsterdam && rules.IsOsaka && msg.GasLimit > params.MaxTxGas {
-			return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, msg.GasLimit)
+		if err := CheckGasLimitCap(msg.GasLimit, rules); err != nil {
+			return err
 		}
 	}
 	if !msg.skipEOACheck {
@@ -672,11 +669,8 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 		if !rules.IsPrague {
 			return fmt.Errorf("%w: setcode tx (sender %v)", ErrTxTypeNotSupported, msg.From)
 		}
-		if msg.To == nil {
-			return fmt.Errorf("%w (sender %v)", ErrSetCodeTxCreate, msg.From)
-		}
-		if len(msg.SetCodeAuthorizations) == 0 {
-			return fmt.Errorf("%w (sender %v)", ErrEmptyAuthList, msg.From)
+		if err := CheckSetCodeTx(msg.To, msg.SetCodeAuthorizations); err != nil {
+			return fmt.Errorf("%w (sender %v)", err, msg.From)
 		}
 	}
 	// Check whether the init code size has been exceeded (EIP-3860).
@@ -700,6 +694,28 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 		return err
 	}
 	return st.buyGas()
+}
+
+// CheckGasLimitCap checks the tx gas limit against the EIP-8037 total cap, or the EIP-7825 cap before it.
+func CheckGasLimitCap(gasLimit uint64, rules params.Rules) error {
+	if rules.IsAmsterdam && gasLimit > params.MaxTxTotalGas {
+		return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxTotalGas, gasLimit)
+	}
+	if !rules.IsAmsterdam && rules.IsOsaka && gasLimit > params.MaxTxGas {
+		return fmt.Errorf("%w (cap: %d, tx: %d)", ErrGasLimitTooHigh, params.MaxTxGas, gasLimit)
+	}
+	return nil
+}
+
+// CheckSetCodeTx checks that an EIP-7702 tx has a recipient and a non-empty authorization list.
+func CheckSetCodeTx(to *common.Address, authList []types.SetCodeAuthorization) error {
+	if to == nil {
+		return ErrSetCodeTxCreate
+	}
+	if len(authList) == 0 {
+		return ErrEmptyAuthList
+	}
+	return nil
 }
 
 // execute transitions the state by applying the current message and

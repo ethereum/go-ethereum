@@ -81,6 +81,15 @@ func (tt *TransactionTest) Run() error {
 		if err != nil {
 			return
 		}
+		// Gas limit cap and set code checks shared with core and the txpool
+		if err = core.CheckGasLimitCap(tx.Gas(), rules); err != nil {
+			return
+		}
+		if tx.Type() == types.SetCodeTxType {
+			if err = core.CheckSetCodeTx(tx.To(), tx.SetCodeAuthorizations()); err != nil {
+				return
+			}
+		}
 		// Intrinsic cost
 		value, overflow := uint256.FromBig(tx.Value())
 		if overflow {
