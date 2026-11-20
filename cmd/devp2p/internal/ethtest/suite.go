@@ -1030,7 +1030,13 @@ func makeSidecar(data ...byte) *types.BlobTxSidecar {
 }
 
 func (s *Suite) makeBlobTxs(txCount, blobCount int, discriminator byte) (txs types.Transactions, blobs [][]kzg4844.Blob) {
-	from, nonce := s.chain.GetSender(5)
+	return s.makeBlobTxsFrom(5, txCount, blobCount, discriminator)
+}
+
+// makeBlobTxsFrom is makeBlobTxs with the sender given by its index in the
+// pre-funded accounts list.
+func (s *Suite) makeBlobTxsFrom(senderIdx, txCount, blobCount int, discriminator byte) (txs types.Transactions, blobs [][]kzg4844.Blob) {
+	from, nonce := s.chain.GetSender(senderIdx)
 	for i := 0; i < txCount; i++ {
 		blobdata := make([]byte, blobCount)
 		for i := range blobdata {
@@ -1514,7 +1520,9 @@ and that providing valid cells causes the tx to enter the pool.`)
 	}
 
 	// Wait for GetPooledTransactions on either conn, respond with tx (without blobs).
-	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](context.Background(), conn1, conn2)
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](ctx, conn1, conn2)
+	cancel()
 	if err != nil {
 		t.Fatalf("failed to read GetPooledTransactions: %v", err)
 	}
@@ -1525,7 +1533,9 @@ and that providing valid cells causes the tx to enter the pool.`)
 	}
 
 	// Wait for GetCells request on either conn.
-	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](context.Background(), conn1, conn2)
+	ctx, cancel = context.WithTimeout(context.Background(), 12*time.Second)
+	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](ctx, conn1, conn2)
+	cancel()
 	if err != nil {
 		t.Fatalf("failed to read GetCells: %v", err)
 	}
@@ -1564,7 +1574,10 @@ while the other peer is not.`)
 		t.Fatalf("send fcu failed: %v", err)
 	}
 
-	txs, blobs := s.makeBlobTxs(1, 1, 0x32)
+	// A sender of its own: from the shared one, this tx would have the nonce and
+	// fees of the tx TestGetCells left in the pool, so a client would reject it
+	// as an underpriced replacement and never send GetCells.
+	txs, blobs := s.makeBlobTxsFrom(6, 1, 1, 0x32)
 	tx := blobTxForProtocol(txs[0], eth.ETH72)
 	blob := blobs[0]
 
@@ -1599,7 +1612,9 @@ while the other peer is not.`)
 		t.Fatalf("conn2 announce failed: %v", err)
 	}
 
-	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](context.Background(), conn1, conn2)
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	pooledReq, pc, err := readAnyFrom[eth.GetPooledTransactionsPacket](ctx, conn1, conn2)
+	cancel()
 	if err != nil {
 		t.Fatalf("failed to read GetPooledTransactions: %v", err)
 	}
@@ -1609,7 +1624,9 @@ while the other peer is not.`)
 		t.Fatalf("writing pooled tx response failed: %v", err)
 	}
 
-	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](context.Background(), conn1, conn2)
+	ctx, cancel = context.WithTimeout(context.Background(), 12*time.Second)
+	cellsReq, cc, err := readAnyFrom[eth.GetCellsRequestPacket](ctx, conn1, conn2)
+	cancel()
 	if err != nil {
 		t.Fatalf("failed to read GetCells: %v", err)
 	}
