@@ -173,3 +173,30 @@ func TestMultisubFullUnsubscribe(t *testing.T) {
 	default:
 	}
 }
+
+func TestMultisubEmpty(t *testing.T) {
+	// Test that joining zero subscriptions doesn't block forever
+	sub := JoinSubscriptions()
+	if sub == nil {
+		t.Fatal("JoinSubscriptions() returned nil")
+	}
+	// Should be able to unsubscribe immediately without blocking
+	done := make(chan struct{})
+	go func() {
+		sub.Unsubscribe()
+		close(done)
+	}()
+	select {
+	case <-done:
+		// Success - unsubscribe completed
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Unsubscribe blocked on empty subscription list")
+	}
+	// Error channel should be closed
+	select {
+	case <-sub.Err():
+		// Expected - channel is closed
+	default:
+		t.Error("error channel not closed after unsubscribe")
+	}
+}
