@@ -18,6 +18,7 @@ package catalyst
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -224,5 +225,104 @@ func testEngineRoundtrip(t *testing.T, fork engineFork) {
 	}
 	if head.Number.Uint64() != parent.NumberU64()+1 {
 		t.Fatalf("head number = %d, want %d", head.Number.Uint64(), parent.NumberU64()+1)
+	}
+}
+
+// TestForkchoiceAppliedOnBadAttributes checks that a forkchoice update whose
+// payload attributes are rejected still moves the head, as the spec requires.
+func TestForkchoiceAppliedOnBadAttributes(t *testing.T) {
+	type fcuFunc func(*ConsensusAPI, engine.ForkchoiceStateV1, *engine.PayloadAttributes) (engine.ForkChoiceResponse, error)
+	var (
+		ctx = context.Background()
+		v2  = func(api *ConsensusAPI, s engine.ForkchoiceStateV1, a *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+			return api.ForkchoiceUpdatedV2(ctx, s, a)
+		}
+		v4 = func(api *ConsensusAPI, s engine.ForkchoiceStateV1, a *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+			return api.ForkchoiceUpdatedV4(ctx, s, a, nil)
+		}
+		witnessV2 = func(api *ConsensusAPI, s engine.ForkchoiceStateV1, a *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+			return api.ForkchoiceUpdatedWithWitnessV2(ctx, s, a)
+		}
+		witnessV3 = func(api *ConsensusAPI, s engine.ForkchoiceStateV1, a *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+			return api.ForkchoiceUpdatedWithWitnessV3(ctx, s, a)
+		}
+		witnessV4 = func(api *ConsensusAPI, s engine.ForkchoiceStateV1, a *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
+			return api.ForkchoiceUpdatedWithWitnessV4(ctx, s, a, nil)
+		}
+	)
+	tests := []struct {
+		name       string
+		fcu        fcuFunc
+		amsterdam  bool // attributes timestamp is in amsterdam, otherwise osaka
+		beaconRoot bool
+		slot       bool
+		want       *engine.EngineAPIError
+	}{
+		{name: "v2 osaka", fcu: v2, want: engine.UnsupportedFork},
+		{name: "v3 amsterdam", fcu: fcuV3, amsterdam: true, beaconRoot: true, want: engine.UnsupportedFork},
+		{name: "v3 no beacon root", fcu: fcuV3, want: engine.InvalidPayloadAttributes},
+		{name: "v4 osaka", fcu: v4, beaconRoot: true, slot: true, want: engine.UnsupportedFork},
+		{name: "witness v2 osaka", fcu: witnessV2, want: engine.UnsupportedFork},
+		{name: "witness v3 amsterdam", fcu: witnessV3, amsterdam: true, beaconRoot: true, want: engine.UnsupportedFork},
+		{name: "witness v4 osaka", fcu: witnessV4, beaconRoot: true, slot: true, want: engine.UnsupportedFork},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Osaka activates on the block we build, amsterdam a while later.
+			genesis, blocks := forkTestChain(t, 10)
+			osakaTime := blocks[len(blocks)-2].Time() + 5
+			amsterdamTime := osakaTime + 100
+			cfg := genesis.Config
+			cfg.ShanghaiTime, cfg.CancunTime, cfg.PragueTime, cfg.OsakaTime = &osakaTime, &osakaTime, &osakaTime, &osakaTime
+			cfg.AmsterdamTime = &amsterdamTime
+			cfg.BlobScheduleConfig = params.DefaultBlobSchedule
+
+			n, ethservice := startEthService(t, genesis, blocks[:9])
+			defer n.Close()
+			api := newConsensusAPIWithoutHeartbeat(ethservice)
+
+			// Build and import a block without making it the head.
+			parent := blocks[8]
+			resp, err := fcuV3(api, engine.ForkchoiceStateV1{HeadBlockHash: parent.Hash()}, &engine.PayloadAttributes{
+				Timestamp:   osakaTime,
+				Withdrawals: []*types.Withdrawal{},
+				BeaconRoot:  &witnessBeaconRoot,
+			})
+			if err != nil || resp.PayloadID == nil {
+				t.Fatalf("forkchoiceUpdated (build): %v", err)
+			}
+			envelope, err := api.GetPayloadV5(*resp.PayloadID)
+			if err != nil {
+				t.Fatalf("getPayload: %v", err)
+			}
+			if status, err := newPayloadV4(api, envelope); err != nil || status.Status != engine.VALID {
+				t.Fatalf("newPayload: status %q, err %v", status.Status, err)
+			}
+			block := envelope.ExecutionPayload.BlockHash
+
+			// Make it the head with attributes the method must reject.
+			attrs := &engine.PayloadAttributes{
+				Timestamp:   osakaTime + 1,
+				Withdrawals: []*types.Withdrawal{},
+			}
+			if tt.amsterdam {
+				attrs.Timestamp = amsterdamTime
+			}
+			if tt.beaconRoot {
+				attrs.BeaconRoot = &witnessBeaconRoot
+			}
+			if tt.slot {
+				attrs.SlotNumber = &witnessSlotNumber
+				attrs.TargetGasLimit = &witnessGasTarget
+			}
+			_, err = tt.fcu(api, engine.ForkchoiceStateV1{HeadBlockHash: block}, attrs)
+			var apiErr *engine.EngineAPIError
+			if !errors.As(err, &apiErr) || apiErr.ErrorCode() != tt.want.ErrorCode() {
+				t.Fatalf("have error %v, want %v", err, tt.want)
+			}
+			if head := ethservice.BlockChain().CurrentBlock().Hash(); head != block {
+				t.Fatalf("head = %x, want %x", head, block)
+			}
+		})
 	}
 }
