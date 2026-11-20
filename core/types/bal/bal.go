@@ -51,6 +51,18 @@ type ConstructionAccountAccess struct {
 	// CodeChange contains the post-state contract code of an account keyed
 	// by tx index.
 	CodeChange map[uint32][]byte `json:"codeChange,omitempty"`
+
+	// storageOrigins records, for written slots, the slot value prior to the
+	// write at the given tx index. It is used by Merge to net writes from
+	// multiple scopes sharing a tx index (e.g. post-execution system calls)
+	// against the value at the start of that index.
+	storageOrigins map[common.Hash]storageOrigin
+}
+
+// storageOrigin is the value of a storage slot before it was written at txIdx.
+type storageOrigin struct {
+	txIdx uint32
+	value common.Hash
 }
 
 // NewConstructionAccountAccess initializes the account access object.
@@ -109,6 +121,22 @@ func (b *ConstructionBlockAccessList) StorageWrite(txIdx uint32, address common.
 	delete(b.Accounts[address].StorageReads, key)
 }
 
+// StorageWriteWithOrigin records the post-transaction value of a mutated storage
+// slot along with its value before the write. The origin allows Merge to drop
+// the write if a later scope at the same tx index restores the slot.
+func (b *ConstructionBlockAccessList) StorageWriteWithOrigin(txIdx uint32, address common.Address, key, origin, value common.Hash) {
+	b.StorageWrite(txIdx, address, key, value)
+
+	acc := b.Accounts[address]
+	if acc.storageOrigins == nil {
+		acc.storageOrigins = make(map[common.Hash]storageOrigin)
+	}
+	if o, ok := acc.storageOrigins[key]; ok && o.txIdx == txIdx {
+		return // keep the value from the start of the index
+	}
+	acc.storageOrigins[key] = storageOrigin{txIdx: txIdx, value: origin}
+}
+
 // CodeChange records the code of a newly-created contract.
 func (b *ConstructionBlockAccessList) CodeChange(address common.Address, txIndex uint32, code []byte) {
 	if _, ok := b.Accounts[address]; !ok {
@@ -151,7 +179,9 @@ func (b *ConstructionBlockAccessList) PrettyPrint() string {
 // Typically each list covers its own tx index, so txIdx-level collisions are
 // not expected; the exception is pre/post-transition system calls, which
 // share a single tx index. In that case callers must pass block-accessList
-// in order strictly.
+// in order strictly. If the origin of a colliding storage write is known and
+// other restores the slot to it, the write is dropped, since the slot is
+// unchanged across the index.
 //
 // other is referenced (not deep copied), after the call both lists share
 // inner maps and other must not be mutated.
@@ -166,13 +196,37 @@ func (b *ConstructionBlockAccessList) Merge(other *ConstructionBlockAccessList) 
 			continue
 		}
 		for key, writes := range otherAcc.StorageWrites {
+			otherOrigin, hasOtherOrigin := otherAcc.storageOrigins[key]
 			existing, ok := acc.StorageWrites[key]
 			if !ok {
 				acc.StorageWrites[key] = writes
-			} else {
-				for txIdx, value := range writes {
-					existing[txIdx] = value
+				if hasOtherOrigin {
+					acc.setStorageOrigin(key, otherOrigin)
 				}
+				delete(acc.StorageReads, key)
+				continue
+			}
+			for txIdx, value := range writes {
+				if _, collide := existing[txIdx]; collide {
+					// Net the write against the value at the start of the index.
+					if o, ok := acc.storageOrigins[key]; ok && o.txIdx == txIdx && o.value == value {
+						delete(existing, txIdx)
+					} else {
+						existing[txIdx] = value
+					}
+					continue
+				}
+				existing[txIdx] = value
+				if hasOtherOrigin && otherOrigin.txIdx == txIdx {
+					acc.setStorageOrigin(key, otherOrigin)
+				}
+			}
+			if len(existing) == 0 {
+				// All writes were netted out, the slot was only accessed.
+				delete(acc.StorageWrites, key)
+				delete(acc.storageOrigins, key)
+				acc.StorageReads[key] = struct{}{}
+				continue
 			}
 			delete(acc.StorageReads, key)
 		}
@@ -194,6 +248,14 @@ func (b *ConstructionBlockAccessList) Merge(other *ConstructionBlockAccessList) 
 	}
 }
 
+// setStorageOrigin records the origin of the given storage slot.
+func (a *ConstructionAccountAccess) setStorageOrigin(key common.Hash, origin storageOrigin) {
+	if a.storageOrigins == nil {
+		a.storageOrigins = make(map[common.Hash]storageOrigin)
+	}
+	a.storageOrigins[key] = origin
+}
+
 // Copy returns a deep copy of the access list.
 func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 	res := NewConstructionBlockAccessList()
@@ -206,6 +268,7 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 		}
 		aaCopy.StorageWrites = slotWrites
 		aaCopy.StorageReads = maps.Clone(aa.StorageReads)
+		aaCopy.storageOrigins = maps.Clone(aa.storageOrigins)
 
 		balances := make(map[uint32]*uint256.Int, len(aa.BalanceChanges))
 		for index, balance := range aa.BalanceChanges {
