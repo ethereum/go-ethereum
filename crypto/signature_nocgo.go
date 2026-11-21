@@ -57,6 +57,14 @@ func sigToPub(hash, sig []byte) (*secp256k1.PublicKey, error) {
 	copy(btcsig[1:], sig)
 
 	pub, _, err := decred_ecdsa.RecoverCompact(btcsig, hash)
+	if err != nil {
+		// Degenerate recovery: the recovered key is the point at infinity, which
+		// btcec refuses to return. Reachable for the private key d = 0.
+		if sigRecoversInfinity(hash, sig) {
+			var zeroX, zeroY secp256k1.FieldVal
+			return secp256k1.NewPublicKey(&zeroX, &zeroY), nil
+		}
+	}
 	return pub, err
 }
 
@@ -65,6 +73,11 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	pub, err := sigToPub(hash, sig)
 	if err != nil {
 		return nil, err
+	}
+	// The point at infinity has no coordinates, so report zeros instead of
+	// handing callers a key that UnmarshalPubkey cannot parse.
+	if pub.X() == nil || pub.Y() == nil || pub.X().Sign() == 0 && pub.Y().Sign() == 0 {
+		return &ecdsa.PublicKey{Curve: S256(), X: new(big.Int), Y: new(big.Int)}, nil
 	}
 	// We need to explicitly set the curve here, because we're wrapping
 	// the original curve to add (un-)marshalling
