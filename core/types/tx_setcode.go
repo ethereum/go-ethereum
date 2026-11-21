@@ -155,15 +155,6 @@ func (a *SetCodeAuthorization) Authority() (common.Address, error) {
 	// recover the public key from the signature
 	pub, err := crypto.Ecrecover(sighash[:], sig[:])
 	if err != nil {
-		// A signature may recover to the point at infinity (most notably the one
-		// made with the private key d = 0), which the underlying libraries reject.
-		// Such an authorisation is valid: fall back to its serialization, whose
-		// Keccak-256 hash is the authority address.
-		if inf, ok := crypto.RecoverInfinity(sighash[:], sig[:]); ok {
-			pub, err = inf, nil
-		}
-	}
-	if err != nil {
 		return common.Address{}, err
 	}
 	if len(pub) == 0 || pub[0] != 4 {

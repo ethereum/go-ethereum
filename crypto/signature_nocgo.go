@@ -30,7 +30,14 @@ import (
 )
 
 // Ecrecover returns the uncompressed public key that created the given signature.
+//
+// A signature may recover to the point at infinity, which the underlying library
+// refuses to return; see RecoverInfinity. Such a signature is valid, its public
+// key being 0x04 followed by 64 zero bytes.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
+	if pub, ok := RecoverInfinity(hash, sig); ok {
+		return pub, nil
+	}
 	pub, err := sigToPub(hash, sig)
 	if err != nil {
 		return nil, err

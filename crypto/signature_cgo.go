@@ -30,6 +30,9 @@ import (
 
 // Ecrecover returns the uncompressed public key that created the given signature.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
+	if pub, ok := RecoverInfinity(hash, sig); ok {
+		return pub, nil
+	}
 	return secp256k1.RecoverPubkey(hash, sig)
 }
 
