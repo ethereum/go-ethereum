@@ -192,10 +192,16 @@ func Transaction(ctx *cli.Context) error {
 			}
 		}
 
-		isOsaka := chainConfig.IsOsaka(new(big.Int), 0)
-		isAmsterdam := chainConfig.IsAmsterdam(new(big.Int), 0)
-		if isOsaka && !isAmsterdam && tx.Gas() > params.MaxTxGas {
-			r.Error = errors.New("gas limit exceeds maximum")
+		// Check the gas limit cap and the set code transaction structure. These
+		// are stateless checks that block execution and the txpool perform on
+		// every transaction, so they are shared instead of duplicated here.
+		if err := core.CheckGasLimitCap(tx.Gas(), rules); err != nil {
+			r.Error = err
+		}
+		if tx.Type() == types.SetCodeTxType {
+			if err := core.CheckSetCodeTx(tx.To(), tx.SetCodeAuthorizations()); err != nil {
+				r.Error = err
+			}
 		}
 		results = append(results, r)
 	}
