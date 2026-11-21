@@ -23,6 +23,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
@@ -30,7 +31,16 @@ import (
 
 // Ecrecover returns the uncompressed public key that created the given signature.
 func Ecrecover(hash, sig []byte) ([]byte, error) {
-	return secp256k1.RecoverPubkey(hash, sig)
+	pub, err := secp256k1.RecoverPubkey(hash, sig)
+	if err != nil {
+		// Degenerate recovery: libsecp256k1 refuses to serialise the point at
+		// infinity, which is what recovery yields for the private key d = 0.
+		// Ethereum encodes it as 0x04 || 64 zero bytes.
+		if sigRecoversInfinity(hash, sig) {
+			return infinityPubKeyBytes(), nil
+		}
+	}
+	return pub, err
 }
 
 // SigToPub returns the public key that created the given signature.
@@ -39,7 +49,16 @@ func SigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	return UnmarshalPubkey(s)
+	pub, err := UnmarshalPubkey(s)
+	if err != nil {
+		// (0, 0) is not on the curve, so UnmarshalPubkey rejects the encoding of
+		// the point at infinity. Report zero coordinates instead of nil.
+		if sigRecoversInfinity(hash, sig) {
+			return &ecdsa.PublicKey{Curve: S256(), X: new(big.Int), Y: new(big.Int)}, nil
+		}
+		return nil, err
+	}
+	return pub, nil
 }
 
 // Sign calculates an ECDSA signature.
