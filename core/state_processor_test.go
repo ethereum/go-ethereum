@@ -372,7 +372,6 @@ func TestStateProcessorErrors(t *testing.T) {
 	{
 		cancunConfig := *config
 		cancunConfig.PragueTime = nil
-		cancunConfig.OsakaTime = nil
 		cancunConfig.BlobScheduleConfig = &params.BlobScheduleConfig{Cancun: params.DefaultCancunBlobConfig}
 
 		var (
