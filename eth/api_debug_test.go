@@ -18,6 +18,7 @@ package eth
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
@@ -275,6 +276,76 @@ func TestStorageRangeAt(t *testing.T) {
 			t.Fatalf("wrong result for range %#x.., limit %d:\ngot %s\nwant %s",
 				test.start, test.limit, dumper.Sdump(result), dumper.Sdump(&test.want))
 		}
+	}
+}
+
+// TestStorageRangeAtModifiedContract checks that debug_storageRangeAt works for
+// a block that modifies the storage of the queried contract, for both state
+// schemes.
+func TestStorageRangeAtModifiedContract(t *testing.T) {
+	t.Parallel()
+
+	for _, scheme := range []string{rawdb.HashScheme, rawdb.PathScheme} {
+		t.Run(scheme, func(t *testing.T) {
+			testStorageRangeAtModifiedContract(t, scheme)
+		})
+	}
+}
+
+func testStorageRangeAtModifiedContract(t *testing.T, scheme string) {
+	var (
+		key, _   = crypto.GenerateKey()
+		sender   = crypto.PubkeyToAddress(key.PublicKey)
+		contract = common.HexToAddress("0xc0de")
+		slot     = common.Hash{0x01}
+		genesis  = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: types.GenesisAlloc{
+				sender: {Balance: big.NewInt(params.Ether)},
+				contract: {
+					// PUSH1 0x2a PUSH1 0x01 SSTORE STOP
+					Code:    common.FromHex("0x602a60015500"),
+					Storage: map[common.Hash]common.Hash{slot: {0x01}},
+				},
+			},
+		}
+		engine = ethash.NewFaker()
+		signer = types.LatestSigner(genesis.Config)
+	)
+	_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, 1, func(_ int, b *core.BlockGen) {
+		tx, _ := types.SignNewTx(key, signer, &types.LegacyTx{
+			Nonce:    0,
+			To:       &contract,
+			Gas:      100000,
+			GasPrice: b.BaseFee(),
+		})
+		b.AddTx(tx)
+	})
+	options := core.DefaultConfig().WithStateScheme(scheme)
+	options.Preimages = true
+	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), genesis, engine, options)
+	if err != nil {
+		t.Fatalf("failed to create tester chain: %v", err)
+	}
+	defer chain.Stop()
+	if n, err := chain.InsertChain(blocks); err != nil {
+		t.Fatalf("block %d: failed to insert into chain: %v", n, err)
+	}
+	eth := &Ethereum{blockchain: chain}
+	eth.APIBackend = &EthAPIBackend{eth: eth}
+	api := NewDebugAPI(eth)
+
+	result, err := api.StorageRangeAt(context.Background(), rpc.BlockNumberOrHashWithNumber(1), 0, contract, nil, 10)
+	if err != nil {
+		t.Fatalf("failed to retrieve storage range: %v", err)
+	}
+	hashed := crypto.Keccak256Hash(slot.Bytes())
+	entry, ok := result.Storage[hashed]
+	if len(result.Storage) != 1 || !ok {
+		t.Fatalf("unexpected storage range: %s", dumper.Sdump(result))
+	}
+	if entry.Value != (common.Hash{0x01}) {
+		t.Fatalf("unexpected storage value: have %x, want %x", entry.Value, common.Hash{0x01})
 	}
 }
 

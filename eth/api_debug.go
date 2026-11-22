@@ -274,7 +274,16 @@ func (api *DebugAPI) StorageRangeAt(ctx context.Context, blockNrOrHash rpc.Block
 	}
 	defer release()
 
-	return storageRangeAt(statedb, block.Root(), contractAddress, keyStart, maxResult)
+	// The state is replayed on top of the parent block, and the storage root
+	// it reports for the contract belongs to that parent state. The storage
+	// trie must therefore be opened against the parent state root rather than
+	// the root of the requested block, otherwise the path-based trie database
+	// fails to resolve the nodes if the block modified the contract storage.
+	parent := api.eth.blockchain.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return StorageRangeResult{}, fmt.Errorf("parent %#x not found", block.ParentHash())
+	}
+	return storageRangeAt(statedb, parent.Root, contractAddress, keyStart, maxResult)
 }
 
 func storageRangeAt(statedb *state.StateDB, root common.Hash, address common.Address, start []byte, maxResult int) (StorageRangeResult, error) {
