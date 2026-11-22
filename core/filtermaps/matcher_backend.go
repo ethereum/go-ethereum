@@ -102,9 +102,9 @@ func (fm *FilterMapsMatcherBackend) GetBlockLvPointer(ctx context.Context, block
 			return fm.f.indexedRange.headDelimiter + 1, nil
 		}
 		if fm.f.indexedRange.blocks.Count() > 0 {
-			// return index at the beginning of the last, partially indexed
-			// block (after the last fully indexed one)
-			blockNumber = fm.f.indexedRange.blocks.Last()
+			// Return the start of the first block that is not fully indexed,
+			// immediately after the last fully indexed block.
+			blockNumber = fm.f.indexedRange.blocks.AfterLast()
 		}
 	}
 	return fm.f.getBlockLvPointer(blockNumber)
