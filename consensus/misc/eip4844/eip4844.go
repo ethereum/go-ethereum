@@ -177,6 +177,16 @@ func CalcBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
 	return blobConfig.blobBaseFee(*header.ExcessBlobGas)
 }
 
+// CalcNextBlobFee calculates the blob fee of the block following the given header.
+// It is the blob fee counterpart of eip1559.CalcBaseFee: the excess blob gas is
+// derived from the given header, and the blob parameters are looked up at the
+// timestamp of that header, which is also how the last baseFeePerBlobGas entry
+// of eth_feeHistory is derived.
+func CalcNextBlobFee(config *params.ChainConfig, header *types.Header) *big.Int {
+	excess := CalcExcessBlobGas(config, header, header.Time)
+	return CalcBlobFee(config, &types.Header{Time: header.Time, ExcessBlobGas: &excess})
+}
+
 // MaxBlobsPerBlock returns the max blobs per block for a block at the given timestamp.
 func MaxBlobsPerBlock(cfg *params.ChainConfig, time uint64) int {
 	blobConfig, err := latestBlobConfig(cfg, time)

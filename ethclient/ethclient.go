@@ -634,7 +634,7 @@ func (ec *Client) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
 	return (*big.Int)(&hex), nil
 }
 
-// BlobBaseFee retrieves the current blob base fee.
+// BlobBaseFee retrieves the blob base fee of the next block.
 func (ec *Client) BlobBaseFee(ctx context.Context) (*big.Int, error) {
 	var hex hexutil.Big
 	if err := ec.c.CallContext(ctx, &hex, "eth_blobBaseFee"); err != nil {

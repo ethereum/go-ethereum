@@ -227,3 +227,38 @@ func TestCalcExcessBlobGasEIP7918(t *testing.T) {
 		}
 	}
 }
+
+func TestCalcNextBlobFee(t *testing.T) {
+	zero := uint64(0)
+	config := &params.ChainConfig{
+		LondonBlock:        big.NewInt(0),
+		CancunTime:         &zero,
+		BlobScheduleConfig: params.DefaultBlobSchedule,
+	}
+	// The Cancun schedule targets 3 blobs and allows at most 6 per block, i.e.
+	// 393216 and 786432 blob gas respectively.
+	tests := []struct {
+		excess      uint64
+		blobGasUsed uint64
+		blobfee     int64
+		headBlobfee int64 // blob fee of the given header, for comparison
+	}{
+		{0, 0, 1, 1},
+		{0, 6 * params.BlobTxBlobGasPerBlob, 1, 1},
+		{10_000_000, 0, 17, 19},
+		{5_000_000, 0, 3, 4},
+		{2314058, 0, 1, 2},
+	}
+	for i, tt := range tests {
+		header := &types.Header{
+			ExcessBlobGas: &tt.excess,
+			BlobGasUsed:   &tt.blobGasUsed,
+		}
+		if have := CalcNextBlobFee(config, header); have.Int64() != tt.blobfee {
+			t.Errorf("test %d: blobfee mismatch: have %v want %v", i, have, tt.blobfee)
+		}
+		if head := CalcBlobFee(config, header); head.Int64() != tt.headBlobfee {
+			t.Errorf("test %d: head blobfee mismatch: have %v want %v", i, head, tt.headBlobfee)
+		}
+	}
+}

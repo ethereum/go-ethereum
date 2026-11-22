@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/misc/eip4844"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/txpool"
@@ -214,5 +215,53 @@ func TestStateAtBlockUnavailable(t *testing.T) {
 		if _, _, err := b.StateAtBlock(context.Background(), block, nil, true, false); !errors.Is(err, database.ErrStateUnavailable) {
 			t.Errorf("%s: have %v, want %v", scheme, err, database.ErrStateUnavailable)
 		}
+	}
+}
+
+// TestBlobBaseFeeNextBlock checks that eth_blobBaseFee reports the blob base fee
+// of the block following the head, and not the one of the head itself.
+func TestBlobBaseFeeNextBlock(t *testing.T) {
+	var (
+		zero   = uint64(0)
+		config = *params.MergedTestChainConfig
+	)
+	config.CancunTime = &zero
+	config.PragueTime = nil
+	config.OsakaTime = nil
+	config.BlobScheduleConfig = params.DefaultBlobSchedule
+
+	// The genesis block carries a large excess blob gas, but no blob gas used. The
+	// first block therefore has a lower blob base fee than the genesis block, which
+	// makes the two candidate readings of eth_blobBaseFee distinguishable.
+	excess := uint64(10_000_000)
+	genesis := &core.Genesis{
+		Config:        &config,
+		BaseFee:       big.NewInt(params.InitialBaseFee),
+		ExcessBlobGas: &excess,
+		BlobGasUsed:   new(uint64),
+	}
+	engine := beacon.New(ethash.NewFaker())
+
+	// Assemble the block that will be built on top of the head and read the blob
+	// base fee the consensus rules assign to it.
+	db, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, 1, nil)
+	if len(blocks) != 1 {
+		t.Fatalf("generated %d blocks", len(blocks))
+	}
+	chain, err := core.NewBlockChain(db, genesis, engine, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(chain.Stop)
+
+	next := blocks[0]
+	want := eip4844.CalcBlobFee(&config, next.Header())
+	if head := eip4844.CalcBlobFee(&config, chain.CurrentHeader()); head.Cmp(want) == 0 {
+		t.Fatalf("test setup broken: head and next blob fee are both %v", head)
+	}
+
+	b := &EthAPIBackend{eth: &Ethereum{blockchain: chain, chainDb: db}}
+	if have := b.BlobBaseFee(context.Background()); have == nil || have.Cmp(want) != 0 {
+		t.Errorf("blob base fee mismatch: have %v, want %v", have, want)
 	}
 }
