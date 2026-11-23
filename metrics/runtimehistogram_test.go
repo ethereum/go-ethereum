@@ -73,6 +73,23 @@ func TestRuntimeHistogramStats(t *testing.T) {
 			StdDev:      3.2096,
 			Percentiles: []float64{16, 18, 18, 24, 24},
 		},
+		3: {
+			// The runtime hands out bucket edges before any sample has been
+			// recorded, e.g. /gc/pauses:seconds when the process has not
+			// collected yet. The mean of zero samples is zero, not NaN.
+			h: metrics.Float64Histogram{
+				Counts:  []uint64{0, 0, 0},
+				Buckets: []float64{0, 1, 2, 3},
+			},
+			Count:       0,
+			Max:         0,
+			Min:         0,
+			Sum:         0,
+			Mean:        0,
+			Variance:    0,
+			StdDev:      0,
+			Percentiles: []float64{0, 0, 0, 0, 0},
+		},
 	}
 
 	for i, test := range tests {
