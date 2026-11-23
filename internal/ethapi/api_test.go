@@ -2632,6 +2632,8 @@ func TestSimulateV1TxSender(t *testing.T) {
 		sender2   = common.Address{0xaa, 0xab}
 		sender3   = common.Address{0xaa, 0xac}
 		recipient = common.Address{0xbb, 0xbb}
+		gas       = hexutil.Uint64(21000)
+		nonce     = hexutil.Uint64(1)
 		gspec     = &core.Genesis{
 			Config: params.MergedTestChainConfig,
 			Alloc: types.GenesisAlloc{
@@ -2668,13 +2670,19 @@ func TestSimulateV1TxSender(t *testing.T) {
 		{Calls: []TransactionArgs{
 			{From: &sender2, To: &recipient, Value: (*hexutil.Big)(big.NewInt(4000))},
 		}},
+		// Two calls that differ only in the sender have the same transaction hash.
+		{Calls: []TransactionArgs{
+			{From: &sender, To: &recipient, Gas: &gas, Nonce: &nonce},
+			{From: &sender3, To: &recipient, Gas: &gas, Nonce: &nonce},
+		}},
 	})
 	if err != nil {
 		t.Fatalf("simulation execution failed: %v", err)
 	}
-	require.Len(t, results, 2, "expected 2 simulated blocks")
+	require.Len(t, results, 3, "expected 3 simulated blocks")
 	require.Len(t, results[0].Block.Transactions(), 3, "expected 3 transaction in simulated block")
 	require.Len(t, results[1].Block.Transactions(), 1, "expected 1 transaction in 2nd simulated block")
+	require.Len(t, results[2].Block.Transactions(), 2, "expected 2 transaction in 3rd simulated block")
 	enc, err := json.Marshal(results)
 	if err != nil {
 		t.Fatalf("failed to marshal results: %v", err)
@@ -2682,19 +2690,24 @@ func TestSimulateV1TxSender(t *testing.T) {
 	type resultType struct {
 		Transactions []struct {
 			From common.Address `json:"from"`
+			Hash common.Hash    `json:"hash"`
 		}
 	}
 	var summary []resultType
 	if err := json.Unmarshal(enc, &summary); err != nil {
 		t.Fatalf("failed to unmarshal results: %v", err)
 	}
-	require.Len(t, summary, 2, "expected 2 simulated blocks")
+	require.Len(t, summary, 3, "expected 3 simulated blocks")
 	require.Len(t, summary[0].Transactions, 3, "expected 3 transaction in simulated block")
 	require.Equal(t, sender, summary[0].Transactions[0].From, "sender address mismatch")
 	require.Equal(t, sender2, summary[0].Transactions[1].From, "sender address mismatch")
 	require.Equal(t, sender3, summary[0].Transactions[2].From, "sender address mismatch")
 	require.Len(t, summary[1].Transactions, 1, "expected 1 transaction in simulated block")
 	require.Equal(t, sender2, summary[1].Transactions[0].From, "sender address mismatch")
+	require.Len(t, summary[2].Transactions, 2, "expected 2 transaction in 3rd simulated block")
+	require.Equal(t, summary[2].Transactions[0].Hash, summary[2].Transactions[1].Hash, "expected equal transaction hashes")
+	require.Equal(t, sender, summary[2].Transactions[0].From, "sender address mismatch")
+	require.Equal(t, sender3, summary[2].Transactions[1].From, "sender address mismatch")
 }
 
 // TestSimulateV1LogIndex checks that logs which are dropped because their call or call frame
