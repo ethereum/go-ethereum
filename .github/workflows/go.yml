@@ -58,6 +58,53 @@ jobs:
       - name: Build
         run: go run build/ci.go keeper
 
+  keeper-zisk:
+    name: Keeper ZisK
+    needs: lint
+    runs-on: ubuntu-latest
+    env:
+      ZISK_VERSION: v1.4.0-alpha
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: false
+
+      - name: Install ziskemu dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -yq --no-install-recommends install \
+            clang cmake libclang-dev libgmp-dev libomp-dev libopenmpi-dev libsodium-dev libssl-dev nasm nlohmann-json3-dev protobuf-compiler uuid-dev
+
+      - name: Restore ziskemu
+        id: ziskemu-cache
+        uses: actions/cache@v4
+        with:
+          path: ziskemu
+          key: ziskemu-${{ env.ZISK_VERSION }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build ziskemu
+        if: steps.ziskemu-cache.outputs.cache-hit != 'true'
+        env:
+          ZISK_CI_NO_DOCKER_REBUILD: '1'
+        run: |
+          git clone --quiet --depth 1 --branch "$ZISK_VERSION" https://github.com/0xPolygonHermez/zisk.git "$RUNNER_TEMP/zisk"
+          cargo build --manifest-path "$RUNNER_TEMP/zisk/Cargo.toml" --release --locked -p ziskemu --features float
+          cp "$RUNNER_TEMP/zisk/target/release/ziskemu" ziskemu
+
+      - name: Build keeper
+        working-directory: cmd/keeper
+        run: GOOS=wasip1 GOARCH=wasm go build -tags zisk,zkvm -o keeper-zisk.wasm .
+
+      - name: Run keeper in ziskemu
+        working-directory: cmd/keeper
+        run: ../../ziskemu --elf keeper-zisk.wasm --legacy-inputs 1192c3_payload.rlp
+
   test-32bit:
     name: "32bit tests"
     needs: test
