@@ -285,7 +285,7 @@ func iterOwnKeys(vm *goja.Runtime, obj *goja.Object, f func(string)) {
 
 func (ctx ppctx) isBigNumber(v *goja.Object) bool {
 	// Handle numbers with custom constructor.
-	if obj := v.Get("constructor").ToObject(ctx.vm); obj != nil {
+	if obj := toObject(ctx.vm, v.Get("constructor")); obj != nil {
 		if strings.HasPrefix(toString(obj), "function BigNumber") {
 			return true
 		}
@@ -309,10 +309,17 @@ func toString(obj *goja.Object) string {
 }
 
 func constructorPrototype(vm *goja.Runtime, obj *goja.Object) *goja.Object {
-	if v := obj.Get("constructor"); v != nil {
-		if v := v.ToObject(vm).Get("prototype"); v != nil {
-			return v.ToObject(vm)
-		}
+	if c := toObject(vm, obj.Get("constructor")); c != nil {
+		return toObject(vm, c.Get("prototype"))
 	}
 	return nil
+}
+
+// toObject converts v to an object, returning nil if v is missing, null or
+// undefined, as converting those would panic.
+func toObject(vm *goja.Runtime, v goja.Value) *goja.Object {
+	if v == nil || goja.IsNull(v) || goja.IsUndefined(v) {
+		return nil
+	}
+	return v.ToObject(vm)
 }
