@@ -127,7 +127,7 @@ func NewSimulatedBeacon(period uint64, feeRecipient common.Address, eth *eth.Eth
 	// if genesis block, send forkchoiceUpdated to trigger transition to PoS
 	if block.Number.Sign() == 0 {
 		version := payloadVersion(eth.BlockChain().Config(), block.Time)
-		if _, err := engineAPI.forkchoiceUpdated(context.Background(), current, nil, version, false); err != nil {
+		if _, err := engineAPI.forkchoiceUpdated(context.Background(), current, nil, nil, version, false); err != nil {
 			return nil, err
 		}
 	}
@@ -222,7 +222,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Service: "engine",
 		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
 	})
-	fcResponse, err := c.engineAPI.forkchoiceUpdated(fcCtx, c.curForkchoiceState, attribute, version, false)
+	fcResponse, err := c.engineAPI.forkchoiceUpdated(fcCtx, c.curForkchoiceState, attribute, nil, version, false)
 	fcSpanEnd(&err)
 	if err != nil {
 		return err
@@ -309,7 +309,7 @@ func (c *SimulatedBeacon) sealBlock(withdrawals []*types.Withdrawal, timestamp u
 		Service: "engine",
 		Method:  "forkchoiceUpdatedV" + fmt.Sprintf("%d", version),
 	})
-	_, err = c.engineAPI.forkchoiceUpdated(fcuCtx, c.curForkchoiceState, nil, version, false)
+	_, err = c.engineAPI.forkchoiceUpdated(fcuCtx, c.curForkchoiceState, nil, nil, version, false)
 	fcuSpanEnd(&err)
 	if err != nil {
 		return err

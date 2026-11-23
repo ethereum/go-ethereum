@@ -52,7 +52,7 @@ func TestGeneratedDispatchUpToDate(t *testing.T) {
 	}
 }
 
-// TestGeneratedProfileUpToDate asserts that the committed PGO profile describes the
+// TestGeneratedProfileUpToDate asserts that every committed PGO profile describes the
 // same call sites the generator builds for the committed dispatch. It is the guard
 // the profile most needs: a profile records the line each handler call sits on, so a
 // dispatch change that does not regenerate it leaves a profile matching nothing. The
@@ -70,18 +70,20 @@ func TestGeneratedProfileUpToDate(t *testing.T) {
 	if err := prof.Write(&buf); err != nil {
 		t.Fatalf("serializing the profile: %v", err)
 	}
-	path := filepath.Join(vmDir(), "..", "..", pgoFile)
-	committed, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading committed %s: %v", pgoFile, err)
+	want := profileEdges(t, "generated", buf.Bytes())
+	for _, file := range pgoFiles {
+		committed, err := os.ReadFile(filepath.Join(vmDir(), "..", "..", file))
+		if err != nil {
+			t.Fatalf("reading committed %s: %v", file, err)
+		}
+		got := profileEdges(t, "committed", committed)
+		if slices.Equal(want, got) {
+			continue
+		}
+		t.Errorf("%s is out of date; run `go generate ./core/vm/...` and commit the result.\n"+
+			"  %d call sites committed, %d generated\n  first difference: committed %q, generated %q",
+			file, len(got), len(want), firstEdge(got, want), firstEdge(want, got))
 	}
-	want, got := profileEdges(t, "generated", buf.Bytes()), profileEdges(t, "committed", committed)
-	if slices.Equal(want, got) {
-		return
-	}
-	t.Fatalf("%s is out of date; run `go generate ./core/vm/...` and commit the result.\n"+
-		"  %d call sites committed, %d generated\n  first difference: committed %q, generated %q",
-		pgoFile, len(got), len(want), firstEdge(got, want), firstEdge(want, got))
 }
 
 // TestHandlersInlined asserts the compiler inlines every handler call the profile marks hot.
@@ -100,7 +102,7 @@ func TestHandlersInlined(t *testing.T) {
 	// compiler print its inlining decisions. A cached build prints them again.
 	root := filepath.Join(vmDir(), "..", "..")
 	gocmd := filepath.Join(runtime.GOROOT(), "bin", "go")
-	cmd := exec.Command(gocmd, "build", "-pgo="+filepath.Join(root, pgoFile), "-gcflags="+vmPkgPath+"=-m", "-o", os.DevNull, vmPkgPath)
+	cmd := exec.Command(gocmd, "build", "-pgo="+filepath.Join(root, pgoFiles[0]), "-gcflags="+vmPkgPath+"=-m", "-o", os.DevNull, vmPkgPath)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	if err != nil {

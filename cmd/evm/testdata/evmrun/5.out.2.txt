@@ -5,10 +5,10 @@ Pre-execution info:
   - gas: `10000000000`
   - value: `0` wei
 
-|  Pc   |      Op     | Cost |   Refund  |   Stack   |
-|-------|-------------|------|-----------|-----------|
-|    0  |      PUSH1  |    3 |         0 |        [] |
-|    2  |       STOP  |    0 |         0 |    [0x40] |
+|  Pc   |      Op     | Cost |   Refund  |   Stack   | Error |
+|-------|-------------|------|-----------|-----------|-------|
+|    0  |      PUSH1  |    3 |         0 |        [] |  |
+|    2  |       STOP  |    0 |         0 |    [0x40] |  |
 
 Post-execution info:
   - output: ``

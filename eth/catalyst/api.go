@@ -35,9 +35,14 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/eth/fetcher"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/telemetry"
 	"github.com/ethereum/go-ethereum/internal/version"
 	"github.com/ethereum/go-ethereum/log"
@@ -86,8 +91,22 @@ const (
 	beaconUpdateWarnFrequency = 5 * time.Minute
 )
 
+// Backend is the part of the eth service that the engine API uses.
+type Backend interface {
+	BlockChain() *core.BlockChain
+	ChainDb() ethdb.Database
+	Downloader() *downloader.Downloader
+	Synced() bool
+	SetSynced()
+	EngineMaxReorgDepth() uint64
+	TxPool() *txpool.TxPool
+	Miner() *miner.Miner
+	BlobCache() *blobpool.Cache
+	BlobFetcher() *fetcher.BlobFetcher
+}
+
 type ConsensusAPI struct {
-	eth *eth.Ethereum
+	eth Backend
 
 	// maxReorgDepth is the maximum reorg depth accepted via forkchoiceUpdated
 	// (0 = no limit). Configured via ethconfig.Config.EngineMaxReorgDepth.
@@ -134,15 +153,23 @@ type ConsensusAPI struct {
 // The underlying blockchain needs to have a valid terminal total difficulty set.
 //
 // This function creates a long-lived object with an attached background thread.
-// For testing or other short-term use cases, please use newConsensusAPIWithoutHeartbeat.
-func NewConsensusAPI(eth *eth.Ethereum) *ConsensusAPI {
+// For testing or other short-term use cases, please use NewConsensusAPIWithoutHeartbeat.
+func NewConsensusAPI(eth Backend) *ConsensusAPI {
 	api := newConsensusAPIWithoutHeartbeat(eth)
 	go api.heartbeat()
 	return api
 }
 
+// NewConsensusAPIWithoutHeartbeat creates a new consensus api for the given
+// backend without the background thread that watches for a beacon client, so
+// it can be dropped together with a short-lived backend, such as one built to
+// run an engine test fixture.
+func NewConsensusAPIWithoutHeartbeat(eth Backend) *ConsensusAPI {
+	return newConsensusAPIWithoutHeartbeat(eth)
+}
+
 // newConsensusAPIWithoutHeartbeat creates a new consensus api for the SimulatedBeacon Node.
-func newConsensusAPIWithoutHeartbeat(eth *eth.Ethereum) *ConsensusAPI {
+func newConsensusAPIWithoutHeartbeat(eth Backend) *ConsensusAPI {
 	if eth.BlockChain().Config().TerminalTotalDifficulty == nil {
 		log.Warn("Engine API started but chain not configured for merge yet")
 	}
@@ -178,73 +205,76 @@ func (api *ConsensusAPI) ForkchoiceUpdatedV1(ctx context.Context, update engine.
 			return engine.STATUS_INVALID, paramsErr("fcuV1 called post-shanghai")
 		}
 	}
-	return api.forkchoiceUpdated(ctx, update, payloadAttributes, engine.PayloadV1, false)
+	return api.forkchoiceUpdated(ctx, update, payloadAttributes, nil, engine.PayloadV1, false)
 }
 
 // ForkchoiceUpdatedV2 is equivalent to V1 with the addition of withdrawals in the payload
 // attributes. It supports both PayloadAttributesV1 and PayloadAttributesV2.
 func (api *ConsensusAPI) ForkchoiceUpdatedV2(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
-	if params != nil {
-		switch {
-		case params.BeaconRoot != nil:
-			return engine.STATUS_INVALID, attributesErr("unexpected beacon root")
-		case api.checkFork(params.Timestamp, forks.Paris) && params.Withdrawals != nil:
-			return engine.STATUS_INVALID, attributesErr("withdrawals before shanghai")
-		case api.checkFork(params.Timestamp, forks.Shanghai) && params.Withdrawals == nil:
-			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
-		case !api.checkFork(params.Timestamp, forks.Paris, forks.Shanghai):
-			return engine.STATUS_INVALID, unsupportedForkErr("fcuV2 must only be called with paris or shanghai payloads")
-		}
-	}
-	return api.forkchoiceUpdated(ctx, update, params, engine.PayloadV2, false)
+	return api.forkchoiceUpdated(ctx, update, params, api.verifyAttributesV2, engine.PayloadV2, false)
 }
 
 // ForkchoiceUpdatedV3 is equivalent to V2 with the addition of parent beacon block root
 // in the payload attributes. It supports only PayloadAttributesV3.
 func (api *ConsensusAPI) ForkchoiceUpdatedV3(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes) (engine.ForkChoiceResponse, error) {
-	if params != nil {
-		switch {
-		case params.Withdrawals == nil:
-			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
-		case params.BeaconRoot == nil:
-			return engine.STATUS_INVALID, attributesErr("missing beacon root")
-		case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2):
-			return engine.STATUS_INVALID, unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka payloads")
-		}
-	}
-	// TODO(matt): the spec requires that fcu is applied when called on a valid
-	// hash, even if params are wrong. To do this we need to split up
-	// forkchoiceUpdate into a function that only updates the head and then a
-	// function that kicks off block construction.
-	return api.forkchoiceUpdated(ctx, update, params, engine.PayloadV3, false)
+	return api.forkchoiceUpdated(ctx, update, params, api.verifyAttributesV3, engine.PayloadV3, false)
 }
 
 // ForkchoiceUpdatedV4 is equivalent to V3 with the addition of slot number
 // in the payload attributes. It supports only PayloadAttributesV4.
 func (api *ConsensusAPI) ForkchoiceUpdatedV4(ctx context.Context, update engine.ForkchoiceStateV1, params *engine.PayloadAttributes, custodyColumns *types.CustodyBitmap) (engine.ForkChoiceResponse, error) {
-	if params != nil {
-		switch {
-		case params.Withdrawals == nil:
-			return engine.STATUS_INVALID, attributesErr("missing withdrawals")
-		case params.BeaconRoot == nil:
-			return engine.STATUS_INVALID, attributesErr("missing beacon root")
-		case params.SlotNumber == nil:
-			return engine.STATUS_INVALID, attributesErr("missing slot number")
-		case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
-			return engine.STATUS_INVALID, unsupportedForkErr("fcuV4 must only be called for amsterdam payloads")
-		}
-	}
 	if custodyColumns != nil {
 		api.eth.BlobFetcher().UpdateCustody(*custodyColumns)
 	}
-	// TODO(matt): the spec requires that fcu is applied when called on a valid
-	// hash, even if params are wrong. To do this we need to split up
-	// forkchoiceUpdate into a function that only updates the head and then a
-	// function that kicks off block construction.
-	return api.forkchoiceUpdated(ctx, update, params, engine.PayloadV4, false)
+	return api.forkchoiceUpdated(ctx, update, params, api.verifyAttributesV4, engine.PayloadV4, false)
 }
 
-func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, payloadVersion engine.PayloadVersion, payloadWitness bool) (result engine.ForkChoiceResponse, err error) {
+// verifyAttributesV2 checks the payload attributes given to forkchoiceUpdatedV2.
+func (api *ConsensusAPI) verifyAttributesV2(params *engine.PayloadAttributes) error {
+	switch {
+	case params.BeaconRoot != nil:
+		return attributesErr("unexpected beacon root")
+	case api.checkFork(params.Timestamp, forks.Paris) && params.Withdrawals != nil:
+		return attributesErr("withdrawals before shanghai")
+	case api.checkFork(params.Timestamp, forks.Shanghai) && params.Withdrawals == nil:
+		return attributesErr("missing withdrawals")
+	case !api.checkFork(params.Timestamp, forks.Paris, forks.Shanghai):
+		return unsupportedForkErr("fcuV2 must only be called with paris or shanghai payloads")
+	}
+	return nil
+}
+
+// verifyAttributesV3 checks the payload attributes given to forkchoiceUpdatedV3.
+func (api *ConsensusAPI) verifyAttributesV3(params *engine.PayloadAttributes) error {
+	switch {
+	case params.Withdrawals == nil:
+		return attributesErr("missing withdrawals")
+	case params.BeaconRoot == nil:
+		return attributesErr("missing beacon root")
+	case !api.checkFork(params.Timestamp, forks.Cancun, forks.Prague, forks.Osaka, forks.BPO1, forks.BPO2):
+		return unsupportedForkErr("fcuV3 must only be called for cancun/prague/osaka payloads")
+	}
+	return nil
+}
+
+// verifyAttributesV4 checks the payload attributes given to forkchoiceUpdatedV4.
+func (api *ConsensusAPI) verifyAttributesV4(params *engine.PayloadAttributes) error {
+	switch {
+	case params.Withdrawals == nil:
+		return attributesErr("missing withdrawals")
+	case params.BeaconRoot == nil:
+		return attributesErr("missing beacon root")
+	case params.SlotNumber == nil:
+		return attributesErr("missing slot number")
+	case !api.checkFork(params.Timestamp, forks.Amsterdam, forks.BPO3, forks.BPO4, forks.BPO5, forks.Bogota):
+		return unsupportedForkErr("fcuV4 must only be called for amsterdam payloads")
+	}
+	return nil
+}
+
+// forkchoiceUpdated applies the forkchoice state, then checks the payload
+// attributes with verify (if set) and starts building a payload.
+func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.ForkchoiceStateV1, payloadAttributes *engine.PayloadAttributes, verify func(*engine.PayloadAttributes) error, payloadVersion engine.PayloadVersion, payloadWitness bool) (result engine.ForkChoiceResponse, err error) {
 	ctx, _, spanEnd := telemetry.StartSpan(ctx, "engine.forkchoiceUpdated")
 	defer spanEnd(&err)
 
@@ -389,6 +419,13 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	// sealed by the beacon client. The payload will be requested later, and we
 	// will replace it arbitrarily many times in between.
 	if payloadAttributes != nil {
+		// The spec checks attributes only after the forkchoice state is
+		// applied, so a rejected request still moves the head.
+		if verify != nil {
+			if err := verify(payloadAttributes); err != nil {
+				return valid(nil), err
+			}
+		}
 		args := &miner.BuildPayloadArgs{
 			Parent:         update.HeadBlockHash,
 			Timestamp:      payloadAttributes.Timestamp,

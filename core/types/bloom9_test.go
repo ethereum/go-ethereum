@@ -76,13 +76,6 @@ func TestBloomExtensively(t *testing.T) {
 	}
 }
 
-func BenchmarkBloom9(b *testing.B) {
-	test := []byte("testestestest")
-	for b.Loop() {
-		Bloom9(test)
-	}
-}
-
 func BenchmarkBloom9Lookup(b *testing.B) {
 	toTest := []byte("testtest")
 	bloom := new(Bloom)

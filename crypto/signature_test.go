@@ -44,6 +44,22 @@ func TestEcrecover(t *testing.T) {
 	}
 }
 
+// TestEcrecoverInvalidRecoveryID checks that recovery ids above 3 are rejected.
+// The pure-Go backend must not accept the compressed-key codes 4-7 of the
+// underlying compact signature format.
+func TestEcrecoverInvalidRecoveryID(t *testing.T) {
+	sig := common.CopyBytes(testsig)
+	for v := 4; v < 256; v++ {
+		sig[RecoveryIDOffset] = byte(v)
+		if _, err := Ecrecover(testmsg, sig); err == nil {
+			t.Errorf("Ecrecover: no error for recovery id %d", v)
+		}
+		if _, err := SigToPub(testmsg, sig); err == nil {
+			t.Errorf("SigToPub: no error for recovery id %d", v)
+		}
+	}
+}
+
 func TestVerifySignature(t *testing.T) {
 	sig := testsig[:len(testsig)-1] // remove recovery id
 	if !VerifySignature(testpubkey, testmsg, sig) {

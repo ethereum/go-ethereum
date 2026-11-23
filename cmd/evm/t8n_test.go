@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -29,8 +30,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
 	"github.com/ethereum/go-ethereum/internal/reexec"
+	"github.com/ethereum/go-ethereum/tests"
 )
 
 func TestMain(m *testing.M) {
@@ -684,6 +689,634 @@ func TestEvmRun(t *testing.T) {
 				t.Fatalf("test %d, output wrong\nhave %q\nwant %q\n", i, have, string(want))
 			}
 		}
+	}
+}
+
+// balBlockHash is the hash of the only block in testdata/blocktest_bal.json and
+// testdata/enginetest_bal.json.
+var balBlockHash = common.HexToHash("0xd56692af6b9fc93c12c1baa7dd03339397ca040c712bcba5c41e93dd12959d74")
+
+// TestBlockAccessListExecution checks that blocktest and enginetest run a block
+// carrying an EIP-7928 access list on the parallel processor, or on the
+// sequential one under --bal-sequential or when blocktest withholds the list,
+// and report the choice on stderr only under --bal-report.
+func TestBlockAccessListExecution(t *testing.T) {
+	t.Parallel()
+	for i, tc := range []struct {
+		input      []string
+		wantPath   string // empty when no event line is expected
+		wantReason string
+	}{
+		{[]string{"blocktest", "--bal-report", "./testdata/blocktest_bal.json"}, "parallel", ""},
+		{[]string{"blocktest", "--bal-report", "--bal-sequential", "./testdata/blocktest_bal.json"}, "sequential", "disabled"},
+		{[]string{"blocktest", "--bal-report", "--bal-withhold", "./testdata/blocktest_bal.json"}, "sequential", "withheld"},
+		{[]string{"blocktest", "--bal-report", "--bal-withhold", "--bal-sequential", "./testdata/blocktest_bal.json"}, "sequential", "withheld"},
+		{[]string{"blocktest", "./testdata/blocktest_bal.json"}, "", ""},
+		{[]string{"enginetest", "--bal-report", "./testdata/enginetest_bal.json"}, "parallel", ""},
+		{[]string{"enginetest", "--bal-report", "--bal-sequential", "./testdata/enginetest_bal.json"}, "sequential", "disabled"},
+		{[]string{"enginetest", "./testdata/enginetest_bal.json"}, "", ""},
+	} {
+		tt := cmdtest.NewTestCmd(t, nil)
+		tt.Run("evm-test", tc.input...)
+		stdout := tt.Output()
+		tt.WaitExit()
+		stderr := tt.StderrText()
+
+		var results []testResult
+		if err := json.Unmarshal(stdout, &results); err != nil {
+			t.Fatalf("test %d: stdout is not a JSON result list: %v\n%s", i, err, stdout)
+		}
+		if len(results) != 1 || !results[0].Pass {
+			t.Fatalf("test %d: unexpected results: %s", i, stdout)
+		}
+		events := balEvents(t, stderr)
+		if tc.wantPath == "" {
+			if len(events) != 0 {
+				t.Fatalf("test %d: events %+v without --bal-report, want none", i, events)
+			}
+			continue
+		}
+		want := executionEvent{Event: "balExecution", Block: 1, Hash: balBlockHash, Path: tc.wantPath, Reason: tc.wantReason}
+		if len(events) != 1 || events[0] != want {
+			t.Fatalf("test %d: events %+v, want [%+v]", i, events, want)
+		}
+	}
+}
+
+// TestBlockAccessListDropped checks that blocktest drops a delivered access
+// list that differs from the one the header commits to, in either fixture
+// field, and imports the block with the list computed in execution, as the
+// downloader does with a peer's list. The report names the dropped list in
+// both modes.
+func TestBlockAccessListDropped(t *testing.T) {
+	t.Parallel()
+	src, err := os.ReadFile("./testdata/blocktest_bal.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"blockAccessList", "rlp_decoded"} {
+		var fixtures map[string]map[string]any
+		if err := json.Unmarshal(src, &fixtures); err != nil {
+			t.Fatal(err)
+		}
+		// Deliver the fixture's only block with one account missing from its
+		// access list, leaving the block and its expected post state alone.
+		for _, test := range fixtures {
+			block := test["blocks"].([]any)[0].(map[string]any)
+			list := block["blockAccessList"].([]any)
+			tampered := list[:len(list)-1]
+			if field == "rlp_decoded" {
+				delete(block, "blockAccessList")
+				block["rlp_decoded"] = map[string]any{"blockAccessList": tampered}
+			} else {
+				block["blockAccessList"] = tampered
+			}
+		}
+		out, err := json.Marshal(fixtures)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "blocktest_bal_dropped.json")
+		if err := os.WriteFile(path, out, 0644); err != nil {
+			t.Fatal(err)
+		}
+		for _, tc := range []struct {
+			args       []string
+			wantPath   string
+			wantReason string
+		}{
+			{[]string{"blocktest", "--bal-report", path}, "sequential", "bad-access-list"},
+			{[]string{"blocktest", "--bal-report", "--bal-sequential", path}, "sequential", "bad-access-list"},
+		} {
+			tt := cmdtest.NewTestCmd(t, nil)
+			tt.Run("evm-test", tc.args...)
+			stdout := tt.Output()
+			tt.WaitExit()
+			stderr := tt.StderrText()
+
+			var results []testResult
+			if err := json.Unmarshal(stdout, &results); err != nil {
+				t.Fatalf("%s %v: stdout is not a JSON result list: %v\n%s", field, tc.args, err, stdout)
+			}
+			if len(results) != 1 || !results[0].Pass {
+				t.Fatalf("%s %v: block with a dropped access list not imported: %s", field, tc.args, stdout)
+			}
+			events := balEvents(t, stderr)
+			want := executionEvent{Event: "balExecution", Block: 1, Hash: balBlockHash, Path: tc.wantPath, Reason: tc.wantReason}
+			if len(events) != 1 || events[0] != want {
+				t.Fatalf("%s %v: events %+v, want [%+v]", field, tc.args, events, want)
+			}
+		}
+	}
+}
+
+// TestBlockAccessListWithheldWithoutList checks that --bal-withhold reports
+// withheld only for a block delivered with a list: a block without one keeps
+// the reason core gives it, as it does without the flag.
+func TestBlockAccessListWithheldWithoutList(t *testing.T) {
+	t.Parallel()
+	src, err := os.ReadFile("./testdata/blocktest_bal.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixtures map[string]map[string]any
+	if err := json.Unmarshal(src, &fixtures); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range fixtures {
+		delete(test["blocks"].([]any)[0].(map[string]any), "blockAccessList")
+	}
+	out, err := json.Marshal(fixtures)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "blocktest_bal_without_list.json")
+	if err := os.WriteFile(path, out, 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"blocktest", "--bal-report", path},
+		{"blocktest", "--bal-report", "--bal-withhold", path},
+	} {
+		tt := cmdtest.NewTestCmd(t, nil)
+		tt.Run("evm-test", args...)
+		stdout := tt.Output()
+		tt.WaitExit()
+		stderr := tt.StderrText()
+
+		var results []testResult
+		if err := json.Unmarshal(stdout, &results); err != nil {
+			t.Fatalf("%v: stdout is not a JSON result list: %v\n%s", args, err, stdout)
+		}
+		if len(results) != 1 || !results[0].Pass {
+			t.Fatalf("%v: unexpected results: %s", args, stdout)
+		}
+		events := balEvents(t, stderr)
+		want := executionEvent{Event: "balExecution", Block: 1, Hash: balBlockHash, Path: "sequential", Reason: "no-access-list"}
+		if len(events) != 1 || events[0] != want {
+			t.Fatalf("%v: events %+v, want [%+v]", args, events, want)
+		}
+	}
+}
+
+// TestBlockAccessListDroppedTwins checks that the report ties a dropped list to
+// the import that dropped it. Fixtures run in parallel import the same block,
+// some delivering its own list and some a tampered one, so every clean import
+// must report the parallel path and every tampered one bad-access-list.
+func TestBlockAccessListDroppedTwins(t *testing.T) {
+	t.Parallel()
+	src, err := os.ReadFile("./testdata/blocktest_bal.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const pairs = 4
+	dir := t.TempDir()
+	for i := 0; i < 2*pairs; i++ {
+		var fixtures map[string]map[string]any
+		if err := json.Unmarshal(src, &fixtures); err != nil {
+			t.Fatal(err)
+		}
+		renamed := make(map[string]map[string]any)
+		for name, test := range fixtures {
+			if i%2 == 1 {
+				block := test["blocks"].([]any)[0].(map[string]any)
+				list := block["blockAccessList"].([]any)
+				block["blockAccessList"] = list[:len(list)-1]
+			}
+			renamed[fmt.Sprintf("%s-%d", name, i)] = test
+		}
+		out, err := json.Marshal(renamed)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("twin%d.json", i)), out, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		args      []string
+		wantClean executionEvent
+	}{
+		{[]string{"blocktest", "--bal-report", "--workers", "8", dir}, executionEvent{Path: "parallel"}},
+		{[]string{"blocktest", "--bal-report", "--bal-sequential", "--workers", "8", dir}, executionEvent{Path: "sequential", Reason: "disabled"}},
+	} {
+		tt := cmdtest.NewTestCmd(t, nil)
+		tt.Run("evm-test", tc.args...)
+		stdout := tt.Output()
+		tt.WaitExit()
+		stderr := tt.StderrText()
+
+		var results []testResult
+		if err := json.Unmarshal(stdout, &results); err != nil {
+			t.Fatalf("%v: stdout is not a JSON result list: %v\n%s", tc.args, err, stdout)
+		}
+		if len(results) != 2*pairs {
+			t.Fatalf("%v: %d results, want %d", tc.args, len(results), 2*pairs)
+		}
+		for _, r := range results {
+			if !r.Pass {
+				t.Fatalf("%v: %s failed: %s", tc.args, r.Name, r.Error)
+			}
+		}
+		counts := make(map[executionEvent]int)
+		for _, event := range balEvents(t, stderr) {
+			counts[executionEvent{Path: event.Path, Reason: event.Reason}]++
+		}
+		want := map[executionEvent]int{
+			tc.wantClean: pairs,
+			{Path: "sequential", Reason: "bad-access-list"}: pairs,
+		}
+		if !reflect.DeepEqual(counts, want) {
+			t.Fatalf("%v: decision lines %v, want %v", tc.args, counts, want)
+		}
+	}
+}
+
+// balEvents returns the execution events a runner printed on stderr under
+// --bal-report.
+func balEvents(t *testing.T, stderr string) []executionEvent {
+	t.Helper()
+	var events []executionEvent
+	for _, line := range strings.Split(stderr, "\n") {
+		if !strings.Contains(line, `"event"`) {
+			continue
+		}
+		var event executionEvent
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("bad event line %q: %v", line, err)
+		}
+		events = append(events, event)
+	}
+	return events
+}
+
+// TestRunnersTakeSeveralPaths checks that the test runners run every path they
+// are given, not only the first.
+func TestRunnersTakeSeveralPaths(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		runner string
+		files  []string
+	}{
+		{"blocktest", []string{"./testdata/blocktest_bal.json", "./testdata/blocktest_exception.json"}},
+		{"enginetest", []string{"./testdata/enginetest_bal.json", "./testdata/enginetest_exception.json"}},
+	} {
+		count := func(args ...string) int {
+			tt := cmdtest.NewTestCmd(t, nil)
+			tt.Run("evm-test", append([]string{tc.runner}, args...)...)
+			stdout := tt.Output()
+			tt.WaitExit()
+			var results []testResult
+			if err := json.Unmarshal(stdout, &results); err != nil {
+				t.Fatalf("%s %v: stdout is not a JSON result list: %v\n%s", tc.runner, args, err, stdout)
+			}
+			return len(results)
+		}
+		want := count(tc.files[0]) + count(tc.files[1])
+		if have := count(tc.files...); have != want {
+			t.Errorf("%s with %d paths: have %d results, want %d", tc.runner, len(tc.files), have, want)
+		}
+	}
+}
+
+// TestRunnersRejectBadPaths checks that a run that cannot run all of its input
+// exits 2 and names the bad path on stderr: a path that does not exist stops
+// the run before any test runs, and a file that is not valid JSON is reported
+// while the other files still run and print their results.
+func TestRunnersRejectBadPaths(t *testing.T) {
+	t.Parallel()
+	corrupt := filepath.Join(t.TempDir(), "corrupt.json")
+	if err := os.WriteFile(corrupt, []byte(`{"truncated": `), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		runner string
+		file   string
+	}{
+		{"blocktest", "./testdata/blocktest_bal.json"},
+		{"enginetest", "./testdata/enginetest_bal.json"},
+	} {
+		for _, bad := range []struct {
+			path    string
+			results int // results printed for the good file
+		}{
+			{"./testdata/does-not-exist.json", 0},
+			{corrupt, 1},
+		} {
+			tt := cmdtest.NewTestCmd(t, nil)
+			tt.Run("evm-test", tc.runner, tc.file, bad.path)
+			stdout := tt.Output()
+			tt.WaitExit()
+			if status := tt.ExitStatus(); status != 2 {
+				t.Errorf("%s %s: exit status %d, want 2", tc.runner, bad.path, status)
+			}
+			if bad.results == 0 && len(stdout) != 0 {
+				t.Errorf("%s %s: results printed despite a missing path:\n%s", tc.runner, bad.path, stdout)
+			}
+			if bad.results > 0 {
+				var results []testResult
+				if err := json.Unmarshal(stdout, &results); err != nil || len(results) != bad.results {
+					t.Errorf("%s %s: want %d results for the good file, err %v:\n%s", tc.runner, bad.path, bad.results, err, stdout)
+				}
+			}
+			if stderr := tt.StderrText(); !strings.Contains(stderr, filepath.Base(bad.path)) {
+				t.Errorf("%s %s: stderr does not name the bad path:\n%s", tc.runner, bad.path, stderr)
+			}
+		}
+	}
+}
+
+// TestRunnersSkipMetaDirectory checks that a fixture directory's .meta folder,
+// which holds files that are not fixtures, is not run.
+func TestRunnersSkipMetaDirectory(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		runner string
+		file   string
+	}{
+		{"blocktest", "./testdata/blocktest_bal.json"},
+		{"enginetest", "./testdata/enginetest_bal.json"},
+	} {
+		dir := t.TempDir()
+		src, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, filepath.Base(tc.file)), src, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(filepath.Join(dir, ".meta"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ".meta", "index.json"), []byte(`{"test_cases": []}`), 0644); err != nil {
+			t.Fatal(err)
+		}
+		tt := cmdtest.NewTestCmd(t, nil)
+		tt.Run("evm-test", tc.runner, dir)
+		stdout := tt.Output()
+		tt.WaitExit()
+		var results []testResult
+		if err := json.Unmarshal(stdout, &results); err != nil {
+			t.Fatalf("%s: stdout is not a JSON result list: %v\n%s\n%s", tc.runner, err, stdout, tt.StderrText())
+		}
+		if len(results) == 0 {
+			t.Errorf("%s: no results for the fixture beside .meta", tc.runner)
+		}
+	}
+}
+
+// TestRunnersDisablePrecompileCache checks that blocktest and enginetest give
+// the chain the shared precompile result cache unless --cache.noprecompile
+// turns it off.
+func TestRunnersDisablePrecompileCache(t *testing.T) {
+	t.Parallel()
+	load := func(path string, into any) {
+		src, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(src, into); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, noPrecompileCache := range []bool{false, true} {
+		// One entry per run whose chain was built, true if it had the cache.
+		var cached []bool
+		record := func(_ error, chain *core.BlockChain) {
+			cached = append(cached, chain.PrecompileCache() != nil)
+		}
+		var blockTests map[string]*tests.BlockTest
+		load("./testdata/blocktest_bal.json", &blockTests)
+		for name, test := range blockTests {
+			if err := test.Run(false, rawdb.PathScheme, false, nil, tests.RunConfig{NoPrecompileCache: noPrecompileCache}, record); err != nil {
+				t.Fatalf("blocktest %s: %v", name, err)
+			}
+		}
+		var engineTests map[string]*tests.EngineTest
+		load("./testdata/enginetest_bal.json", &engineTests)
+		for name, test := range engineTests {
+			if err := test.Run(rawdb.PathScheme, nil, tests.RunConfig{NoPrecompileCache: noPrecompileCache}, attachEngineAPI, record); err != nil {
+				t.Fatalf("enginetest %s: %v", name, err)
+			}
+		}
+		want := []bool{!noPrecompileCache, !noPrecompileCache}
+		if !reflect.DeepEqual(cached, want) {
+			t.Errorf("noPrecompileCache %v: cache present in blocktest, enginetest: have %v, want %v", noPrecompileCache, cached, want)
+		}
+	}
+}
+
+// TestRunnersReportRejections checks that blocktest and enginetest report
+// every rejected block with geth's own error and its index in the fixture, and
+// that the error does not decide whether the test passes: the expected
+// exceptions here name a different reason, and the tests still pass. A block
+// whose delivered access list matches its header is run with that list even
+// when it is then rejected.
+func TestRunnersReportRejections(t *testing.T) {
+	t.Parallel()
+	const unrelated = "TransactionException.INSUFFICIENT_ACCOUNT_FUNDS"
+	rejectedHash := common.HexToHash("0x1b8e8678c0b5d3ec4ad6873b4739a7bd7da73d2af166ea4672140d83b38cf244")
+	const bad = "access list hash mismatch, local: 79fa24e990772eea49e38869e0148edec3eac2cb729d30899d869c3b8037f293, remote: bad19914b7e4665d1d7361029751c983b19b6090835c77d8138ae209e16d1c03"
+	for _, tc := range []struct {
+		runner, list string
+		// addRejected changes the fixture's invalid entry to expect an
+		// unrelated exception and appends a second one the client rejects.
+		addRejected func(entries []any) []any
+		want        []tests.Rejection
+	}{
+		{
+			runner: "blocktest",
+			list:   "blocks",
+			addRejected: func(blocks []any) []any {
+				blocks[0].(map[string]any)["expectException"] = unrelated
+				return append(blocks, map[string]any{"rlp": "0xc0", "expectException": unrelated})
+			},
+			want: []tests.Rejection{
+				{Index: 0, Hash: &rejectedHash, Error: bad},
+				{Index: 1, Error: "rlp: too few elements for types.extblock"},
+			},
+		},
+		{
+			runner: "enginetest",
+			list:   "engineNewPayloads",
+			addRejected: func(payloads []any) []any {
+				first := payloads[0].(map[string]any)
+				first["validationError"] = unrelated
+				// The same payload through engine_newPayloadV4, whose params do
+				// not fit Amsterdam, fails with a JSON-RPC error whose data
+				// names the cause.
+				second := maps.Clone(first)
+				delete(second, "validationError")
+				second["newPayloadVersion"] = "4"
+				second["errorCode"] = "-32602"
+				return append(payloads, second)
+			},
+			want: []tests.Rejection{
+				{Index: 0, Error: bad},
+				{Index: 1, Error: `-32602: Invalid parameters: {"err":"slotNumber not supported pre-amsterdam"}`},
+			},
+		},
+	} {
+		run := func(path string) (testResult, []executionEvent) {
+			tt := cmdtest.NewTestCmd(t, nil)
+			tt.Run("evm-test", tc.runner, "--bal-report", path)
+			stdout := tt.Output()
+			tt.WaitExit()
+			var results []testResult
+			if err := json.Unmarshal(stdout, &results); err != nil || len(results) != 1 {
+				t.Fatalf("%s: want one JSON result, err %v:\n%s", tc.runner, err, stdout)
+			}
+			if !strings.Contains(string(stdout), `"rejections": [`) {
+				t.Fatalf("%s: result has no rejections list:\n%s", tc.runner, stdout)
+			}
+			return results[0], balEvents(t, tt.StderrText())
+		}
+		if res, _ := run(fmt.Sprintf("./testdata/%s_bal.json", tc.runner)); !res.Pass || len(res.Rejections) != 0 {
+			t.Errorf("%s clean fixture: pass %v, rejections %+v", tc.runner, res.Pass, res.Rejections)
+		}
+
+		src, err := os.ReadFile(fmt.Sprintf("./testdata/%s_exception.json", tc.runner))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fixtures map[string]map[string]any
+		if err := json.Unmarshal(src, &fixtures); err != nil {
+			t.Fatal(err)
+		}
+		for _, fixture := range fixtures {
+			fixture[tc.list] = tc.addRejected(fixture[tc.list].([]any))
+		}
+		out, err := json.Marshal(fixtures)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), tc.runner+".json")
+		if err := os.WriteFile(path, out, 0644); err != nil {
+			t.Fatal(err)
+		}
+		res, events := run(path)
+		if !res.Pass {
+			t.Errorf("%s: an expected rejection for another reason failed the test: %s", tc.runner, res.Error)
+		}
+		if !reflect.DeepEqual(res.Rejections, tc.want) {
+			t.Errorf("%s: wrong rejections\nhave %+v\nwant %+v", tc.runner, res.Rejections, tc.want)
+		}
+		// The first rejected block's delivered list is the one its header
+		// commits to, so it is attached and the parallel processor runs, and
+		// rejects, the block.
+		want := executionEvent{Event: "balExecution", Block: 1, Hash: rejectedHash, Path: "parallel"}
+		if len(events) != 1 || events[0] != want {
+			t.Errorf("%s: events %+v, want [%+v]", tc.runner, events, want)
+		}
+	}
+}
+
+// TestRunnersExitStatus checks that blocktest and enginetest exit 0 when every
+// fixture passes and 1 when one fails, and that stdout still holds only the
+// JSON results.
+func TestRunnersExitStatus(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		runner, list string
+		// fail makes the fixture expect its only, valid, entry to be rejected.
+		fail func(entry map[string]any)
+	}{
+		{
+			runner: "blocktest",
+			list:   "blocks",
+			fail: func(block map[string]any) {
+				delete(block, "blockHeader")
+				block["expectException"] = "BlockException.INVALID_BLOCK_ACCESS_LIST"
+			},
+		},
+		{
+			runner: "enginetest",
+			list:   "engineNewPayloads",
+			fail: func(payload map[string]any) {
+				payload["validationError"] = "BlockException.INVALID_BLOCK_ACCESS_LIST"
+			},
+		},
+	} {
+		run := func(path string) (int, []testResult) {
+			tt := cmdtest.NewTestCmd(t, nil)
+			tt.Run("evm-test", tc.runner, path)
+			stdout := tt.Output()
+			tt.WaitExit()
+			var results []testResult
+			if err := json.Unmarshal(stdout, &results); err != nil {
+				t.Fatalf("%s: stdout is not a JSON result list: %v\n%s", tc.runner, err, stdout)
+			}
+			return tt.ExitStatus(), results
+		}
+		clean := fmt.Sprintf("./testdata/%s_bal.json", tc.runner)
+		if status, results := run(clean); status != 0 || len(results) != 1 || !results[0].Pass {
+			t.Errorf("%s clean fixture: exit status %d, results %+v", tc.runner, status, results)
+		}
+
+		src, err := os.ReadFile(clean)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fixtures map[string]map[string]any
+		if err := json.Unmarshal(src, &fixtures); err != nil {
+			t.Fatal(err)
+		}
+		for _, fixture := range fixtures {
+			tc.fail(fixture[tc.list].([]any)[0].(map[string]any))
+		}
+		out, err := json.Marshal(fixtures)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), tc.runner+".json")
+		if err := os.WriteFile(path, out, 0644); err != nil {
+			t.Fatal(err)
+		}
+		if status, results := run(path); status != 1 || len(results) != 1 || results[0].Pass {
+			t.Errorf("%s failing fixture: exit status %d, results %+v", tc.runner, status, results)
+		}
+	}
+}
+
+// TestRunnersStdinSkipsBadPath checks that in stdin mode a file that cannot be
+// read is skipped, the file after it still runs, and the run exits with
+// exitIncomplete.
+func TestRunnersStdinSkipsBadPath(t *testing.T) {
+	t.Parallel()
+	for _, runner := range []string{"blocktest", "enginetest"} {
+		missing := filepath.Join(t.TempDir(), "missing.json")
+		tt := cmdtest.NewTestCmd(t, nil)
+		tt.Run("evm-test", runner)
+		tt.InputLine(missing)
+		tt.InputLine(fmt.Sprintf("./testdata/%s_bal.json", runner))
+		tt.InputLine("")
+		stdout := tt.Output()
+		tt.WaitExit()
+		var results []testResult
+		if err := json.Unmarshal(stdout, &results); err != nil || len(results) != 1 || !results[0].Pass {
+			t.Errorf("%s: the file after the missing one did not run and pass: %v\n%s", runner, err, stdout)
+		}
+		if status := tt.ExitStatus(); status != exitIncomplete {
+			t.Errorf("%s: exit status %d, want %d", runner, status, exitIncomplete)
+		}
+		if stderr := tt.StderrText(); !strings.Contains(stderr, missing) {
+			t.Errorf("%s: stderr does not name the missing file:\n%s", runner, stderr)
+		}
+	}
+}
+
+// TestEvmVersion checks that evm --version prints one line and exits 0.
+func TestEvmVersion(t *testing.T) {
+	t.Parallel()
+	tt := cmdtest.NewTestCmd(t, nil)
+	tt.Run("evm-test", "--version")
+	stdout := tt.Output()
+	tt.WaitExit()
+	if status := tt.ExitStatus(); status != 0 {
+		t.Errorf("exit status %d", status)
+	}
+	if lines := strings.Split(strings.TrimSpace(string(stdout)), "\n"); len(lines) != 1 || !strings.Contains(lines[0], " version ") {
+		t.Errorf("want one version line, have:\n%s", stdout)
 	}
 }
 

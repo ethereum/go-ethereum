@@ -241,9 +241,10 @@ type accountAccessMarshaling struct {
 	StorageReads []*hexutil.U256
 }
 
-// validate converts the account accesses out of encoding format.
-// If any of the keys in the encoding object are not ordered according to the
-// spec, an error is returned.
+// validate checks that the account access is well-formed according to the
+// spec. It returns an error if any of its lists is unsorted or has duplicates,
+// a storage slot has no changes or is both read and written, or a change
+// exceeds the allowed index or code size.
 func (e *AccountAccess) validate(maxBALIndex int) error {
 	// Check the storage writes are sorted in order, and unique by slot
 	if !isStrictlySortedFunc(e.StorageChanges, func(a, b encodingSlotChanges) int {
@@ -266,21 +267,15 @@ func (e *AccountAccess) validate(maxBALIndex int) error {
 	}
 
 	// Check that the set of written storage slots does not intersect with the
-	// set of read slots.
-	var (
-		readKeys  = make(map[common.Hash]struct{}, len(e.StorageReads))
-		writeKeys = make(map[common.Hash]struct{}, len(e.StorageChanges))
-	)
-	for _, rk := range e.StorageReads {
-		readKey := common.BytesToHash(rk.Bytes())
-		readKeys[readKey] = struct{}{}
-	}
-	for _, write := range e.StorageChanges {
-		writeKey := common.BytesToHash(write.Slot.Bytes())
-		writeKeys[writeKey] = struct{}{}
-	}
-	for readKey := range readKeys {
-		if _, ok := writeKeys[readKey]; ok {
+	// set of read slots. Both lists were checked to be strictly sorted above,
+	// so a single merge walk over them is enough.
+	for i, j := 0, 0; i < len(e.StorageReads) && j < len(e.StorageChanges); {
+		switch e.StorageReads[i].Cmp(e.StorageChanges[j].Slot) {
+		case -1:
+			i++
+		case 1:
+			j++
+		default:
 			return errors.New("storage key reported in both read/write sets")
 		}
 	}

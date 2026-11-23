@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -392,7 +391,6 @@ func (db *Database) Disable() error {
 	if err := db.waitWrites(); err != nil {
 		return err
 	}
-
 	// Write the initial sync flag to persist it across restarts.
 	rawdb.WriteSnapSyncStatusFlag(db.diskdb, rawdb.StateSyncRunning)
 	log.Info("Disabled trie database due to state sync")
@@ -410,6 +408,9 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	if stored != root {
 		return fmt.Errorf("state root mismatch: stored %x, synced %x", stored, root)
 	}
+	if err := db.waitWrites(); err != nil {
+		return err
+	}
 	// Stop the history indexers before the histories are purged: they work in
 	// the background, and one still indexing the old histories would write
 	// their index back after the purge.
@@ -419,33 +420,22 @@ func (db *Database) resetForReactivation(root common.Hash) error {
 	if db.trienodeIndexer != nil {
 		db.trienodeIndexer.close()
 	}
-	// Drop the layer journal of the old state if exists.
-	if path := db.journalPath(); path != "" {
-		err := os.Remove(path)
-		if err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove stale journal %s: %v", path, err)
-		}
-		if err := syncDir(db.config.JournalDirectory); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to sync the journal directory: %v", err)
-		}
-		if err == nil {
-			log.Debug("Removed stale journal", "path", path)
-		}
-	}
-	// Drop the stale state journal marker and the journal in the key-value
-	// store, and reset the persistent state id back to zero.
+	// Reset the persistent state id back to zero.
 	batch := db.diskdb.NewBatch()
 	rawdb.DeleteSnapshotRoot(batch)
 	rawdb.WritePersistentStateID(batch, 0)
 	if err := batch.Write(); err != nil {
 		return err
 	}
+	// Drop the old state's layer journal, in the file and in the key-value
+	// store, before the histories are purged: if the sync ended at its root,
+	// a restart would load it.
+	if err := db.deleteJournal(); err != nil {
+		return err
+	}
 	// Clean up all state histories in the freezer. Theoretically all root->id
 	// mappings should be removed as well; since those can be huge, leave them
 	// on disk and let them be overwritten.
-	if err := db.waitWrites(); err != nil {
-		return err
-	}
 	purgeHistory(db.stateFreezer, db.diskdb, typeStateHistory)
 	purgeHistory(db.trienodeFreezer, db.diskdb, typeTrienodeHistory)
 
@@ -558,6 +548,14 @@ func (db *Database) Recover(root common.Hash) error {
 		// done after each revert operation, otherwise the new
 		// disk layer won't be accessible from outside.
 		db.tree.init(dl)
+	}
+	// Delete the journal before truncating the histories, otherwise, it's
+	// possible the unclean shutdown happens after the history truncation
+	// with stale journal left, in the next restart, the database is initialized
+	// with the journal (the persistent state is unchanged) and the gap
+	// exists between the history and top diff-layer.
+	if err := db.deleteJournal(); err != nil {
+		log.Crit("Failed to delete journal after rollback", "err", err)
 	}
 	// Explicitly sync the key-value store to ensure all recent writes are
 	// flushed to disk. This step is crucial to prevent a scenario where

@@ -6,7 +6,8 @@ All notable changes to the tracing interface will be documented in this file.
 
 ### Behavior changes
 
-- `OnOpcode` and `OnOpcodeV2` now report zero cost when `err` is non-nil. `OnFault` and `OnFaultV2` always report zero cost, including for `REVERT`. This replaces the computed or partial costs previously reported for error events. Zero means the cost is omitted, not that the failed opcode consumes no gas. A pre-execution opcode event may already have reported the computed cost before the fault event.
+- `OnOpcode` and `OnOpcodeV2` now report zero cost when `err` is non-nil. `OnFault` and `OnFaultV2` always report zero cost. This replaces the computed or partial costs previously reported for error events. Zero means the cost is omitted, not that the failed opcode consumes no gas. A pre-execution opcode event may already have reported the computed cost before the fault event.
+- Explicit `REVERT` emits the computed cost through the opcode hook and reports `ErrExecutionReverted`, return data and `reverted == true` through the exit hook. It no longer emits a fault event. Preparation failures such as memory expansion running out of gas still report an opcode error with zero cost.
 
 ### Deprecated methods
 

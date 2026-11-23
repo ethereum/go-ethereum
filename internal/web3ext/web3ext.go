@@ -158,11 +158,6 @@ web3._extend({
 			name: 'stopWS',
 			call: 'admin_stopWS'
 		}),
-		new web3._extend.Method({
-			name: 'clearTxpool',
-			call: 'debug_clearTxpool',
-			params: 0
-		}),
 	],
 	properties: [
 		new web3._extend.Property({
@@ -232,6 +227,11 @@ web3._extend({
 			name: 'chaindbProperty',
 			call: 'debug_chaindbProperty',
 			outputFormatter: console.log
+		}),
+		new web3._extend.Method({
+			name: 'clearTxpool',
+			call: 'debug_clearTxpool',
+			params: 0
 		}),
 		new web3._extend.Method({
 			name: 'chaindbCompact',

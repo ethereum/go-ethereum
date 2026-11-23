@@ -19,13 +19,14 @@ package jsre
 import (
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/dop251/goja"
-	"github.com/fatih/color"
+	"github.com/mattn/go-isatty"
 )
 
 const (
@@ -33,12 +34,28 @@ const (
 	indentString        = "  "
 )
 
+// colorEnabled mirrors the default color-enablement logic of common terminal
+// color libraries: colors are disabled when NO_COLOR is set, when TERM is
+// "dumb", or when stdout is not a terminal.
+var colorEnabled = os.Getenv("NO_COLOR") == "" &&
+	os.Getenv("TERM") != "dumb" &&
+	(isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd()))
+
+func colorize(code string) func(format string, args ...interface{}) string {
+	return func(format string, args ...interface{}) string {
+		if !colorEnabled {
+			return fmt.Sprintf(format, args...)
+		}
+		return "\x1b[" + code + "m" + fmt.Sprintf(format, args...) + "\x1b[0m"
+	}
+}
+
 var (
-	FunctionColor = color.New(color.FgMagenta).SprintfFunc()
-	SpecialColor  = color.New(color.Bold).SprintfFunc()
-	NumberColor   = color.New(color.FgRed).SprintfFunc()
-	StringColor   = color.New(color.FgGreen).SprintfFunc()
-	ErrorColor    = color.New(color.FgHiRed).SprintfFunc()
+	FunctionColor = colorize("35") // magenta
+	SpecialColor  = colorize("1")  // bold
+	NumberColor   = colorize("31") // red
+	StringColor   = colorize("32") // green
+	ErrorColor    = colorize("91") // hi-red
 )
 
 // these fields are hidden when printing objects.
@@ -268,7 +285,7 @@ func iterOwnKeys(vm *goja.Runtime, obj *goja.Object, f func(string)) {
 
 func (ctx ppctx) isBigNumber(v *goja.Object) bool {
 	// Handle numbers with custom constructor.
-	if obj := v.Get("constructor").ToObject(ctx.vm); obj != nil {
+	if obj := toObject(ctx.vm, v.Get("constructor")); obj != nil {
 		if strings.HasPrefix(toString(obj), "function BigNumber") {
 			return true
 		}
@@ -292,10 +309,17 @@ func toString(obj *goja.Object) string {
 }
 
 func constructorPrototype(vm *goja.Runtime, obj *goja.Object) *goja.Object {
-	if v := obj.Get("constructor"); v != nil {
-		if v := v.ToObject(vm).Get("prototype"); v != nil {
-			return v.ToObject(vm)
-		}
+	if c := toObject(vm, obj.Get("constructor")); c != nil {
+		return toObject(vm, c.Get("prototype"))
 	}
 	return nil
+}
+
+// toObject converts v to an object, returning nil if v is missing, null or
+// undefined, as converting those would panic.
+func toObject(vm *goja.Runtime, v goja.Value) *goja.Object {
+	if v == nil || goja.IsNull(v) || goja.IsUndefined(v) {
+		return nil
+	}
+	return v.ToObject(vm)
 }

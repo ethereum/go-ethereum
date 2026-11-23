@@ -22,6 +22,7 @@ import (
 	"math"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -379,5 +380,80 @@ func TestBlockAccessListValidation(t *testing.T) {
 	listB := cBAL.ToEncodingObj()
 	if err := listB.Validate(math.MaxUint64, 10000); err != nil {
 		t.Fatalf("Unexpected validation error: %v", err)
+	}
+}
+
+func TestBlockAccessListValidationErrors(t *testing.T) {
+	var (
+		addr1 = common.HexToAddress("0x01")
+		addr2 = common.HexToAddress("0x02")
+		u     = uint256.NewInt
+	)
+	write := func(slot uint64, indices ...uint32) encodingSlotChanges {
+		sc := encodingSlotChanges{Slot: u(slot)}
+		for _, idx := range indices {
+			sc.SlotChanges = append(sc.SlotChanges, encodingStorageWrite{BlockAccessIndex: idx, PostValue: u(1)})
+		}
+		return sc
+	}
+	tests := []struct {
+		name string
+		bal  BlockAccessList
+		want string
+	}{
+		{"unsorted accounts", BlockAccessList{{Address: addr2}, {Address: addr1}}, "not in lexicographic order"},
+		{"duplicate accounts", BlockAccessList{{Address: addr1}, {Address: addr1}}, "not in lexicographic order"},
+		{"unsorted write slots", BlockAccessList{{Address: addr1, StorageChanges: []encodingSlotChanges{write(2, 1), write(1, 1)}}}, "storage write slots must be unique and sorted"},
+		{"duplicate write slots", BlockAccessList{{Address: addr1, StorageChanges: []encodingSlotChanges{write(1, 1), write(1, 2)}}}, "storage write slots must be unique and sorted"},
+		{"empty slot changes", BlockAccessList{{Address: addr1, StorageChanges: []encodingSlotChanges{write(1)}}}, "empty slot changes"},
+		{"unsorted slot change indices", BlockAccessList{{Address: addr1, StorageChanges: []encodingSlotChanges{write(1, 2, 1)}}}, "storage write indexes must be unique and sorted"},
+		{"slot change index too high", BlockAccessList{{Address: addr1, StorageChanges: []encodingSlotChanges{write(1, 4)}}}, "storage write index exceeds limit"},
+		{"unsorted reads", BlockAccessList{{Address: addr1, StorageReads: []*uint256.Int{u(2), u(1)}}}, "storage read slots must be unique and sorted"},
+		{"duplicate reads", BlockAccessList{{Address: addr1, StorageReads: []*uint256.Int{u(1), u(1)}}}, "storage read slots must be unique and sorted"},
+		{"first slot read and written", BlockAccessList{{Address: addr1, StorageChanges: []encodingSlotChanges{write(1, 1), write(5, 1)}, StorageReads: []*uint256.Int{u(1), u(7)}}}, "both read/write sets"},
+		{"middle slot read and written", BlockAccessList{{Address: addr1, StorageChanges: []encodingSlotChanges{write(2, 1), write(5, 1), write(9, 1)}, StorageReads: []*uint256.Int{u(1), u(5), u(8)}}}, "both read/write sets"},
+		{"last slot read and written", BlockAccessList{{Address: addr1, StorageChanges: []encodingSlotChanges{write(9, 1)}, StorageReads: []*uint256.Int{u(1), u(9)}}}, "both read/write sets"},
+		{"unsorted balance changes", BlockAccessList{{Address: addr1, BalanceChanges: []encodingBalanceChange{{2, u(1)}, {1, u(1)}}}}, "balance changes must be unique and sorted"},
+		{"balance change index too high", BlockAccessList{{Address: addr1, BalanceChanges: []encodingBalanceChange{{4, u(1)}}}}, "balance change index exceeds limit"},
+		{"duplicate nonce changes", BlockAccessList{{Address: addr1, NonceChanges: []encodingAccountNonce{{1, 1}, {1, 2}}}}, "nonce changes must be unique and sorted"},
+		{"nonce change index too high", BlockAccessList{{Address: addr1, NonceChanges: []encodingAccountNonce{{4, 1}}}}, "nonce change index exceeds limit"},
+		{"unsorted code changes", BlockAccessList{{Address: addr1, CodeChanges: []encodingCodeChange{{2, nil}, {1, nil}}}}, "code changes must be unique and sorted"},
+		{"code change index too high", BlockAccessList{{Address: addr1, CodeChanges: []encodingCodeChange{{4, nil}}}}, "code change index exceeds limit"},
+		{"oversized code", BlockAccessList{{Address: addr1, CodeChanges: []encodingCodeChange{{1, make([]byte, params.MaxCodeSizeAmsterdam+1)}}}}, "oversized code"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Two transactions, so block access indices 0 to 3 are allowed.
+			err := tt.bal.Validate(math.MaxUint64, 2)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("have error %v, want %q", err, tt.want)
+			}
+		})
+	}
+	// Interleaved, disjoint read and write sets are valid.
+	valid := BlockAccessList{{Address: addr1, StorageChanges: []encodingSlotChanges{write(2, 0, 3), write(4, 1)}, StorageReads: []*uint256.Int{u(1), u(3), u(5)}}}
+	if err := valid.Validate(math.MaxUint64, 2); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// BenchmarkBlockAccessListValidate measures validation of an access list with
+// 10000 items, where each account has a few written and read slots.
+func BenchmarkBlockAccessListValidate(b *testing.B) {
+	c := NewConstructionBlockAccessList()
+	for i := range 2500 {
+		addr := common.BytesToAddress(testrand.Bytes(20))
+		c.StorageWrite(uint32(i%100+1), addr, testrand.Hash(), testrand.Hash())
+		c.StorageRead(addr, testrand.Hash())
+		c.StorageRead(addr, testrand.Hash())
+		c.BalanceChange(uint32(i%100+1), addr, uint256.NewInt(uint64(i)))
+	}
+	list := c.ToEncodingObj()
+
+	b.ReportAllocs()
+	for b.Loop() {
+		if err := list.Validate(math.MaxUint64, 100); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

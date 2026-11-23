@@ -19,10 +19,6 @@
 // system memory as the fallback on all platforms.
 package memlimit
 
-import (
-	gopsutil "github.com/shirou/gopsutil/mem"
-)
-
 // Source identifies which mechanism produced the limit value.
 type Source int
 
@@ -52,8 +48,8 @@ func Limit() (bytes uint64, source Source) {
 	if v, src, ok := platformLimit(); ok {
 		return v, src
 	}
-	if mem, err := gopsutil.VirtualMemory(); err == nil {
-		return mem.Total, SourceSystem
+	if v, ok := totalSystemMemory(); ok {
+		return v, SourceSystem
 	}
 	return 0, SourceUnknown
 }

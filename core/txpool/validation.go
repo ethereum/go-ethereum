@@ -90,11 +90,8 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 			return err
 		}
 	}
-	if rules.IsOsaka && !rules.IsAmsterdam && tx.Gas() > params.MaxTxGas {
-		return fmt.Errorf("%w (cap: %d, tx: %d)", core.ErrGasLimitTooHigh, params.MaxTxGas, tx.Gas())
-	}
-	if rules.IsAmsterdam && tx.Gas() > params.MaxTxTotalGas {
-		return fmt.Errorf("%w (cap: %d, tx: %d)", core.ErrGasLimitTooHigh, params.MaxTxTotalGas, tx.Gas())
+	if err := core.CheckGasLimitCap(tx.Gas(), rules); err != nil {
+		return err
 	}
 	// Transactions can't be negative. This may never happen using RLP decoded
 	// transactions but may occur for transactions created using the RPC.
@@ -131,30 +128,9 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return core.ErrInsufficientFunds
 	}
 	// Ensure the transaction has more gas than the bare minimum needed to cover
-	// the transaction metadata
-	intrGas, err := core.IntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), from, tx.To(), value, rules)
-	if err != nil {
+	// the transaction metadata.
+	if _, _, err := core.CheckIntrinsicGas(tx.Data(), tx.AccessList(), tx.SetCodeAuthorizations(), from, tx.To(), value, tx.Gas(), rules, false); err != nil {
 		return err
-	}
-	if tx.Gas() < intrGas {
-		return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrIntrinsicGas, tx.Gas(), intrGas)
-	}
-	// Ensure the transaction can cover floor data gas.
-	if rules.IsPrague {
-		floorDataGas, err := core.FloorDataGas(rules, from, tx.To(), value, tx.Data(), tx.AccessList())
-		if err != nil {
-			return err
-		}
-		// Make sure the transaction has sufficient gas allowance to
-		// pay the floor cost.
-		if tx.Gas() < floorDataGas {
-			return fmt.Errorf("%w: gas %v, minimum needed %v", core.ErrFloorDataGas, tx.Gas(), floorDataGas)
-		}
-		// In Amsterdam, the transaction gas limit is allowed to exceed
-		// params.MaxTxGas, but the calldata floor cost is capped by it.
-		if rules.IsAmsterdam && max(intrGas, floorDataGas) > params.MaxTxGas {
-			return fmt.Errorf("%w: intrinsic cost %v, floor: %v", core.ErrFloorDataGas, intrGas, floorDataGas)
-		}
 	}
 	// Ensure the gasprice is high enough to cover the requirement of the calling pool
 	if tx.GasTipCapIntCmp(opts.MinTip) < 0 {
@@ -164,8 +140,8 @@ func ValidateTransaction(tx *types.Transaction, head *types.Header, signer types
 		return validateBlobSidecar(tx, head, opts)
 	}
 	if tx.Type() == types.SetCodeTxType {
-		if len(tx.SetCodeAuthorizations()) == 0 {
-			return errors.New("set code tx must have at least one authorization tuple")
+		if err := core.CheckSetCodeTx(tx.To(), tx.SetCodeAuthorizations()); err != nil {
+			return err
 		}
 	}
 	return nil

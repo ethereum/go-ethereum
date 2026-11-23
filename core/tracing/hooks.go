@@ -188,7 +188,7 @@ type (
 	// If err is non-nil, cost is zero.
 	OpcodeHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, rData []byte, depth int, err error)
 
-	// FaultHook is invoked when an error occurs during the execution of an opcode.
+	// FaultHook is invoked on an exceptional halt during the execution of an opcode.
 	// Cost is zero; a preceding OpcodeHook may already have reported the computed cost.
 	FaultHook = func(pc uint64, op byte, gas, cost uint64, scope OpContext, depth int, err error)
 

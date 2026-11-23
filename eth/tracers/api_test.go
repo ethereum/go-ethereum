@@ -205,6 +205,9 @@ type stateTracer struct {
 
 type tracedOpcodeLog struct {
 	Op      string            `json:"op"`
+	GasCost *uint64           `json:"gasCost"`
+	Error   string            `json:"error,omitempty"`
+	Stack   []string          `json:"stack"`
 	Refund  *uint64           `json:"refund,omitempty"`
 	Storage map[string]string `json:"storage,omitempty"`
 }
@@ -1285,6 +1288,10 @@ func TestTraceTransactionFailureReturnValues(t *testing.T) {
 		name            string
 		code            []byte
 		wantReturnValue string
+		wantCost        uint64
+		wantError       string
+		wantSteps       int
+		wantStack       []string
 	}{
 		{
 			name: "revert preserves return data",
@@ -1292,11 +1299,15 @@ func TestTraceTransactionFailureReturnValues(t *testing.T) {
 				byte(vm.PUSH1), 0x2a,
 				byte(vm.PUSH1), 0x00,
 				byte(vm.MSTORE),
-				byte(vm.PUSH1), 0x20,
+				byte(vm.PUSH1), 0x40,
 				byte(vm.PUSH1), 0x00,
 				byte(vm.REVERT),
 			},
-			wantReturnValue: "0x000000000000000000000000000000000000000000000000000000000000002a",
+			wantReturnValue: "0x000000000000000000000000000000000000000000000000000000000000002a" +
+				"0000000000000000000000000000000000000000000000000000000000000000",
+			wantCost:  3,
+			wantSteps: 6,
+			wantStack: []string{"0x40", "0x0"},
 		},
 		{
 			name: "hard failure clears return data",
@@ -1304,6 +1315,19 @@ func TestTraceTransactionFailureReturnValues(t *testing.T) {
 				byte(vm.INVALID),
 			},
 			wantReturnValue: "0x",
+			wantError:       "invalid opcode: INVALID",
+			wantSteps:       1,
+		},
+		{
+			name: "invalid jump reports error on the original step",
+			code: []byte{
+				byte(vm.PUSH1), 0x00,
+				byte(vm.JUMP),
+			},
+			wantReturnValue: "0x",
+			wantError:       vm.ErrInvalidJump.Error(),
+			wantSteps:       2,
+			wantStack:       []string{"0x0"},
 		},
 	}
 	for _, tc := range tests {
@@ -1350,8 +1374,15 @@ func TestTraceTransactionFailureReturnValues(t *testing.T) {
 			if traced.ReturnValue != tc.wantReturnValue {
 				t.Fatalf("unexpected returnValue: have %s want %s", traced.ReturnValue, tc.wantReturnValue)
 			}
-			if len(traced.StructLogs) == 0 {
-				t.Fatal("expected failing trace to still include structLogs")
+			if len(traced.StructLogs) != tc.wantSteps {
+				t.Fatalf("got %d opcode records, want %d", len(traced.StructLogs), tc.wantSteps)
+			}
+			last := traced.StructLogs[len(traced.StructLogs)-1]
+			if last.Op != vm.OpCode(tc.code[len(tc.code)-1]).String() || last.GasCost == nil || *last.GasCost != tc.wantCost || last.Error != tc.wantError {
+				t.Fatalf("unexpected final opcode record: %+v", last)
+			}
+			if !slices.Equal(last.Stack, tc.wantStack) {
+				t.Errorf("final stack = %v, want pre-execution stack %v", last.Stack, tc.wantStack)
 			}
 		})
 	}
