@@ -19,6 +19,7 @@ package bal
 import (
 	"bytes"
 	"maps"
+	"slices"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/holiman/uint256"
@@ -51,6 +52,47 @@ type ConstructionAccountAccess struct {
 	// CodeChange contains the post-state contract code of an account keyed
 	// by tx index.
 	CodeChange map[uint32][]byte `json:"codeChange,omitempty"`
+
+	// restores marks, keyed by tx index, the entries which were set back to
+	// the value they held before that index. They only matter to Merge, which
+	// drops the entries they shadow. It is nil unless there is any.
+	restores map[uint32]*constructionRestores
+}
+
+// constructionRestores is the set of entries of an account which ended a
+// finalisation scope with the value they held before the block access index,
+// after a previous scope of the same index might have recorded a change.
+type constructionRestores struct {
+	balance, nonce, code bool
+	slots                []common.Hash
+}
+
+// restoresAt returns the restore markers of the account for the given index,
+// creating them if absent.
+func (a *ConstructionAccountAccess) restoresAt(txIdx uint32) *constructionRestores {
+	if a.restores == nil {
+		a.restores = make(map[uint32]*constructionRestores)
+	}
+	r := a.restores[txIdx]
+	if r == nil {
+		r = new(constructionRestores)
+		a.restores[txIdx] = r
+	}
+	return r
+}
+
+// dropStorageWrite removes the write of the slot at the given index. A slot
+// left with no write at all is demoted to a read.
+func (a *ConstructionAccountAccess) dropStorageWrite(txIdx uint32, key common.Hash) {
+	writes, ok := a.StorageWrites[key]
+	if !ok {
+		return
+	}
+	delete(writes, txIdx)
+	if len(writes) == 0 {
+		delete(a.StorageWrites, key)
+		a.StorageReads[key] = struct{}{}
+	}
 }
 
 // NewConstructionAccountAccess initializes the account access object.
@@ -136,6 +178,60 @@ func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint32, address common
 	b.Accounts[address].BalanceChanges[txIdx] = balance.Clone()
 }
 
+// The Restore methods below record that an entry ended a finalisation scope
+// with the value it held immediately before the given index. Changes are net
+// of the whole index, so such an entry is not a change, and whatever an
+// earlier scope sharing the index recorded for it is dropped on Merge. The
+// entries of other indices are left alone.
+
+// BalanceRestore records that the balance of the account is back to the one
+// it had before the given index.
+func (b *ConstructionBlockAccessList) BalanceRestore(txIdx uint32, address common.Address) {
+	acc := b.account(address)
+	delete(acc.BalanceChanges, txIdx)
+	acc.restoresAt(txIdx).balance = true
+}
+
+// NonceRestore records that the nonce of the account is back to the one it
+// had before the given index.
+func (b *ConstructionBlockAccessList) NonceRestore(address common.Address, txIdx uint32) {
+	acc := b.account(address)
+	delete(acc.NonceChanges, txIdx)
+	acc.restoresAt(txIdx).nonce = true
+}
+
+// CodeRestore records that the code of the account is back to the one it had
+// before the given index.
+func (b *ConstructionBlockAccessList) CodeRestore(address common.Address, txIdx uint32) {
+	acc := b.account(address)
+	delete(acc.CodeChange, txIdx)
+	acc.restoresAt(txIdx).code = true
+}
+
+// StorageRestore records that the storage slot is back to the value it had
+// before the given index. The slot counts as read, unless it was written at
+// another index.
+func (b *ConstructionBlockAccessList) StorageRestore(txIdx uint32, address common.Address, key common.Hash) {
+	acc := b.account(address)
+	if _, ok := acc.StorageWrites[key]; ok {
+		acc.dropStorageWrite(txIdx, key)
+	} else {
+		acc.StorageReads[key] = struct{}{}
+	}
+	r := acc.restoresAt(txIdx)
+	r.slots = append(r.slots, key)
+}
+
+// account returns the access object of the given account, creating it if absent.
+func (b *ConstructionBlockAccessList) account(address common.Address) *ConstructionAccountAccess {
+	acc, ok := b.Accounts[address]
+	if !ok {
+		acc = NewConstructionAccountAccess()
+		b.Accounts[address] = acc
+	}
+	return acc
+}
+
 // PrettyPrint returns a human-readable representation of the access list
 func (b *ConstructionBlockAccessList) PrettyPrint() string {
 	enc := b.ToEncodingObj()
@@ -151,7 +247,9 @@ func (b *ConstructionBlockAccessList) PrettyPrint() string {
 // Typically each list covers its own tx index, so txIdx-level collisions are
 // not expected; the exception is pre/post-transition system calls, which
 // share a single tx index. In that case callers must pass block-accessList
-// in order strictly.
+// in order strictly. Entries which other marks as restored to their value
+// from before a tx index are dropped from the local list for that index, so
+// that the merged list is net of all the scopes sharing the index.
 //
 // other is referenced (not deep copied), after the call both lists share
 // inner maps and other must not be mutated.
@@ -164,6 +262,27 @@ func (b *ConstructionBlockAccessList) Merge(other *ConstructionBlockAccessList) 
 		if !ok {
 			b.Accounts[addr] = otherAcc
 			continue
+		}
+		// Drop the entries restored by other first: anything other carries
+		// for the same index was recorded after the restore.
+		for txIdx, restored := range otherAcc.restores {
+			local := acc.restoresAt(txIdx)
+			if restored.balance {
+				delete(acc.BalanceChanges, txIdx)
+				local.balance = true
+			}
+			if restored.nonce {
+				delete(acc.NonceChanges, txIdx)
+				local.nonce = true
+			}
+			if restored.code {
+				delete(acc.CodeChange, txIdx)
+				local.code = true
+			}
+			for _, key := range restored.slots {
+				acc.dropStorageWrite(txIdx, key)
+			}
+			local.slots = append(local.slots, restored.slots...)
 		}
 		for key, writes := range otherAcc.StorageWrites {
 			existing, ok := acc.StorageWrites[key]
@@ -219,6 +338,15 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 			codes[index] = bytes.Clone(code)
 		}
 		aaCopy.CodeChange = codes
+
+		if aa.restores != nil {
+			aaCopy.restores = make(map[uint32]*constructionRestores, len(aa.restores))
+			for index, restored := range aa.restores {
+				cpy := *restored
+				cpy.slots = slices.Clone(restored.slots)
+				aaCopy.restores[index] = &cpy
+			}
+		}
 		res.Accounts[addr] = &aaCopy
 	}
 	return res

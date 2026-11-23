@@ -17,6 +17,9 @@
 package state
 
 import (
+	"bytes"
+	"maps"
+	"slices"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -158,5 +161,91 @@ func TestApplyBlockAccessListMatchesSequential(t *testing.T) {
 
 	if gotRoot != wantRoot {
 		t.Fatalf("BAL apply root = %x, want %x", gotRoot, wantRoot)
+	}
+}
+
+// TestAccessListNetsOverBlockAccessIndex checks that the changes recorded for
+// a block access index are net of all the finalisation scopes sharing it (the
+// withdrawals and the post-execution system calls, for instance), and not of
+// each scope on its own.
+func TestAccessListNetsOverBlockAccessIndex(t *testing.T) {
+	var (
+		earlier = common.HexToAddress("0x1111") // also changed at an earlier index
+		only    = common.HexToAddress("0x2222") // only touched at the shared index
+		again   = common.HexToAddress("0x3333") // restored, then changed once more
+		slot    = common.HexToHash("0x01")
+		rules   = params.Rules{IsEIP158: true, IsEIP2929: true, IsAmsterdam: true}
+
+		codeA, codeB, codeC = []byte{0x00}, []byte{0x5f, 0x00}, []byte{0x5f, 0x5f, 0x00}
+	)
+	sdb, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	set := func(addr common.Address, balance, nonce uint64, code []byte, value byte) {
+		sdb.SetBalance(addr, uint256.NewInt(balance), tracing.BalanceChangeUnspecified)
+		sdb.SetNonce(addr, nonce, tracing.NonceChangeUnspecified)
+		sdb.SetCode(addr, code, tracing.CodeChangeUnspecified)
+		sdb.SetState(addr, slot, common.BytesToHash([]byte{value}))
+	}
+	for _, addr := range []common.Address{earlier, only, again} {
+		set(addr, 5, 1, codeA, 0)
+	}
+	sdb.Finalise(params.Rules{IsEIP158: true})
+
+	list := bal.NewConstructionBlockAccessList()
+	scope := func(index uint32, fn func()) {
+		sdb.Prepare(rules, common.Address{}, common.Address{}, nil, nil, nil)
+		sdb.SetTxContext(common.Hash{}, 0, index)
+		fn()
+		list.Merge(sdb.Finalise(rules))
+	}
+	// Index 1, a single scope.
+	scope(1, func() { set(earlier, 7, 2, codeB, 1) })
+
+	// Index 2, three scopes: change, restore, and change one account again.
+	scope(2, func() {
+		set(earlier, 9, 3, codeC, 2)
+		set(only, 9, 3, codeC, 2)
+		set(again, 9, 3, codeC, 2)
+	})
+	scope(2, func() {
+		set(earlier, 7, 2, codeB, 1)
+		set(only, 5, 1, codeA, 0)
+		set(again, 5, 1, codeA, 0)
+	})
+	scope(2, func() { set(again, 11, 4, codeB, 3) })
+
+	check := func(addr common.Address, indices ...uint32) {
+		t.Helper()
+		acct := list.Accounts[addr]
+		if acct == nil {
+			t.Fatalf("account %x missing from the access list", addr)
+		}
+		have := map[string][]uint32{
+			"balance": slices.Sorted(maps.Keys(acct.BalanceChanges)),
+			"nonce":   slices.Sorted(maps.Keys(acct.NonceChanges)),
+			"code":    slices.Sorted(maps.Keys(acct.CodeChange)),
+			"storage": slices.Sorted(maps.Keys(acct.StorageWrites[slot])),
+		}
+		for kind, have := range have {
+			if !slices.Equal(have, indices) {
+				t.Errorf("account %x: %s changes at indices %v, want %v", addr, kind, have, indices)
+			}
+		}
+		if _, read := acct.StorageReads[slot]; read != (len(indices) == 0) {
+			t.Errorf("account %x: slot in storage reads = %v, want %v", addr, read, len(indices) == 0)
+		}
+	}
+	check(earlier, 1)
+	check(only)
+	check(again, 2)
+
+	acct := list.Accounts[again]
+	if !acct.BalanceChanges[2].Eq(uint256.NewInt(11)) || acct.NonceChanges[2] != 4 ||
+		!bytes.Equal(acct.CodeChange[2], codeB) || acct.StorageWrites[slot][2] != common.BytesToHash([]byte{3}) {
+		t.Errorf("account %x: wrong post-index values: %+v", again, acct)
+	}
+	acct = list.Accounts[earlier]
+	if !acct.BalanceChanges[1].Eq(uint256.NewInt(7)) || acct.NonceChanges[1] != 2 ||
+		!bytes.Equal(acct.CodeChange[1], codeB) || acct.StorageWrites[slot][1] != common.BytesToHash([]byte{1}) {
+		t.Errorf("account %x: wrong values at the earlier index: %+v", earlier, acct)
 	}
 }

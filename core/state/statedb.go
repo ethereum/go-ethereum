@@ -134,6 +134,14 @@ type StateDB struct {
 	// Block access index (0 for pre-execution, 1..n for transactions, n+1 for post-execution)
 	blockAccessIndex uint32
 
+	// indexOrigins holds the values which the accounts and storage slots
+	// mutated at the current block access index had immediately before it.
+	// The block-level access list is net of a whole index, which can span
+	// several finalisation scopes (the pre-execution system calls, or the
+	// withdrawals and the post-execution system calls). It is dropped when
+	// the index moves on.
+	indexOrigins map[common.Address]*indexOrigin
+
 	// Transient storage
 	transientStorage transientStorage
 
@@ -751,6 +759,12 @@ func (s *StateDB) Copy() *StateDB {
 	if s.stateAccessList != nil {
 		state.stateAccessList = s.stateAccessList.Copy()
 	}
+	if s.indexOrigins != nil {
+		state.indexOrigins = make(map[common.Address]*indexOrigin, len(s.indexOrigins))
+		for addr, origin := range s.indexOrigins {
+			state.indexOrigins[addr] = origin.copy()
+		}
+	}
 	return state
 }
 
@@ -818,33 +832,131 @@ func (s *StateDB) Finalise(rules params.Rules) *bal.ConstructionBlockAccessList 
 	return nil
 }
 
+// indexOrigin tracks the values an account had immediately before the current
+// block access index, captured by the first finalisation scope of the index
+// mutating them.
+type indexOrigin struct {
+	balance    *uint256.Int
+	balanceSet bool
+	nonce      uint64
+	nonceSet   bool
+	code       []byte
+	codeSet    bool
+	storage    map[common.Hash]common.Hash
+}
+
+func (o *indexOrigin) copy() *indexOrigin {
+	cpy := *o
+	if o.balance != nil {
+		cpy.balance = new(uint256.Int).Set(o.balance)
+	}
+	cpy.code = slices.Clone(o.code)
+	cpy.storage = maps.Clone(o.storage)
+	return &cpy
+}
+
+// indexOriginFor returns the index origin tracker of the account, creating
+// it if absent.
+func (s *StateDB) indexOriginFor(addr common.Address) *indexOrigin {
+	origin := s.indexOrigins[addr]
+	if origin == nil {
+		if s.indexOrigins == nil {
+			s.indexOrigins = make(map[common.Address]*indexOrigin)
+		}
+		origin = new(indexOrigin)
+		s.indexOrigins[addr] = origin
+	}
+	return origin
+}
+
+// recordStorageChange aggregates the storage slot mutated in the scope being
+// finalised into the block-level access list. The prev is the value of the
+// slot at the start of the scope, which is always different from the value.
+//
+// The slot is a change if its value differs from the one it had immediately
+// before the current block access index, the same as the prev unless a former
+// scope of the index mutated the slot already. Otherwise the slot is restored,
+// revoking whatever was recorded for it at this index.
+func (s *StateDB) recordStorageChange(addr common.Address, key, prev, value common.Hash) {
+	if s.stateAccessList == nil {
+		return
+	}
+	origin := s.indexOriginFor(addr)
+	start, ok := origin.storage[key]
+	if !ok {
+		if origin.storage == nil {
+			origin.storage = make(map[common.Hash]common.Hash)
+		}
+		origin.storage[key], start = prev, prev
+	}
+	if value != start {
+		s.stateAccessList.StorageWrite(s.blockAccessIndex, addr, key, value)
+	} else {
+		s.stateAccessList.StorageRestore(s.blockAccessIndex, addr, key)
+	}
+}
+
+// recordAccessListChanges aggregates the account metadata mutated in the scope
+// being finalised into the block-level access list. The fields are compared
+// against the values they had immediately before the current block access
+// index, not before the scope: several scopes can share an index, and a field
+// ending up where the index started is not a change, in which case whatever
+// a former scope recorded for it at this index is revoked.
 func (s *StateDB) recordAccessListChanges(addr common.Address, state *journalMutationState) {
 	// No list means we are outside a transaction scope (e.g, PostExecution
 	// without a preceding Prepare), skip BAL recording.
 	if s.stateAccessList == nil {
 		return
 	}
+	if !state.balanceSet && !state.nonceSet && !state.codeSet {
+		return
+	}
 	var (
 		balance = uint256.NewInt(0)
 		nonce   uint64
+		origin  = s.indexOriginFor(addr)
 	)
 	obj := s.stateObjects[addr] // nil when the account was removed
 	if obj != nil {
 		balance, nonce = obj.Balance(), obj.Nonce()
 	}
-	if state.balanceSet && balance.Cmp(state.balance) != 0 {
-		s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+	if state.balanceSet {
+		// The pre-scope value is the pre-index one, unless a former scope
+		// of the index has mutated the field already.
+		seen := origin.balanceSet
+		if !seen {
+			origin.balance, origin.balanceSet = state.balance, true
+		}
+		if balance.Cmp(origin.balance) != 0 {
+			s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+		} else if seen {
+			s.stateAccessList.BalanceRestore(s.blockAccessIndex, addr)
+		}
 	}
-	if state.nonceSet && nonce != state.nonce {
-		s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)
+	if state.nonceSet {
+		seen := origin.nonceSet
+		if !seen {
+			origin.nonce, origin.nonceSet = state.nonce, true
+		}
+		if nonce != origin.nonce {
+			s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)
+		} else if seen {
+			s.stateAccessList.NonceRestore(addr, s.blockAccessIndex)
+		}
 	}
 	if state.codeSet {
 		var code []byte
 		if obj != nil {
 			code = obj.Code()
 		}
-		if !bytes.Equal(code, state.code) {
+		seen := origin.codeSet
+		if !seen {
+			origin.code, origin.codeSet = state.code, true
+		}
+		if !bytes.Equal(code, origin.code) {
 			s.stateAccessList.CodeChange(addr, s.blockAccessIndex, code)
+		} else if seen {
+			s.stateAccessList.CodeRestore(addr, s.blockAccessIndex)
 		}
 	}
 }
@@ -1142,6 +1254,11 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 func (s *StateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint32) {
 	s.thash = thash
 	s.txIndex = ti
+
+	// The pre-index values are only meaningful within the index.
+	if blockAccessIndex != s.blockAccessIndex {
+		s.indexOrigins = nil
+	}
 	s.blockAccessIndex = blockAccessIndex
 }
 

@@ -254,6 +254,13 @@ func (s *stateObject) setState(key common.Hash, value common.Hash, origin common
 func (s *stateObject) finalise() {
 	slotsToPrefetch := make([]common.Hash, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
+		// Aggregate storage writes into the block-level access list.
+		// All slots in the dirtyStorage set must have post-transaction
+		// values that differ from their pre-transaction values, which
+		// are resolved before the slots are moved into the pending area.
+		if s.db.stateAccessList != nil {
+			s.db.recordStorageChange(s.address, key, s.GetCommittedState(key), value)
+		}
 		if origin, exist := s.uncommittedStorage[key]; exist && origin == value {
 			// The slot is reverted to its original value, delete the entry
 			// to avoid thrashing the data structures.
@@ -274,13 +281,6 @@ func (s *stateObject) finalise() {
 		// map as the dirty slot might have been committed already (before the
 		// byzantium fork) and entry is necessary to modify the value back.
 		s.pendingStorage[key] = value
-
-		// Aggregate storage writes into the block-level access list.
-		// All slots in the dirtyStorage set must have post-transaction
-		// values that differ from their pre-transaction values.
-		if s.db.stateAccessList != nil {
-			s.db.stateAccessList.StorageWrite(s.db.blockAccessIndex, s.address, key, value)
-		}
 	}
 	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {
 		if err := s.db.prefetcher.prefetch(s.addrHash(), s.data.Root, s.address, nil, slotsToPrefetch, false); err != nil {

@@ -159,6 +159,70 @@ func TestConstructionBALMerge(t *testing.T) {
 	}
 }
 
+// TestConstructionBALMergeRestores checks that the entries restored to their
+// value from before a tx index revoke what was recorded at that index, and
+// nothing else, also when the restoring list is merged in several hops.
+func TestConstructionBALMergeRestores(t *testing.T) {
+	var (
+		addr  = common.BytesToAddress([]byte{0xAA})
+		slot1 = common.BytesToHash([]byte{0x01}) // written at an earlier index too
+		slot2 = common.BytesToHash([]byte{0x02}) // only written at the shared index
+		slot3 = common.BytesToHash([]byte{0x03}) // restored, then written again
+		value = common.BytesToHash([]byte{0x11})
+	)
+	block := NewConstructionBlockAccessList()
+	for _, idx := range []uint32{1, 2} {
+		block.StorageWrite(idx, addr, slot1, value)
+		block.BalanceChange(idx, addr, uint256.NewInt(100))
+		block.NonceChange(addr, idx, 7)
+		block.CodeChange(addr, idx, []byte{0xde, 0xad})
+	}
+	block.StorageWrite(2, addr, slot2, value)
+	block.StorageWrite(2, addr, slot3, value)
+
+	restore := NewConstructionBlockAccessList()
+	restore.StorageRestore(2, addr, slot1)
+	restore.StorageRestore(2, addr, slot2)
+	restore.StorageRestore(2, addr, slot3)
+	restore.BalanceRestore(2, addr)
+	restore.NonceRestore(addr, 2)
+	restore.CodeRestore(addr, 2)
+
+	again := NewConstructionBlockAccessList()
+	again.StorageWrite(2, addr, slot3, value)
+	again.BalanceChange(2, addr, uint256.NewInt(300))
+
+	// The scopes of an index are gathered first, as the pre- and
+	// post-execution do, and then handed over to the block-level list.
+	post := NewConstructionBlockAccessList()
+	post.AccountRead(addr)
+	post.Merge(restore.Copy())
+	post.Merge(again)
+	block.Merge(post)
+
+	acc := block.Accounts[addr]
+	wantWrites := map[common.Hash]map[uint32]common.Hash{
+		slot1: {1: value},
+		slot3: {2: value},
+	}
+	if !reflect.DeepEqual(acc.StorageWrites, wantWrites) {
+		t.Fatalf("storage writes mismatch: got %v, want %v", acc.StorageWrites, wantWrites)
+	}
+	wantReads := map[common.Hash]struct{}{slot2: {}}
+	if !reflect.DeepEqual(acc.StorageReads, wantReads) {
+		t.Fatalf("storage reads mismatch: got %v, want %v", acc.StorageReads, wantReads)
+	}
+	if len(acc.BalanceChanges) != 2 || acc.BalanceChanges[1].Uint64() != 100 || acc.BalanceChanges[2].Uint64() != 300 {
+		t.Fatalf("balance changes mismatch: %v", acc.BalanceChanges)
+	}
+	if len(acc.NonceChanges) != 1 || acc.NonceChanges[1] != 7 {
+		t.Fatalf("nonce changes mismatch: %v", acc.NonceChanges)
+	}
+	if len(acc.CodeChange) != 1 || !bytes.Equal(acc.CodeChange[1], []byte{0xde, 0xad}) {
+		t.Fatalf("code changes mismatch: %v", acc.CodeChange)
+	}
+}
+
 func makeTestAccountAccess(sort bool) AccountAccess {
 	var (
 		storageWrites []encodingSlotChanges

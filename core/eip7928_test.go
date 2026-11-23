@@ -2287,3 +2287,98 @@ func TestBALDelegatedSender(t *testing.T) {
 	assertPresent(t, b, env.from)
 	assertAbsent(t, b, implementation)
 }
+
+// ============================== Netting over a block access index ==============================
+
+// The withdrawals and every post-execution system call share a single block
+// access index, and the EIP nets changes over the whole index: a value which
+// ends the index where it started must not be recorded, no matter how many
+// finalisation scopes it travelled through.
+
+// balFlipSlot1 flips storage slot 1 between zero and one:
+// SSTORE(1, ISZERO(SLOAD(1))); STOP.
+var balFlipSlot1 = []byte{0x60, 0x01, 0x54, 0x15, 0x60, 0x01, 0x55, 0x00}
+
+// balCallNoValue returns code performing a plain CALL to target with all the
+// remaining gas, no value and no data.
+func balCallNoValue(target common.Address) []byte {
+	code := []byte{0x5f, 0x5f, 0x5f, 0x5f, 0x5f, 0x73} // 4 x PUSH0 (args/ret), PUSH0 (value), PUSH20
+	code = append(code, target.Bytes()...)
+	return append(code, 0x5a, 0xf1, 0x00) // GAS; CALL; STOP
+}
+
+// TestBALPostExecutionNetBalance: a withdrawal credits a request predeploy,
+// whose system call then forwards the whole balance to a sink. The predeploy
+// ends the index with the balance it started with, so it is listed without
+// a balance change.
+func TestBALPostExecutionNetBalance(t *testing.T) {
+	sink := common.HexToAddress("0x51c0")
+	// CALL(GAS, sink, SELFBALANCE, 0, 0, 0, 0); STOP.
+	forwardAll := []byte{0x5f, 0x5f, 0x5f, 0x5f, 0x47, 0x73}
+	forwardAll = append(forwardAll, sink.Bytes()...)
+	forwardAll = append(forwardAll, 0x5a, 0xf1, 0x00)
+
+	env := newBALTestEnv(types.GenesisAlloc{
+		sink:                          {Balance: big.NewInt(1)},
+		params.WithdrawalQueueAddress: {Nonce: 1, Code: forwardAll, Balance: common.Big0},
+	})
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+		g.AddWithdrawal(&types.Withdrawal{Validator: 1, Address: params.WithdrawalQueueAddress, Amount: 1})
+	})
+
+	predeploy := assertPresent(t, b, params.WithdrawalQueueAddress)
+	if len(predeploy.BalanceChanges) != 0 {
+		t.Fatalf("balance restored within the index must not be recorded: %+v\n%s", predeploy.BalanceChanges, b.PrettyPrint())
+	}
+	want := new(uint256.Int).AddUint64(uint256.NewInt(params.GWei), 1)
+	s := assertPresent(t, b, sink)
+	if len(s.BalanceChanges) != 1 || s.BalanceChanges[0].BlockAccessIndex != 1 || s.BalanceChanges[0].PostBalance.Cmp(want) != 0 {
+		t.Fatalf("sink balance change: have %+v, want %d at index 1", s.BalanceChanges, want)
+	}
+}
+
+// TestBALPostExecutionNetStorage: the withdrawal queue system call makes the
+// consolidation contract set a slot, which the consolidation system call then
+// clears again. The slot is unchanged over the index and is a read.
+func TestBALPostExecutionNetStorage(t *testing.T) {
+	slot := common.BigToHash(big.NewInt(1))
+	env := newBALTestEnv(types.GenesisAlloc{
+		params.WithdrawalQueueAddress:    {Nonce: 1, Code: balCallNoValue(params.ConsolidationQueueAddress), Balance: common.Big0},
+		params.ConsolidationQueueAddress: {Nonce: 1, Code: balFlipSlot1, Balance: common.Big0},
+	})
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+	})
+
+	aa := assertPresent(t, b, params.ConsolidationQueueAddress)
+	if hasStorageWrite(b, params.ConsolidationQueueAddress, slot) {
+		t.Fatalf("slot restored within the index must not be in storage_changes\n%s", b.PrettyPrint())
+	}
+	if !hasSlotIn(aa.StorageReads, slot) {
+		t.Fatalf("slot restored within the index must be in storage_reads\n%s", b.PrettyPrint())
+	}
+}
+
+// TestBALPostExecutionNetStorageKeepsEarlierIndex: netting a slot away at the
+// post-execution index must leave the change of an earlier transaction alone.
+func TestBALPostExecutionNetStorageKeepsEarlierIndex(t *testing.T) {
+	slot := common.BigToHash(big.NewInt(1))
+	env := newBALTestEnv(types.GenesisAlloc{
+		params.WithdrawalQueueAddress:    {Nonce: 1, Code: balCallNoValue(params.ConsolidationQueueAddress), Balance: common.Big0},
+		params.ConsolidationQueueAddress: {Nonce: 1, Code: balFlipSlot1, Balance: common.Big0},
+	})
+	b, _ := env.run(t, func(g *BlockGen) {
+		g.SetCoinbase(common.Address{0xc0})
+		// Index 1: 0 -> 1. Index 2: 1 -> 0 -> 1.
+		g.AddTx(env.tx(0, &params.ConsolidationQueueAddress, big.NewInt(0), 1_000_000, 0, nil))
+	})
+
+	aa := assertPresent(t, b, params.ConsolidationQueueAddress)
+	assertStorageChanges(t, aa, slot, []balStorageChangeExpectation{
+		{index: 1, value: common.BigToHash(big.NewInt(1))},
+	})
+	if hasSlotIn(aa.StorageReads, slot) {
+		t.Fatalf("slot with committed changes must not be in storage_reads\n%s", b.PrettyPrint())
+	}
+}
