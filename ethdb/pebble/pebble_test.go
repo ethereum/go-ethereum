@@ -18,6 +18,7 @@ package pebble
 
 import (
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/cockroachdb/pebble"
@@ -55,6 +56,110 @@ func TestPebbleDB(t *testing.T) {
 			}
 		})
 	})
+}
+
+func TestReverseIterator(t *testing.T) {
+	db, err := pebblev2.Open("", &pebblev2.Options{
+		FS: vfsv2.NewMem(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	testReverseIterator(t, &Database{
+		db: db,
+	})
+}
+
+func TestReverseIteratorV1(t *testing.T) {
+	db, err := pebblev1.Open("", &pebblev1.Options{
+		FS: vfsv1.NewMem(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	testReverseIterator(t, &V1Database{
+		db: db,
+	})
+}
+
+func testReverseIterator(t *testing.T, store interface {
+	ethdb.KeyValueWriter
+	ethdb.ReverseIteratee
+}) {
+	keys := []string{"o", "p", "p\x00", "pa", "pa\x00", "p\xff", "p\xff\xff", "q", "\xff\xff", "\xff\xff\xff"}
+	for _, k := range keys {
+		if err := store.Put([]byte(k), []byte(k)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		name, prefix string
+		start        []byte
+		want         []string
+	}{
+		{
+			name:   "prefix",
+			prefix: "p",
+			want:   []string{"p\xff\xff", "p\xff", "pa\x00", "pa", "p\x00", "p"},
+		},
+		{
+			name:   "exact",
+			prefix: "p",
+			start:  []byte("a"),
+			want:   []string{"pa", "p\x00", "p"},
+		},
+		{
+			name:   "missing",
+			prefix: "p",
+			start:  []byte("b"),
+			want:   []string{"pa\x00", "pa", "p\x00", "p"},
+		},
+		{
+			name:   "empty suffix",
+			prefix: "p",
+			start:  []byte{},
+			want:   []string{"p"},
+		},
+		{
+			name:   "trailing ff",
+			prefix: "p",
+			start:  []byte{0xff},
+			want:   []string{"p\xff", "pa\x00", "pa", "p\x00", "p"},
+		},
+		{
+			name:   "unbounded prefix",
+			prefix: "\xff\xff",
+			want:   []string{"\xff\xff\xff", "\xff\xff"},
+		},
+		{
+			name:   "absent prefix",
+			prefix: "x",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			it := store.NewReverseIterator([]byte(tc.prefix), tc.start)
+			var got []string
+			for it.Next() {
+				got = append(got, string(it.Key()))
+				if len(got) == 1 {
+					// Resume inclusively after releasing the old read state.
+					start := []byte(got[0][len(tc.prefix):])
+					it.Release()
+					it = store.NewReverseIterator([]byte(tc.prefix), start)
+					if !it.Next() || string(it.Key()) != got[0] {
+						t.Fatalf("resume at %x returned %x (error %v)", got[0], it.Key(), it.Error())
+					}
+				}
+			}
+			err := it.Error()
+			it.Release()
+			if err != nil || !slices.Equal(got, tc.want) {
+				t.Fatalf("got %x (error %v), want %x", got, err, tc.want)
+			}
+		})
+	}
 }
 
 func BenchmarkPebbleDB(b *testing.B) {
