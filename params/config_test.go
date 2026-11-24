@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/params/forks"
 	"github.com/stretchr/testify/require"
 )
 
@@ -214,5 +215,45 @@ func TestCheckConfigForkOrderBPO(t *testing.T) {
 				require.NoError(t, err)
 			}
 		})
+	}
+}
+
+// TestLatestForkBPOAfterAmsterdam checks the latest fork and its blob config
+// when BPO forks activate after Amsterdam.
+func TestLatestForkBPOAfterAmsterdam(t *testing.T) {
+	config := *MergedTestChainConfig
+	config.OsakaTime = newUint64(0)
+	config.BPO1Time = newUint64(0)
+	config.BPO2Time = newUint64(0)
+	config.AmsterdamTime = newUint64(10)
+	config.BPO3Time = newUint64(20)
+	config.BPO4Time = newUint64(30)
+	config.BogotaTime = nil
+	config.BPO5Time = nil
+	config.BlobScheduleConfig = &BlobScheduleConfig{
+		Cancun: DefaultCancunBlobConfig,
+		Prague: DefaultPragueBlobConfig,
+		BPO1:   DefaultBPO1BlobConfig,
+		BPO2:   DefaultBPO2BlobConfig,
+		BPO3:   DefaultBPO3BlobConfig,
+		BPO4:   DefaultBPO4BlobConfig,
+	}
+	require.NoError(t, config.CheckConfigForkOrder())
+
+	tests := []struct {
+		time uint64
+		fork forks.Fork
+		blob *BlobConfig
+	}{
+		{0, forks.BPO2, DefaultBPO2BlobConfig},
+		{10, forks.Amsterdam, DefaultBPO2BlobConfig},
+		{20, forks.BPO3, DefaultBPO3BlobConfig},
+		{30, forks.BPO4, DefaultBPO4BlobConfig},
+	}
+	for _, tt := range tests {
+		fork := config.LatestFork(tt.time)
+		require.Equal(t, tt.fork, fork, "time %d", tt.time)
+		require.Equal(t, tt.blob, config.BlobConfig(fork), "time %d", tt.time)
+		require.Equal(t, newUint64(tt.time), config.Timestamp(fork), "time %d", tt.time)
 	}
 }

@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -205,6 +206,25 @@ func TestOnDemandSpam(t *testing.T) {
 		case <-abort.C:
 			t.Fatalf("timed out without including all withdrawals/txs: have txs %d, want %d, have wxs %d, want %d",
 				includedTxs, txCount, includedWxs, wxCount)
+		}
+	}
+}
+
+// TestPayloadVersionBPOAfterAmsterdam checks that the simulated beacon keeps
+// building Amsterdam payloads after a BPO fork that activates after Amsterdam.
+func TestPayloadVersionBPOAfterAmsterdam(t *testing.T) {
+	config := *params.MergedTestChainConfig
+	config.AmsterdamTime = new(uint64)
+	bpo3 := uint64(100)
+	config.BPO3Time = &bpo3
+	config.BlobScheduleConfig = &params.BlobScheduleConfig{
+		Cancun: params.DefaultCancunBlobConfig,
+		Prague: params.DefaultPragueBlobConfig,
+		BPO3:   params.DefaultBPO3BlobConfig,
+	}
+	for _, time := range []uint64{0, bpo3} {
+		if have := payloadVersion(&config, time); have != engine.PayloadV4 {
+			t.Errorf("time %d: payload version mismatch: have %d, want %d", time, have, engine.PayloadV4)
 		}
 	}
 }

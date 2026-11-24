@@ -4833,6 +4833,18 @@ func TestEIP7910Config(t *testing.T) {
 		BPO2:   params.DefaultBPO2BlobConfig,
 	}
 
+	// bpoAfterAmsterdamConfig schedules BPO3 after Amsterdam. At Amsterdam the
+	// BPO2 blob schedule is still in force and BPO3 is the next fork.
+	bpoAfterAmsterdamConfig := bpoConfig
+	bpoAfterAmsterdamConfig.BPO3Time = newUint64(1743004832)
+	bpoAfterAmsterdamConfig.BlobScheduleConfig = &params.BlobScheduleConfig{
+		Cancun: params.DefaultCancunBlobConfig,
+		Prague: params.DefaultPragueBlobConfig,
+		BPO1:   params.DefaultBPO1BlobConfig,
+		BPO2:   params.DefaultBPO2BlobConfig,
+		BPO3:   params.DefaultBPO3BlobConfig,
+	}
+
 	var testSuite = []struct {
 		config *params.ChainConfig
 		time   uint64
@@ -4852,6 +4864,11 @@ func TestEIP7910Config(t *testing.T) {
 			config: &bpoConfig,
 			time:   *bpoConfig.BPO2Time,
 			file:   "bpo-skip",
+		},
+		{
+			config: &bpoAfterAmsterdamConfig,
+			time:   *bpoAfterAmsterdamConfig.AmsterdamTime,
+			file:   "bpo-after-amsterdam",
 		},
 	}
 
