@@ -17,6 +17,7 @@
 package override
 
 import (
+	"errors"
 	"maps"
 	"testing"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/triedb"
 )
 
@@ -120,6 +122,27 @@ func TestStateOverrideMovePrecompile(t *testing.T) {
 			if _, ok := cpy[k]; !ok {
 				t.Errorf("test %d: precompile not found: %s", i, k.String())
 			}
+		}
+	}
+}
+
+func TestBlockOverridesUnsupported(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		overrides BlockOverrides
+	}{
+		{"beaconRoot", BlockOverrides{BeaconRoot: &common.Hash{}}},
+		{"withdrawals", BlockOverrides{Withdrawals: &types.Withdrawals{{Index: 1, Amount: 1}}}},
+		{"empty withdrawals", BlockOverrides{Withdrawals: &types.Withdrawals{}}},
+	} {
+		err := tt.overrides.Apply(&vm.BlockContext{})
+		var rpcErr rpc.Error
+		if !errors.As(err, &rpcErr) {
+			t.Errorf("%s: want rpc error, have %v", tt.name, err)
+			continue
+		}
+		if code := rpcErr.ErrorCode(); code != -32602 {
+			t.Errorf("%s: want error code -32602, have %d", tt.name, code)
 		}
 	}
 }

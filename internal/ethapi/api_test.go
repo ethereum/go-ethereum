@@ -1079,6 +1079,7 @@ func TestCall(t *testing.T) {
 		call           TransactionArgs
 		blockOverrides override.BlockOverrides
 		expectErr      error
+		expectErrCode  int
 		want           string
 	}{
 		// transfer on genesis
@@ -1321,7 +1322,8 @@ func TestCall(t *testing.T) {
 			blockOverrides: override.BlockOverrides{
 				BeaconRoot: &common.Hash{0, 1, 2},
 			},
-			expectErr: errors.New(`block override "beaconRoot" is not supported for this RPC method`),
+			expectErr:     errors.New(`block override "beaconRoot" is not supported for this RPC method`),
+			expectErrCode: ErrCodeInvalidParams,
 		},
 		{
 			name:        "unsupported block override withdrawals",
@@ -1330,7 +1332,8 @@ func TestCall(t *testing.T) {
 			blockOverrides: override.BlockOverrides{
 				Withdrawals: &types.Withdrawals{},
 			},
-			expectErr: errors.New(`block override "withdrawals" is not supported for this RPC method`),
+			expectErr:     errors.New(`block override "withdrawals" is not supported for this RPC method`),
+			expectErrCode: ErrCodeInvalidParams,
 		},
 		// Verify that an overridden basefee is honored when computing gasPrice
 		// from the 1559 fee fields. Returning GASPRICE opcode; expected value
@@ -1363,8 +1366,13 @@ func TestCall(t *testing.T) {
 			}
 			if !errors.Is(err, tc.expectErr) {
 				// Second try
-				if !reflect.DeepEqual(err, tc.expectErr) {
+				if err.Error() != tc.expectErr.Error() {
 					t.Errorf("test %s: error mismatch, want %v, have %v", tc.name, tc.expectErr, err)
+				}
+			}
+			if tc.expectErrCode != 0 {
+				if rpcErr, ok := err.(rpc.Error); !ok || rpcErr.ErrorCode() != tc.expectErrCode {
+					t.Errorf("test %s: want error code %d, have %v", tc.name, tc.expectErrCode, err)
 				}
 			}
 			continue
