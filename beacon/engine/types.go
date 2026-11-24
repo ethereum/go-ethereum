@@ -250,7 +250,7 @@ func encodeTransactions(txs []*types.Transaction) [][]byte {
 func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	var (
 		txs     = make([]*types.Transaction, len(enc))
-		workers = min(runtime.GOMAXPROCS(0), len(enc)/decodeBatchSize)
+		workers = decodeWorkers(enc, runtime.GOMAXPROCS(0))
 	)
 	if workers < 2 {
 		if err := decodeRange(enc, txs, 0, len(enc)); err != nil {
@@ -281,6 +281,28 @@ func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 
 // decodeBatchSize is the fewest transactions worth handing to a decode worker.
 const decodeBatchSize = 32
+
+// decodeByteBatchSize is the fewest encoded bytes worth handing to a decode
+// worker. Sizing the worker pool by total bytes as well as by transaction count
+// keeps a block of a few very large transactions (large calldata or many
+// EIP-7702 authorizations) from being decoded on a single worker.
+const decodeByteBatchSize = 256 * 1024
+
+// decodeWorkers sizes the transaction-decode worker pool from both the number of
+// transactions and their total encoded size, bounded by maxProcs. Using the
+// transaction count alone understates the work for a block made of a few very
+// large transactions, which would otherwise decode serially.
+func decodeWorkers(enc [][]byte, maxProcs int) int {
+	var totalBytes int
+	for _, e := range enc {
+		totalBytes += len(e)
+	}
+	// Never use more workers than there are transactions: a single large
+	// transaction cannot be decoded in parallel, so extra workers would only add
+	// scheduling overhead. For a block below both thresholds this returns < 2 and
+	// the caller decodes serially, exactly as before this byte-based sizing.
+	return min(maxProcs, len(enc), max(len(enc)/decodeBatchSize, totalBytes/decodeByteBatchSize))
+}
 
 // decodeRange decodes enc[from:to] into txs.
 func decodeRange(enc [][]byte, txs []*types.Transaction, from, to int) error {

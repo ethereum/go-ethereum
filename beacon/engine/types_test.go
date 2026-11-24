@@ -17,6 +17,8 @@
 package engine
 
 import (
+	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -44,5 +46,116 @@ func TestBlobs(t *testing.T) {
 	env = BlockToExecutableData(block, common.Big0, []*types.BlobTxSidecar{sidecarWithCellProofs}, nil)
 	if len(env.BlobsBundle.Proofs) != 128 {
 		t.Fatalf("Expect 128 proofs in blobs bundle, got %v", len(env.BlobsBundle.Proofs))
+	}
+}
+
+// makeEncTx builds a dynamic-fee transaction with dataLen bytes of calldata and
+// returns its canonical binary encoding. The transaction is unsigned, which is
+// irrelevant to encode/decode round-tripping.
+func makeEncTx(t *testing.T, nonce uint64, dataLen int) []byte {
+	t.Helper()
+	to := common.Address{0x1}
+	tx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   big.NewInt(1),
+		Nonce:     nonce,
+		GasTipCap: big.NewInt(1),
+		GasFeeCap: big.NewInt(1),
+		Gas:       21000,
+		To:        &to,
+		Value:     big.NewInt(0),
+		Data:      make([]byte, dataLen),
+	})
+	enc, err := tx.MarshalBinary()
+	if err != nil {
+		t.Fatalf("MarshalBinary: %v", err)
+	}
+	return enc
+}
+
+// TestDecodeWorkers checks that the worker pool is sized by both transaction
+// count and total encoded bytes, so a block of a few large transactions is
+// decoded concurrently instead of serially.
+func TestDecodeWorkers(t *testing.T) {
+	const maxProcs = 8
+	blob := func(n, size int) [][]byte {
+		enc := make([][]byte, n)
+		for i := range enc {
+			enc[i] = make([]byte, size)
+		}
+		return enc
+	}
+	tests := []struct {
+		name string
+		enc  [][]byte
+		max  int
+		want int
+	}{
+		{"empty", nil, maxProcs, 0},
+		{"few small -> serial", blob(4, 100), maxProcs, 0},
+		{"many small -> count parallel", blob(96, 100), maxProcs, 3},
+		// 4 x 300 KiB: count/32 == 0, but 1.2 MiB / 256 KiB == 4 -> parallel.
+		{"few large -> byte parallel", blob(4, 300*1024), maxProcs, 4},
+		{"byte parallel capped by maxProcs", blob(4, 300*1024), 2, 2},
+		// 2 x 1 MiB: bytes term is 8, but capped at the 2 transactions.
+		{"few very large capped by tx count", blob(2, 1024*1024), maxProcs, 2},
+		// single large tx cannot be parallelized -> 1 worker (serial).
+		{"single large -> serial", blob(1, 1024*1024), maxProcs, 1},
+	}
+	for _, tt := range tests {
+		if got := decodeWorkers(tt.enc, tt.max); got != tt.want {
+			t.Errorf("%s: decodeWorkers = %d, want %d", tt.name, got, tt.want)
+		}
+	}
+}
+
+// TestDecodeTransactionsRoundtrip checks that DecodeTransactions returns the
+// original transactions for both the serial and the parallel paths, and that a
+// malformed entry yields an error naming the lowest failing index.
+func TestDecodeTransactionsRoundtrip(t *testing.T) {
+	sizes := map[string]struct {
+		n, dataLen int
+	}{
+		"serial small":        {3, 64},
+		"count parallel":      {96, 64},
+		"byte parallel (few)": {6, 300 * 1024}, // 1.8 MiB across 6 txs -> parallel by bytes
+	}
+	for name, s := range sizes {
+		enc := make([][]byte, s.n)
+		want := make([]common.Hash, s.n)
+		for i := range enc {
+			enc[i] = makeEncTx(t, uint64(i), s.dataLen)
+			var tx types.Transaction
+			if err := tx.UnmarshalBinary(enc[i]); err != nil {
+				t.Fatalf("%s: setup decode: %v", name, err)
+			}
+			want[i] = tx.Hash()
+		}
+		got, err := DecodeTransactions(enc)
+		if err != nil {
+			t.Fatalf("%s: DecodeTransactions: %v", name, err)
+		}
+		if len(got) != s.n {
+			t.Fatalf("%s: got %d txs, want %d", name, len(got), s.n)
+		}
+		for i, tx := range got {
+			if tx.Hash() != want[i] {
+				t.Errorf("%s: tx %d hash mismatch", name, i)
+			}
+		}
+	}
+
+	// A malformed entry must surface an error naming its (lowest) index.
+	enc := [][]byte{
+		makeEncTx(t, 0, 32),
+		makeEncTx(t, 1, 32),
+		{0x02, 0xff}, // typed (dynamic-fee) prefix with a garbage payload
+		makeEncTx(t, 3, 32),
+	}
+	_, err := DecodeTransactions(enc)
+	if err == nil {
+		t.Fatal("expected error for malformed transaction, got nil")
+	}
+	if !strings.Contains(err.Error(), "transaction 2") {
+		t.Errorf("error %q does not name failing index 2", err)
 	}
 }
