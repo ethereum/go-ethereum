@@ -225,6 +225,8 @@ Mining can be further configured by changing the default gas limit blocks conver
 
 ### Running A Miner (Ethash) {#running-a-miner}
 
+> :> [!WARNING] **Geth no longer supports mining: the `--mine`, `--miner.threads` and `--miner.etherbase` flags no longer exist**
+
 For PoW in a simple private network, a single CPU miner instance is enough to create a stable stream of blocks at regular intervals. To start a Geth instance for mining, it can be run with all the usual flags plus the following to configure mining:
 
 ```sh
