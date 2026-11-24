@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 )
 
@@ -103,6 +105,65 @@ func TestIngestBatch(t *testing.T) {
 	}
 	if len(entries) != 0 {
 		t.Fatalf("Unexpected leftover sstables: %d", len(entries))
+	}
+}
+
+func TestIngestBatchDescending(t *testing.T) {
+	db, err := New(t.TempDir(), 16, 16, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Fit several keys in each SST and leave a partial table at the end.
+	const count = 17
+	db.ingestOpts.TargetFileSizes[0] = 256
+	batch := db.NewIngestBatch(0)
+	defer batch.Close()
+
+	wantOrder := make([]string, 0, count)
+	for i := count - 1; i >= 0; i-- {
+		key := ingestKey(i)
+		if err := batch.Put(key, ingestValue(i)); err != nil {
+			t.Fatal(err)
+		}
+		wantOrder = append(wantOrder, string(key))
+	}
+	if err := batch.Write(); err != nil {
+		t.Fatal(err)
+	}
+	var tables uint64
+	for _, level := range db.db.Metrics().Levels {
+		tables += level.TablesIngested
+	}
+	if tables < 2 {
+		t.Fatalf("Ingested %d SSTs, want multiple tables", tables)
+	}
+	for i := range count {
+		key := ingestKey(i)
+		got, err := db.Get(key)
+		if want := ingestValue(i); err != nil || !bytes.Equal(got, want) {
+			t.Fatalf("Value of %s: got %x, want %x, err %v", key, got, want, err)
+		}
+	}
+
+	// Check after Write so this also catches reordering the batch in place.
+	var replayOrder []string
+	replay := ethdb.HookedBatch{
+		Batch: memorydb.New().NewBatch(),
+		OnPut: func(key, _ []byte) {
+			replayOrder = append(replayOrder, string(key))
+		},
+		OnDelete: func(key []byte) {
+			t.Fatalf("Unexpected replay deletion for %s", key)
+		},
+	}
+	defer replay.Close()
+	if err := batch.Replay(replay); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(replayOrder, wantOrder) {
+		t.Fatalf("Replay order: got %v, want %v", replayOrder, wantOrder)
 	}
 }
 
