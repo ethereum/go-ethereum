@@ -3,7 +3,7 @@ title: Proof-of-work mining with Ethash
 description: Introduction to proof-of-work mining with Geth
 ---
 
-<Note>Proof-of-work mining is no longer used to secure Ethereum Mainnet.</Note>
+<Note>Proof-of-work mining is no longer used to secure Ethereum Mainnet, and Geth no longer supports it: the `--mine`, `--miner.etherbase` and `--miner.threads` flags no longer exist. This page only applies to older versions of Geth.</Note>
 
 Blockchains grow when individual nodes create valid blocks and distribute them to their peers who check the blocks and add them to their own local databases.
 
