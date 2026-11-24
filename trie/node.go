@@ -345,17 +345,15 @@ func (err *decodeError) Error() string {
 //
 // The subtree root blob is one of:
 //
-//   - a branch: the canonical root is a freshly constructed extension carrying
-//     the single nibble n and pointing at the branch by hash. The branch stays
-//     at the path the partition already wrote it to ([n]).
+//   - a branch: the canonical root is an extension carrying the single nibble
+//     n. The branch is embedded if short enough and referenced by hash otherwise.
 //
 //   - a short node (extension or leaf): its hex key is extended from [k...] to
 //     [n, k...], preserving the leaf terminator if present, and the child/value
 //     element is reused verbatim.
 //
-// isOrphaned reports whether a short node was folded. When true, the node the
-// caller persisted at path [n] is no longer referenced by the returned root and
-// should be deleted. It is false for the branch case, where [n] stays referenced.
+// isOrphaned reports whether a short node was folded into the parent. A branch
+// retains its position at [n] and needs separate persistence if referenced by hash.
 func MountPartitionRoot(blob []byte, n byte) (hash common.Hash, writeBlob []byte, isOrphaned bool, err error) {
 	elems, err := decodeNodeElements(blob)
 	if err != nil {
@@ -363,15 +361,17 @@ func MountPartitionRoot(blob []byte, n byte) (hash common.Hash, writeBlob []byte
 	}
 	switch len(elems) {
 	case 17:
-		// Branch root: wrap it in an extension carrying the single nibble n,
-		// referencing the branch by its 32-byte hash.
+		// Branch root: wrap it in an extension carrying the single nibble n.
 		keyRLP, err := rlp.EncodeToBytes(hexToCompact([]byte{n}))
 		if err != nil {
 			return common.Hash{}, nil, false, fmt.Errorf("encode extension key: %w", err)
 		}
-		childRLP, err := rlp.EncodeToBytes(crypto.Keccak256(blob))
-		if err != nil {
-			return common.Hash{}, nil, false, fmt.Errorf("encode child ref: %w", err)
+		childRLP := blob
+		if len(blob) >= common.HashLength {
+			childRLP, err = rlp.EncodeToBytes(crypto.Keccak256(blob))
+			if err != nil {
+				return common.Hash{}, nil, false, fmt.Errorf("encode child ref: %w", err)
+			}
 		}
 		writeBlob, err = encodeNodeElements([][]byte{keyRLP, childRLP})
 		if err != nil {

@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
 	"github.com/ethereum/go-ethereum/log"
@@ -80,6 +79,23 @@ type genCounters struct {
 	progress [numPartitions]atomic.Uint64 // per-partition keyspace position
 }
 
+type trieGenerator struct {
+	db               ethdb.Database
+	scheme           string
+	counters         genCounters
+	availableWorkers chan struct{}
+}
+
+func newTrieGenerator(db ethdb.Database, scheme string) *trieGenerator {
+	// Each account partition starts with one worker. A storage split can
+	// borrow additional workers only from partitions that have finished.
+	return &trieGenerator{
+		db:               db,
+		scheme:           scheme,
+		availableWorkers: make(chan struct{}, numPartitions),
+	}
+}
+
 // rangeIterators bundles the per-partition account and storage iterators.
 type rangeIterators struct {
 	db   ethdb.Database
@@ -88,11 +104,31 @@ type rangeIterators struct {
 }
 
 func openRangeIterators(db ethdb.Database, start common.Hash) *rangeIterators {
-	return &rangeIterators{
-		db:   db,
-		acct: openFlatIterator(db, rawdb.SnapshotAccountPrefix, start[:], common.HashLength),
-		stor: openFlatIterator(db, rawdb.SnapshotStoragePrefix, start[:], 2*common.HashLength),
+	r := &rangeIterators{db: db}
+	r.open(start)
+	return r
+}
+
+func (r *rangeIterators) open(start common.Hash) {
+	r.acct = openFlatIterator(r.db, rawdb.SnapshotAccountPrefix, start[:], common.HashLength)
+	r.stor = openFlatIterator(r.db, rawdb.SnapshotStoragePrefix, start[:], 2*common.HashLength)
+}
+
+// resumeAfterStorage skips the owner handled by the storage jobs, starting at
+// the immediate successor.
+func (r *rangeIterators) resumeAfterStorage(owner common.Hash) {
+	if owner == common.MaxHash {
+		r.acct = emptyFlatIterator()
+		r.stor = emptyFlatIterator()
+		return
 	}
+	for i := len(owner) - 1; i >= 0; i-- {
+		owner[i]++
+		if owner[i] != 0 {
+			break
+		}
+	}
+	r.open(owner)
 }
 
 // reopen releases both iterators and reopens them at their current
@@ -105,8 +141,13 @@ func (r *rangeIterators) reopen() {
 }
 
 func (r *rangeIterators) release() {
-	r.acct.Release()
-	r.stor.Release()
+	if r.acct != nil {
+		r.acct.Release()
+	}
+	if r.stor != nil {
+		r.stor.Release()
+	}
+	r.acct, r.stor = nil, nil
 }
 
 // flushIfFull writes and resets the batch once it grows past IdealBatchSize,
@@ -135,7 +176,7 @@ func openFlatIterator(db ethdb.Database, prefix, start []byte, suffixLen int) *i
 func reopenFlatIterator(db ethdb.Database, old *internal.HoldableIterator, prefix []byte, suffixLen int) *internal.HoldableIterator {
 	if !old.Next() {
 		old.Release()
-		return internal.NewHoldableIterator(memorydb.New().NewIterator(nil, nil))
+		return emptyFlatIterator()
 	}
 	// pebble's Key() slice is invalidated by Release. Copy first so the new
 	// iterator's lower bound isn't seeded from freed memory.
@@ -144,39 +185,37 @@ func reopenFlatIterator(db ethdb.Database, old *internal.HoldableIterator, prefi
 	return openFlatIterator(db, prefix, next[len(prefix):], suffixLen)
 }
 
+func emptyFlatIterator() *internal.HoldableIterator {
+	return internal.NewHoldableIterator(memorydb.New().NewIterator(nil, nil))
+}
+
 // generatePartition walks accounts whose first nibble equals `partition`,
 // reconciling each account's Root with its flat storage and building
 // both per-account storage subtries and the partition's slice of the
 // account trie. Returns the partition's stripped subtree root blob, or
 // nil if the partition had no accounts at all.
-func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Database, scheme string, partition byte, rangeStart, rangeEnd common.Hash, c *genCounters) ([]byte, error) {
-	iters := openRangeIterators(db, rangeStart)
+func (g *trieGenerator) generatePartition(ctx context.Context, cancel <-chan struct{}, partition byte, rangeStart, rangeEnd common.Hash) ([]byte, error) {
+	counter := &g.counters
+	iters := openRangeIterators(g.db, rangeStart)
 	defer iters.release()
 
-	batch := db.NewBatchWithSize(ethdb.IdealBatchSize)
+	batch := g.db.NewBatchWithSize(ethdb.IdealBatchSize)
+	defer batch.Close()
 
 	// Account-trie builder for this partition. It is fed account keys with
 	// their leading nibble stripped and emits nodes at their absolute path
 	// (prefixed with the partition nibble), so they line up with the full
 	// trie without any post-hoc surgery.
 	//
-	// The subtree root is the only node emitted at path [partition]; we both
-	// persist it (so the top-level branch can reference it) and capture its
-	// bytes for assembleRoot, which needs them to either reference it or,
-	// in the single-partition case, fold the leading nibble back in.
+	// Hold the subtree root until assembly determines whether it is referenced
+	// by hash, embedded or folded into a short node.
 	var root []byte
 	acctTrie := trie.NewPartialStackTrie(partition, func(path []byte, hash common.Hash, blob []byte) {
 		if len(path) == 1 {
 			root = common.CopyBytes(blob)
+			return
 		}
-		c.accountTrieNodes.Add(1)
-
-		if scheme == rawdb.PathScheme {
-			c.accountTrieBytes.Add(int64(len(path) + len(blob)))
-		} else {
-			c.accountTrieBytes.Add(int64(common.HashLength + len(blob)))
-		}
-		rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, blob, scheme)
+		g.writeAccountNode(batch, path, hash, blob)
 	})
 
 	// Iterate through all the accounts.
@@ -194,95 +233,25 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 		if bytes.Compare(accountHash[:], rangeEnd[:]) > 0 {
 			break
 		}
-		c.accounts.Add(1)
-		c.progress[partition].Store(binary.BigEndian.Uint64(accountHash[:8]))
+		counter.accounts.Add(1)
+		counter.progress[partition].Store(binary.BigEndian.Uint64(accountHash[:8]))
 
 		// Decode the account object
 		account, err := types.FullAccount(iters.acct.Value())
 		if err != nil {
 			return nil, fmt.Errorf("decode account %x: %w", accountHash, err)
 		}
-
-		// Build the account's storage trie from the flat storage snapshot.
-		// StackTrie's onTrieNode callback persists nodes as they finalize.
-		storageTrie := trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
-			c.storageTrieNodes.Add(1)
-
-			if scheme == rawdb.PathScheme {
-				c.storageTrieBytes.Add(int64(len(path) + common.HashLength + len(blob)))
-			} else {
-				c.storageTrieBytes.Add(int64(common.HashLength + len(blob)))
-			}
-			rawdb.WriteTrieNode(batch, accountHash, path, hash, blob, scheme)
-		})
-
-		// Compute the storage root by consuming matching slots from the
-		// shared storage iterator. The inner loop terminates on Hold()
-		// (slot belongs to a later account) or exhaustion.
-		lastDanglingAccount := make([]byte, common.HashLength)
-		for iters.stor.Next() {
-			// Re-check cancel.
-			select {
-			case <-cancel:
-				return nil, ErrCancelled
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			default:
-			}
-			var (
-				sk             = iters.stor.Key()
-				storageAccount = sk[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength]
-				cmp            = bytes.Compare(storageAccount, accountHash[:])
-			)
-			// The slot belongs to an account whose hash is smaller than the one
-			// currently being processed. This should be theoretically impossible,
-			// so log it loudly and delete the dangling entry from the flat state.
-			if cmp < 0 {
-				if !bytes.Equal(lastDanglingAccount, storageAccount) {
-					copy(lastDanglingAccount, storageAccount)
-					log.Error("Unexpected storage entries for dangling account", "expected", accountHash, "got", common.BytesToHash(storageAccount))
-				}
-				c.storageDeleted.Add(1)
-				slotHash := sk[len(rawdb.SnapshotStoragePrefix)+common.HashLength:]
-				rawdb.DeleteStorageSnapshot(batch, common.BytesToHash(storageAccount), common.BytesToHash(slotHash))
-				if err := iters.flushIfFull(batch, "dangling"); err != nil {
-					return nil, err
-				}
-				continue
-			}
-
-			// The slot belongs to a later account. We're done with the current
-			// account's slots, but we don't want to lose this slot. The slot might
-			// belong to the next iteration of the account for-loop (or a later one).
-			// Hold() the iterator so the next Next() call will re-serve this same
-			// entry instead of advancing past it.
-			if cmp > 0 {
-				iters.stor.Hold()
-				break
-			}
-
-			// The slot belongs to this account so we add it to the StackTrie.
-			slotHash := sk[len(rawdb.SnapshotStoragePrefix)+common.HashLength:]
-			if err := storageTrie.Update(slotHash, iters.stor.Value()); err != nil {
-				return nil, fmt.Errorf("storage stack trie update for %x: %w", accountHash, err)
-			}
-			c.slots.Add(1)
-			if err := iters.flushIfFull(batch, "storage"); err != nil {
-				return nil, err
-			}
+		computed, err := g.generateAccountStorage(ctx, cancel, iters, batch, accountHash)
+		if err != nil {
+			return nil, err
 		}
-		if err := iters.stor.Error(); err != nil {
-			return nil, fmt.Errorf("storage iterator: %w", err)
-		}
-		computed := storageTrie.Hash()
-
 		// If account.Root was stale, rewrite the flat-state entry. Then feed
 		// the account, now with the correct Root, into this partition's
 		// account trie.
 		if computed != account.Root {
 			account.Root = computed
 			rawdb.WriteAccountSnapshot(batch, accountHash, types.SlimAccountRLP(*account))
-			c.accountUpdated.Add(1)
+			counter.accountUpdated.Add(1)
 		}
 		fullAccount, err := rlp.EncodeToBytes(account)
 		if err != nil {
@@ -321,7 +290,7 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 			copy(lastDanglingTail, acct)
 			log.Error("Unexpected storage entries for dangling account", "addrhash", common.BytesToHash(acct))
 		}
-		c.storageDeleted.Add(1)
+		counter.storageDeleted.Add(1)
 		slotHash := sk[len(rawdb.SnapshotStoragePrefix)+common.HashLength:]
 		rawdb.DeleteStorageSnapshot(batch, common.BytesToHash(acct), common.BytesToHash(slotHash))
 		if err := iters.flushIfFull(batch, "dangling tail"); err != nil {
@@ -341,6 +310,91 @@ func generatePartition(ctx context.Context, cancel <-chan struct{}, db ethdb.Dat
 		return nil, fmt.Errorf("final partition batch write: %w", err)
 	}
 	return root, nil
+}
+
+// generateAccountStorage builds one storage trie and leaves the scans positioned
+// to continue with the next account.
+func (g *trieGenerator) generateAccountStorage(ctx context.Context, cancel <-chan struct{}, iters *rangeIterators, batch ethdb.Batch, accountHash common.Hash) (common.Hash, error) {
+	var (
+		storageTrie         *trie.StackTrie
+		lastDanglingAccount common.Hash
+		counter             = &g.counters
+	)
+	for iters.stor.Next() {
+		// Re-check cancel.
+		select {
+		case <-cancel:
+			return common.Hash{}, ErrCancelled
+		case <-ctx.Done():
+			return common.Hash{}, ctx.Err()
+		default:
+		}
+		var (
+			sk             = iters.stor.Key()
+			storageAccount = sk[len(rawdb.SnapshotStoragePrefix) : len(rawdb.SnapshotStoragePrefix)+common.HashLength]
+			cmp            = bytes.Compare(storageAccount, accountHash[:])
+		)
+		// The slot belongs to an account whose hash is smaller than the one
+		// currently being processed. This should be theoretically impossible,
+		// so log it loudly and delete the dangling entry from the flat state.
+		if cmp < 0 {
+			if !bytes.Equal(lastDanglingAccount[:], storageAccount) {
+				copy(lastDanglingAccount[:], storageAccount)
+				log.Error("Unexpected storage entries for dangling account", "expected", accountHash, "got", common.BytesToHash(storageAccount))
+			}
+			counter.storageDeleted.Add(1)
+			slotHash := sk[len(rawdb.SnapshotStoragePrefix)+common.HashLength:]
+			rawdb.DeleteStorageSnapshot(batch, common.BytesToHash(storageAccount), common.BytesToHash(slotHash))
+
+			if err := iters.flushIfFull(batch, "dangling"); err != nil {
+				return common.Hash{}, err
+			}
+			continue
+		}
+
+		// Keep the first slot of the next owner for the following scan.
+		if cmp > 0 {
+			iters.stor.Hold()
+			break
+		}
+
+		// Generate the storage trie
+		slotHash := sk[len(rawdb.SnapshotStoragePrefix)+common.HashLength:]
+		if storageTrie == nil {
+			split, err := g.probeStorage(ctx, cancel, accountHash, slotHash)
+			if err != nil {
+				return common.Hash{}, fmt.Errorf("probe storage for %x: %w", accountHash, err)
+			}
+			if split {
+				// Child jobs scan the owner's full storage range. Release the
+				// parent iterators so they do not pin a read view while waiting.
+				iters.release()
+				root, err := g.splitStorage(ctx, cancel, accountHash, batch)
+				if err != nil {
+					return common.Hash{}, fmt.Errorf("split storage for %x: %w", accountHash, err)
+				}
+				iters.resumeAfterStorage(accountHash)
+				return root, nil
+			}
+			storageTrie = trie.NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+				g.writeStorageNode(batch, accountHash, path, hash, blob)
+			})
+		}
+		if err := storageTrie.Update(slotHash, iters.stor.Value()); err != nil {
+			return common.Hash{}, fmt.Errorf("storage stack trie update for %x: %w", accountHash, err)
+		}
+		counter.slots.Add(1)
+		if err := iters.flushIfFull(batch, "storage"); err != nil {
+			return common.Hash{}, err
+		}
+	}
+	if err := iters.stor.Error(); err != nil {
+		return common.Hash{}, fmt.Errorf("storage iterator: %w", err)
+	}
+	if storageTrie == nil {
+		return types.EmptyRootHash, nil
+	}
+	return storageTrie.Hash(), nil
 }
 
 // hashRanges returns hash pairs [start, end] that evenly partition the
@@ -370,14 +424,13 @@ func hashRanges(total int) [][2]common.Hash {
 // GenerateTrie builds all tries (storage + account) from flat snapshot
 // data in the database. The account hash space is partitioned into 16
 // slices aligned with the first-nibble branching of the MPT root. Each
-// partition is processed by its own goroutine, which walks its slice,
-// reconciles stale account.Root fields with flat storage, builds the
-// per-account storage tries and the partition's slice of the account
-// trie. Once every partition has produced its subtree root, the top-level
-// branch is assembled and its hash verified against the expected root.
+// partition is processed by its own goroutine. Large storage tries are split
+// into disjoint ranges that use available worker capacity. Once all account
+// partitions have produced their subtree roots, generation assembles and
+// verifies the state root.
 //
-// Generation is all or nothing: an interrupted run leaves no resume
-// state and the next run builds every partition from scratch.
+// An interrupted run leaves no resume state. The next run builds every
+// partition from scratch.
 func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-chan struct{}) (GenerateStats, error) {
 	return GenerateTrieWithProgress(db, scheme, root, cancel, nil)
 }
@@ -386,14 +439,15 @@ func GenerateTrie(db ethdb.Database, scheme string, root common.Hash, cancel <-c
 func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash, cancel <-chan struct{}, prog *atomic.Uint64) (GenerateStats, error) {
 	var (
 		start        = time.Now()
-		c            genCounters
+		gen          = newTrieGenerator(db, scheme)
+		counter      = &gen.counters
 		progressDone = make(chan struct{})
 
 		// partitionBlobs[i] holds the root node for partition i, or nil if
 		// the partition is empty.
 		partitionBlobs [numPartitions][]byte
 	)
-	go tickProgress(progressDone, start, &c, prog)
+	go tickProgress(progressDone, start, counter, prog)
 	defer close(progressDone)
 
 	// Run every partition concurrently, each producing the subtree root
@@ -402,18 +456,22 @@ func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash
 		ranges  = hashRanges(numPartitions)
 		eg, ctx = errgroup.WithContext(context.Background())
 	)
+
 	for i, r := range ranges {
 		partition := byte(i)
 		rangeStart, rangeEnd := r[0], r[1]
+
 		eg.Go(func() error {
+			defer func() { gen.availableWorkers <- struct{}{} }()
+
 			start := time.Now()
-			blob, err := generatePartition(ctx, cancel, db, scheme, partition, rangeStart, rangeEnd, &c)
+			blob, err := gen.generatePartition(ctx, cancel, partition, rangeStart, rangeEnd)
 			if err != nil {
 				return err
 			}
 			log.Info("Partition done", "partition", partition, "elapsed", common.PrettyDuration(time.Since(start)))
 
-			c.progress[partition].Store(partitionFinished)
+			counter.progress[partition].Store(partitionFinished)
 			partitionBlobs[partition] = blob
 			return nil
 		})
@@ -428,7 +486,7 @@ func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash
 	}
 	// Assemble the top-level root from the partition blobs and verify it
 	// matches the expected root.
-	got, err := assembleRoot(db, scheme, partitionBlobs)
+	got, err := gen.assembleRoot(&partitionBlobs)
 	if err != nil {
 		return GenerateStats{}, fmt.Errorf("assemble root: %w", err)
 	}
@@ -436,89 +494,39 @@ func GenerateTrieWithProgress(db ethdb.Database, scheme string, root common.Hash
 		return GenerateStats{}, fmt.Errorf("state root mismatch: got %x, want %x", got, root)
 	}
 	log.Info("Generated state trie",
-		"accounts", c.accounts.Load(), "slots", c.slots.Load(),
-		"account-nodes", c.accountTrieNodes.Load(), "storage-nodes", c.storageTrieNodes.Load(),
-		"account-nodebytes", common.StorageSize(c.accountTrieBytes.Load()), "storage-nodebytes", common.StorageSize(c.storageTrieBytes.Load()),
-		"updated-accounts", c.accountUpdated.Load(), "dangling-slots", c.storageDeleted.Load(),
+		"accounts", counter.accounts.Load(), "slots", counter.slots.Load(),
+		"account-nodes", counter.accountTrieNodes.Load(), "storage-nodes", counter.storageTrieNodes.Load(),
+		"account-nodebytes", common.StorageSize(counter.accountTrieBytes.Load()), "storage-nodebytes", common.StorageSize(counter.storageTrieBytes.Load()),
+		"updated-accounts", counter.accountUpdated.Load(), "dangling-slots", counter.storageDeleted.Load(),
 		"elapsed", common.PrettyDuration(time.Since(start)))
 
 	return GenerateStats{
-		Scanned: c.accounts.Load(),
-		Updated: c.accountUpdated.Load(),
-		Deleted: c.storageDeleted.Load(),
+		Scanned: counter.accounts.Load(),
+		Updated: counter.accountUpdated.Load(),
+		Deleted: counter.storageDeleted.Load(),
 	}, nil
 }
 
-// assembleRoot computes the canonical state root from the 16 partition subtree
-// root blobs and persists the top-level node. Each partition was built with its
-// leading nibble stripped, so its root blob is already the exact node the parent
-// branch mounts in that slot, and the partition has already written it (and all
-// its descendants) at their absolute paths. What's left depends on how many
-// partitions ended up populated:
-//
-//   - 0 populated: the state is empty, the root is types.EmptyRootHash and
-//     nothing is written.
-//
-//   - 1 populated: there is no top-level branch; the canonical root is that
-//     lone partition's subtree with its leading nibble folded back in (see
-//     trie.MountPartitionRoot). The new root node is written. If the fold
-//     orphaned the old subtree root the partition left at [n], that node is
-//     also deleted.
-//
-//   - 2+ populated: the canonical root is a 17-slot branch mounting each
-//     partition's subtree root by hash. The subtree roots are already on disk,
-//     so we only encode, hash, and persist the branch itself.
-func assembleRoot(db ethdb.Database, scheme string, partitionBlobs [numPartitions][]byte) (common.Hash, error) {
-	var (
-		populated int
-		partition int // last populated index, read only when populated == 1
-		children  [17][]byte
-	)
-
-	// Loop through all partitions and count how many are populated, while
-	// pre-filling the branch children array for the common 2+ case.
-	for i := range numPartitions {
-		if partitionBlobs[i] != nil {
-			populated++
-			partition = i
-			children[i] = crypto.Keccak256(partitionBlobs[i])
-		}
+func (g *trieGenerator) assembleRoot(partitionBlobs *[numPartitions][]byte) (common.Hash, error) {
+	batch := g.db.NewBatch()
+	defer batch.Close()
+	root, err := assemblePartitionRoots(partitionBlobs, func(path []byte, hash common.Hash, blob []byte) {
+		g.writeAccountNode(batch, path, hash, blob)
+	})
+	if err != nil || batch.ValueSize() == 0 {
+		return root, err
 	}
+	return root, batch.Write()
+}
 
-	// No populated partitions: the state is empty.
-	if populated == 0 {
-		return types.EmptyRootHash, nil
+func (g *trieGenerator) writeAccountNode(batch ethdb.Batch, path []byte, hash common.Hash, blob []byte) {
+	g.counters.accountTrieNodes.Add(1)
+	if g.scheme == rawdb.PathScheme {
+		g.counters.accountTrieBytes.Add(int64(len(path) + len(blob)))
+	} else {
+		g.counters.accountTrieBytes.Add(int64(common.HashLength + len(blob)))
 	}
-
-	// One populated partition: no top-level branch, so fold its leading nibble
-	// back into the subtree root.
-	if populated == 1 {
-		rootHash, rootBlob, isOrphaned, err := trie.MountPartitionRoot(partitionBlobs[partition], byte(partition))
-		if err != nil {
-			return common.Hash{}, fmt.Errorf("mount partition %d: %w", partition, err)
-		}
-		batch := db.NewBatch()
-		rawdb.WriteTrieNode(batch, common.Hash{}, nil, rootHash, rootBlob, scheme)
-		if isOrphaned {
-			// The folded root at nil does not reference [partition], so the copy
-			// generatePartition wrote there is now unreferenced. Delete it so the
-			// on-disk node set matches the canonical trie.
-			staleHash := crypto.Keccak256Hash(partitionBlobs[partition])
-			rawdb.DeleteTrieNode(batch, common.Hash{}, []byte{byte(partition)}, staleHash, scheme)
-		}
-		return rootHash, batch.Write()
-	}
-
-	// populated >= 2: mount each partition's subtree root (already persisted at
-	// path [i]) into a 17-slot branch by hash, using the children array filled
-	// above. Those hash references are valid because account-trie subtree roots
-	// are always >= 32 bytes.
-	rootBlob, rootHash, err := trie.AssembleBranch(children)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	rawdb.WriteTrieNode(db, common.Hash{}, nil, rootHash, rootBlob, scheme)
-	return rootHash, nil
+	rawdb.WriteTrieNode(batch, common.Hash{}, path, hash, blob, g.scheme)
 }
 
 // tickProgress logs an aggregate progress line every 30 seconds until done
