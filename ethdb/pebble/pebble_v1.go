@@ -495,6 +495,20 @@ func (d *V1Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	return &v1pebbleIterator{iter: iter, moved: true, released: false}
 }
 
+// NewReverseIterator implements ethdb.ReverseIteratee.
+func (d *V1Database) NewReverseIterator(prefix, start []byte) ethdb.Iterator {
+	iter, _ := d.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: reverseUpperBound(prefix, start),
+	})
+	iter.Last()
+	return &v1pebbleIterator{
+		iter:    iter,
+		moved:   true,
+		reverse: true,
+	}
+}
+
 // meter periodically retrieves internal pebble counters and reports them to
 // the metrics subsystem.
 func (d *V1Database) meter(refresh time.Duration, namespace string) {
@@ -713,6 +727,7 @@ func (b *v1batch) Close() {
 type v1pebbleIterator struct {
 	iter     *pebble.Iterator
 	moved    bool
+	reverse  bool
 	released bool
 }
 
@@ -722,6 +737,9 @@ func (iter *v1pebbleIterator) Next() bool {
 	if iter.moved {
 		iter.moved = false
 		return iter.iter.Valid()
+	}
+	if iter.reverse {
+		return iter.iter.Prev()
 	}
 	return iter.iter.Next()
 }

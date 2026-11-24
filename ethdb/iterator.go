@@ -16,7 +16,8 @@
 
 package ethdb
 
-// Iterator iterates over a database's key/value pairs in ascending key order.
+// Iterator iterates over a database's key/value pairs in the order selected by
+// its constructor.
 //
 // When it encounters an error any seek will return false and will yield no key/
 // value pairs. The error can be queried by calling the Error method. Calling
@@ -58,4 +59,14 @@ type Iteratee interface {
 	// Note: This method assumes that the prefix is NOT part of the start, so there's
 	// no need for the caller to prepend the prefix to the start
 	NewIterator(prefix []byte, start []byte) Iterator
+}
+
+// ReverseIteratee is an optional capability for scanning keys in descending order.
+type ReverseIteratee interface {
+	// NewReverseIterator returns keys with the given prefix, starting at the
+	// greatest key at or below prefix + start.
+	//
+	// A nil start selects the last key with the prefix. Each call to Next moves
+	// towards smaller keys.
+	NewReverseIterator(prefix []byte, start []byte) Iterator
 }

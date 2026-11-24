@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -535,6 +536,15 @@ func upperBound(prefix []byte) (limit []byte) {
 	return limit
 }
 
+// reverseUpperBound includes the exact start key but excludes its extensions.
+// A nil start includes the entire prefix.
+func reverseUpperBound(prefix, start []byte) []byte {
+	if start == nil {
+		return upperBound(prefix)
+	}
+	return slices.Concat(prefix, start, []byte{0})
+}
+
 // Stat returns the internal metrics of Pebble in a text format. It's a developer
 // method to read everything there is to read, independent of Pebble version.
 func (d *Database) Stat() (string, error) {
@@ -799,6 +809,7 @@ func (b *batch) Close() {
 type pebbleIterator struct {
 	iter     *pebble.Iterator
 	moved    bool
+	reverse  bool
 	released bool
 }
 
@@ -814,12 +825,30 @@ func (d *Database) NewIterator(prefix []byte, start []byte) ethdb.Iterator {
 	return &pebbleIterator{iter: iter, moved: true, released: false}
 }
 
+// NewReverseIterator implements ethdb.ReverseIteratee.
+func (d *Database) NewReverseIterator(prefix, start []byte) ethdb.Iterator {
+	iter, _ := d.db.NewIter(&pebble.IterOptions{
+		LowerBound: prefix,
+		UpperBound: reverseUpperBound(prefix, start),
+	})
+	iter.Last()
+
+	return &pebbleIterator{
+		iter:    iter,
+		moved:   true,
+		reverse: true,
+	}
+}
+
 // Next moves the iterator to the next key/value pair. It returns whether the
 // iterator is exhausted.
 func (iter *pebbleIterator) Next() bool {
 	if iter.moved {
 		iter.moved = false
 		return iter.iter.Valid()
+	}
+	if iter.reverse {
+		return iter.iter.Prev()
 	}
 	return iter.iter.Next()
 }
