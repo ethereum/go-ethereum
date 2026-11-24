@@ -47,14 +47,15 @@ type StackTrie struct {
 	root       *stNode
 	h          *hasher
 	last       []byte
+	reverse    bool
 	onTrieNode OnTrieNode
 	kBuf       []byte // buf space used for hex-key during insertions
 	pBuf       []byte // buf space used for path during insertions
 	vPool      *unsafeBytesPool
 }
 
-// NewStackTrie allocates and initializes an empty trie. The committed nodes
-// will be discarded immediately if no callback is configured.
+// NewStackTrie creates a trie that accepts keys in strictly ascending order.
+// Committed nodes are discarded immediately if no callback is configured.
 func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 	return &StackTrie{
 		root:       stPool.Get().(*stNode),
@@ -64,6 +65,14 @@ func NewStackTrie(onTrieNode OnTrieNode) *StackTrie {
 		pBuf:       make([]byte, 64),
 		vPool:      newUnsafeBytesPool(300, 20),
 	}
+}
+
+// NewReverseStackTrie creates a trie that accepts keys in strictly descending
+// order and emits committed nodes in strictly descending path order.
+func NewReverseStackTrie(onTrieNode OnTrieNode) *StackTrie {
+	t := NewStackTrie(onTrieNode)
+	t.reverse = true
+	return t
 }
 
 func (t *StackTrie) grow(key []byte) {
@@ -93,13 +102,13 @@ func (t *StackTrie) Update(key, value []byte) error {
 // non-empty. It is shared by Update and the partition builder, which feeds a
 // key with its leading nibble stripped.
 func (t *StackTrie) update(k, value []byte) error {
-	if bytes.Compare(t.last, k) >= 0 {
+	order := bytes.Compare(t.last, k)
+	if t.reverse {
+		if len(k) == 0 || (t.last != nil && order <= 0) {
+			return errors.New("non-descending key order")
+		}
+	} else if order >= 0 {
 		return errors.New("non-ascending key order")
-	}
-	if t.last == nil {
-		t.last = append([]byte{}, k...) // allocate key slice
-	} else {
-		t.last = append(t.last[:0], k...) // reuse key slice
 	}
 	vBuf := t.vPool.get()
 	if cap(vBuf) < len(value) {
@@ -109,6 +118,7 @@ func (t *StackTrie) update(k, value []byte) error {
 		copy(vBuf, value)
 	}
 	t.insert(t.root, k, vBuf, t.pBuf[:0])
+	t.last = append(t.last[:0], k...)
 	return nil
 }
 
@@ -199,14 +209,10 @@ func (t *StackTrie) insert(st *stNode, key, value []byte, path []byte) {
 	case branchNode: /* Branch */
 		idx := int(key[0])
 
-		// Unresolve elder siblings
-		for i := idx - 1; i >= 0; i-- {
-			if st.children[i] != nil {
-				if st.children[i].typ != hashedNode {
-					t.hash(st.children[i], append(path, byte(i)))
-				}
-				break
-			}
+		// The previous key identifies the only child that may still be open.
+		// Once insertion moves to another child, finalize the previous one.
+		if prev := t.last[len(path)]; prev != key[0] {
+			t.hash(st.children[prev], append(path, prev))
 		}
 
 		// Add new child
@@ -436,7 +442,7 @@ func (t *StackTrie) hash(st *stNode, path []byte) {
 // Hash will firstly hash the entire trie if it's still not hashed and then commit
 // all leftover nodes to the associated database. Actually most of the trie nodes
 // have been committed already. The main purpose here is to commit the nodes on
-// right boundary.
+// boundary of the last inserted key.
 func (t *StackTrie) Hash() common.Hash {
 	n := t.root
 	t.hash(n, nil)

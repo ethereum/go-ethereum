@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -376,6 +377,55 @@ func TestStacktrieNotModifyValues(t *testing.T) {
 		if !bytes.Equal(have, want) {
 			t.Fatalf("item %d, have %#x want %#x", i, have, want)
 		}
+	}
+}
+
+func TestReverseStackTrie(t *testing.T) {
+	// Cover embedded leaves, sparse branches and extensions split at different depths.
+	keys, values := sortedPairs([]string{
+		"0a", "30", "3004", "3110", "3115", "3115fa", "311b", "3a", "3fe", "f2",
+		strings.Repeat("3", 63) + "0", strings.Repeat("3", 63) + "1",
+	})
+	for i := range values {
+		if i%2 == 0 {
+			values[i] = values[i][:1]
+		}
+	}
+
+	var wantRoot common.Hash
+	wantNodes := collect(func(onNode OnTrieNode) {
+		trie := NewStackTrie(onNode)
+		for i := range keys {
+			if err := trie.Update(keys[i], values[i]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		wantRoot = trie.Hash()
+	})
+	var lastPath []byte
+	trie := NewReverseStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+		if lastPath != nil && bytes.Compare(lastPath, path) <= 0 {
+			t.Fatalf("paths not descending: %x followed by %x", lastPath, path)
+		}
+		lastPath = append(lastPath[:0], path...)
+		node, ok := wantNodes[string(path)]
+		if !ok || node.hash != hash || !bytes.Equal(node.blob, blob) {
+			t.Fatalf("unexpected node at %x: hash %x, blob %x", path, hash, blob)
+		}
+		delete(wantNodes, string(path))
+	})
+	for i := len(keys) - 1; i >= 0; i-- {
+		if err := trie.Update(keys[i], values[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, key := range [][]byte{keys[0], keys[1]} {
+		if err := trie.Update(key, values[0]); err == nil {
+			t.Fatalf("accepted non-descending key %x", key)
+		}
+	}
+	if root := trie.Hash(); root != wantRoot || len(wantNodes) != 0 {
+		t.Fatalf("got root %x, want %x, missing %d nodes", root, wantRoot, len(wantNodes))
 	}
 }
 
