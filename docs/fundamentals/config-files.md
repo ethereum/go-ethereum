@@ -15,7 +15,7 @@ To create a shell script, save the Geth startup commands in a shell file, prepen
 
 ```sh
 #!/bin/bash
-./geth --sepolia --datadir sepoliadata --authrpc.addr localhost --authrpc.port 8551, 8545 --authrpc.vhosts localhost --authrpc.jwtsecret sepoliadata/jwtsecret --http --http.api eth,net --metrics --metric.addr 127.0.0.1 --metrics.port 6060
+./geth --sepolia --datadir sepoliadata --authrpc.addr localhost --authrpc.port 8551 --authrpc.vhosts localhost --authrpc.jwtsecret sepoliadata/jwtsecret --http --http.api eth,net --metrics --metrics.addr 127.0.0.1 --metrics.port 6060
 ```
 
 Save the file as (e.g.) `start-geth.sh`. Then make the file executable using
