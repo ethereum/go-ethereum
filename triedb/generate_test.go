@@ -642,7 +642,13 @@ func TestGenerateTrieBatchFlush(t *testing.T) {
 			build: func(db ethdb.Database) {
 				slots := make([]testSlot, n)
 				for i := range slots {
-					slots[i] = testSlot{hash: h(i), value: bytes.Repeat([]byte{byte(i)}, 32)}
+					// Keys outside the probe range keep this case on the serial path.
+					slot := h(i)
+					slot[0] = 0x10
+					slots[i] = testSlot{
+						hash:  slot,
+						value: bytes.Repeat([]byte{byte(i)}, 32),
+					}
 				}
 				rawdb.WriteAccountSnapshot(db, h(7), types.SlimAccountRLP(acct(computeStorageRootFromSlots(slots))))
 				for _, s := range slots {
@@ -673,10 +679,13 @@ func TestGenerateTrieBatchFlush(t *testing.T) {
 			tc.build(db)
 
 			peak := 0
-			var c genCounters
+			g := newTrieGenerator(&peakBatchDB{
+				Database: db,
+				peak:     &peak,
+			}, rawdb.HashScheme)
+			c := &g.counters
 			ranges := hashRanges(numPartitions)
-			if _, err := generatePartition(context.Background(), nil, peakBatchDB{Database: db, peak: &peak},
-				rawdb.HashScheme, 0, ranges[0][0], ranges[0][1], &c); err != nil {
+			if _, err := g.generatePartition(context.Background(), nil, 0, ranges[0][0], ranges[0][1]); err != nil {
 				t.Fatalf("generatePartition: %v", err)
 			}
 
