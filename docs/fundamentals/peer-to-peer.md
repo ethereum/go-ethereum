@@ -3,28 +3,28 @@ title: Connecting To The Network
 description: Guide to connecting Geth to a peer-to-peer network
 ---
 
-The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/fundamentals/private-network) and [local testnets](/docs/developers/dapp-developer/dev-mode). For convenience, the two public testnets with long term support, Goerli and Sepolia, have their own command line flag. Geth can connect to these testnets simply by passing:
+The default behaviour for Geth is to connect to Ethereum Mainnet. However, Geth can also connect to public testnets, [private networks](/docs/fundamentals/private-network) and [local testnets](/docs/developers/dapp-developer/dev-mode). For convenience, the two public testnets with long term support, Sepolia and Hoodi, have their own command line flag. Geth can connect to these testnets simply by passing:
 
-- `--goerli`, Goerli proof-of-authority test network
-- `--sepolia` Sepolia proof-of-work test network
+- `--sepolia`, Sepolia test network
+- `--hoodi`, Hoodi test network
 
-These testnets started as proof-of-work and proof-of-authority testnets, but they were transitioned to proof-of-stake in 2022 in preparation for doing the same to Ethereum Mainnet. This means that to run a node on Goerli or Sepolia it is now necessary to run a consensus client connected to Geth. This is also true for Ethereum Mainnet. **Geth does not work on proof-of-stake networks without a consensus client**! The remainder of this page will assume that Geth is connected to a consensus client that is synced to the desired network. For instructions on how to set up a consensus client please see the [Consensus Clients](/docs/getting-started/consensus-clients) page.
+Both testnets are proof-of-stake networks: Sepolia started as a proof-of-work testnet and moved to proof-of-stake in 2022, and Hoodi launched as a proof-of-stake testnet. This means that to run a node on Sepolia or Hoodi it is necessary to run a consensus client connected to Geth. This is also true for Ethereum Mainnet. **Geth does not work on proof-of-stake networks without a consensus client**! The remainder of this page will assume that Geth is connected to a consensus client that is synced to the desired network. For instructions on how to set up a consensus client please see the [Consensus Clients](/docs/getting-started/consensus-clients) page.
 
 **Note:** Network selection is not persisted from a config file. To connect to a pre-defined network you must always enable it explicitly, even when using the `--config` flag to load other configuration values. For example:
 
 ```sh
 # Generate desired config file. You must specify testnet here.
-geth --goerli --syncmode "full" ... dumpconfig > goerli.toml
+geth --sepolia --syncmode "full" ... dumpconfig > sepolia.toml
 
 # Start geth with given config file. Here too the testnet must be specified.
-geth --goerli --config goerli.toml
+geth --sepolia --config sepolia.toml
 ```
 
 ## Finding peers {#finding-peers}
 
 Geth continuously attempts to connect to other nodes on the network until it has enough peers. If UPnP (Universal Plug and Play) is enabled at the router or Ethereum is run on an Internet-facing server, it will also accept connections from other nodes. Geth finds peers using the [discovery protocol](https://ethereum.org/en/developers/docs/networking-layer/#discovery). In the discovery protocol, nodes exchange connectivity details and then establish sessions ([RLPx](https://github.com/ethereum/devp2p/blob/master/rlpx.md)). If the nodes support compatible sub-protocols they can start exchanging Ethereum data [on the wire](https://ethereum.org/en/developers/docs/networking-layer/#wire-protocol).
 
-A new node entering the network for the first time gets introduced to a set of peers by a bootstrap node ("bootnode") whose sole purpose is to connect new nodes to peers. The endpoints for these bootnodes are hardcoded into Geth, but they can also be specified by providing the `--bootnode` flag along with comma-separated bootnode addresses in the form of [enodes](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode) on startup. For example:
+A new node entering the network for the first time gets introduced to a set of peers by a bootstrap node ("bootnode") whose sole purpose is to connect new nodes to peers. The endpoints for these bootnodes are hardcoded into Geth, but they can also be specified by providing the `--bootnodes` flag along with comma-separated bootnode addresses in the form of [enodes](https://ethereum.org/en/developers/docs/networking-layer/network-addresses/#enode) on startup. For example:
 
 ```sh
 geth --bootnodes enode://pubkey1@ip1:port1,enode://pubkey2@ip2:port2,enode://pubkey3@ip3:port3
@@ -154,4 +154,4 @@ admin.addTrustedPeer(
 
 ## Summary {#summary}
 
-Geth connects to Ethereum Mainnet by default. However, this behaviour can be changed using combinations of command line flags and files. This page has described the various options available for connecting a Geth node to Ethereum, public testnets and private networks. Remember that to connect to a proof-of-stake network (e.g. Ethereum Mainnet, Goerli, Sepolia) a consensus client is also required.
+Geth connects to Ethereum Mainnet by default. However, this behaviour can be changed using combinations of command line flags and files. This page has described the various options available for connecting a Geth node to Ethereum, public testnets and private networks. Remember that to connect to a proof-of-stake network (e.g. Ethereum Mainnet, Sepolia, Hoodi) a consensus client is also required.
