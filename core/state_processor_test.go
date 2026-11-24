@@ -19,6 +19,7 @@ package core
 import (
 	"crypto/ecdsa"
 	"encoding/binary"
+	"errors"
 	"math"
 	"math/big"
 	"testing"
@@ -365,6 +366,44 @@ func TestStateProcessorErrors(t *testing.T) {
 			if have, want := err.Error(), tt.want; have != want {
 				t.Errorf("test %d:\nhave \"%v\"\nwant \"%v\"\n", i, have, want)
 			}
+		}
+	}
+	// ErrSenderNoEOA before Prague, for a sender with an EIP-7702 delegation designator
+	{
+		cancunConfig := *config
+		cancunConfig.PragueTime = nil
+		cancunConfig.BlobScheduleConfig = &params.BlobScheduleConfig{Cancun: params.DefaultCancunBlobConfig}
+
+		var (
+			db    = rawdb.NewMemoryDatabase()
+			gspec = &Genesis{
+				Config: &cancunConfig,
+				Alloc: withSystemContracts(types.GenesisAlloc{
+					common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7"): types.Account{
+						Balance: big.NewInt(1000000000000000000), // 1 ether
+						Nonce:   0,
+						Code:    types.AddressToDelegation(common.HexToAddress("0xaaaa")),
+					},
+				}),
+			}
+			blockchain, _ = NewBlockChain(db, gspec, beacon.New(ethash.NewFaker()), nil)
+			cancunSigner  = types.LatestSigner(&cancunConfig)
+		)
+		defer blockchain.Stop()
+
+		tx, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{
+			ChainID:   cancunConfig.ChainID,
+			Nonce:     0,
+			GasTipCap: big.NewInt(0),
+			GasFeeCap: big.NewInt(875000000),
+			Gas:       params.TxGas,
+			To:        &common.Address{},
+			Value:     big.NewInt(0),
+		}), cancunSigner, key1)
+		block := GenerateBadBlock(gspec.ToBlock(), beacon.New(ethash.NewFaker()), types.Transactions{tx}, gspec.Config, false)
+		_, err := blockchain.InsertChain(types.Blocks{block})
+		if !errors.Is(err, ErrSenderNoEOA) {
+			t.Fatalf("block import error mismatch: have %v, want %v", err, ErrSenderNoEOA)
 		}
 	}
 }

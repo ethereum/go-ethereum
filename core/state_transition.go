@@ -596,8 +596,9 @@ func (st *stateTransition) preCheck(rules params.Rules) error {
 	if !msg.skipEOACheck {
 		// Make sure the sender is an EOA
 		code := st.state.GetCode(msg.From)
+		// EIP-7702 exempts the delegation designator from EIP-3607, from Prague on.
 		_, delegated := types.ParseDelegation(code)
-		if len(code) > 0 && !delegated {
+		if len(code) > 0 && !(delegated && rules.IsPrague) {
 			return fmt.Errorf("%w: address %v, len(code): %d", ErrSenderNoEOA, msg.From.Hex(), len(code))
 		}
 	}
