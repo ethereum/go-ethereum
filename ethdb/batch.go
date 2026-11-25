@@ -52,6 +52,17 @@ type Batcher interface {
 	NewBatchWithSize(size int) Batch
 }
 
+// Ingester supports bulk writes through file ingestion.
+type Ingester interface {
+	// NewIngestBatch creates a write-only batch with pre-allocated buffer, whose
+	// accumulated data is committed by being ingested into the host database as
+	// a whole, bypassing the write-ahead log. Callers that depend on the
+	// durability of earlier ordinary writes must call SyncKeyValue first.
+	//
+	// It is intended for bulk writes. Range deletion is not supported.
+	NewIngestBatch(size int) Batch
+}
+
 // HookedBatch wraps an arbitrary batch where each operation may be hooked into
 // to monitor from black box code.
 type HookedBatch struct {
