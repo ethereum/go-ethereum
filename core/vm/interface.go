@@ -18,6 +18,7 @@ package vm
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/stateless"
 	"github.com/ethereum/go-ethereum/core/tracing"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -28,6 +29,8 @@ import (
 
 // StateDB is an EVM database for full state querying.
 type StateDB interface {
+	Copy() *state.StateDB
+
 	CreateAccount(common.Address)
 	CreateContract(common.Address)
 

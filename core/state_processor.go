@@ -201,14 +201,19 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 	_, _, spanEnd := telemetry.StartSpan(ctx, "core.postExecution")
 	defer spanEnd(&err)
 
+	var (
+		original *state.StateDB
+		postBAL  *postExecutionAccessList
+	)
 	if config.IsAmsterdam(number, time) {
-		blockAccessList = bal.NewConstructionBlockAccessList()
+		original = evm.StateDB.Copy()
+		postBAL = newPostExecutionAccessList(blockAccessIndex)
 	}
 	rules := config.Rules(number, true, time) // IsMerge is always true
 
 	// Withdrawals are applied before the system calls
 	if rules.IsShanghai {
-		ProcessWithdrawals(withdrawals, evm, blockAccessIndex, blockAccessList)
+		ProcessWithdrawals(withdrawals, evm, blockAccessIndex, postBAL)
 	}
 	// Read requests if Prague is enabled.
 	if rules.IsPrague {
@@ -218,29 +223,35 @@ func PostExecution(ctx context.Context, config *params.ChainConfig, number *big.
 			return nil, nil, fmt.Errorf("failed to parse deposit logs: %w", err)
 		}
 		// EIP-7002
-		if err := ProcessWithdrawalQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
+		if err := ProcessWithdrawalQueue(&requests, rules, evm, blockAccessIndex, postBAL); err != nil {
 			return nil, nil, fmt.Errorf("failed to process withdrawal queue: %w", err)
 		}
 		// EIP-7251
-		if err := ProcessConsolidationQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
+		if err := ProcessConsolidationQueue(&requests, rules, evm, blockAccessIndex, postBAL); err != nil {
 			return nil, nil, fmt.Errorf("failed to process consolidation queue: %w", err)
 		}
 	}
 
 	if rules.IsAmsterdam {
 		// EIP-8282
-		if err := ProcessBuilderDepositQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
+		if err := ProcessBuilderDepositQueue(&requests, rules, evm, blockAccessIndex, postBAL); err != nil {
 			return nil, nil, fmt.Errorf("failed to process builder deposit queue: %w", err)
 		}
-		if err := ProcessBuilderExitQueue(&requests, rules, evm, blockAccessIndex, blockAccessList); err != nil {
+		if err := ProcessBuilderExitQueue(&requests, rules, evm, blockAccessIndex, postBAL); err != nil {
 			return nil, nil, fmt.Errorf("failed to process builder exit queue: %w", err)
+		}
+	}
+	if postBAL != nil {
+		blockAccessList = postBAL.netChanges(original)
+		if err := original.Error(); err != nil {
+			return nil, nil, fmt.Errorf("reading pre-withdrawal state: %w", err)
 		}
 	}
 	return requests, blockAccessList, nil
 }
 
 // ProcessWithdrawals credits the given withdrawals to their recipients.
-func ProcessWithdrawals(withdrawals types.Withdrawals, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) {
+func ProcessWithdrawals(withdrawals types.Withdrawals, evm *vm.EVM, blockAccessIndex uint32, blockAccessList accessListMerger) {
 	rules := evm.GetRules()
 	evm.StateDB.Prepare(rules, common.Address{}, common.Address{}, nil, nil, nil)
 	evm.StateDB.SetTxContext(common.Hash{}, 0, blockAccessIndex)
@@ -440,29 +451,29 @@ func ProcessParentBlockHash(prevHash common.Hash, evm *vm.EVM, blockAccessList *
 
 // ProcessWithdrawalQueue calls the EIP-7002 withdrawal queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessWithdrawalQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+func ProcessWithdrawalQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList accessListMerger) error {
 	return processRequestsSystemCall(requests, rules, evm, 0x01, params.WithdrawalQueueAddress, blockAccessIndex, blockAccessList)
 }
 
 // ProcessConsolidationQueue calls the EIP-7251 consolidation queue contract.
 // It returns the opaque request data returned by the contract.
-func ProcessConsolidationQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+func ProcessConsolidationQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList accessListMerger) error {
 	return processRequestsSystemCall(requests, rules, evm, 0x02, params.ConsolidationQueueAddress, blockAccessIndex, blockAccessList)
 }
 
 // ProcessBuilderDepositQueue calls the EIP-8282 builder deposit contract.
 // It returns the opaque request data returned by the contract.
-func ProcessBuilderDepositQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+func ProcessBuilderDepositQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList accessListMerger) error {
 	return processRequestsSystemCall(requests, rules, evm, 0x03, params.BuilderDepositAddress, blockAccessIndex, blockAccessList)
 }
 
 // ProcessBuilderExitQueue calls the EIP-8282 builder exit contract.
 // It returns the opaque request data returned by the contract.
-func ProcessBuilderExitQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+func ProcessBuilderExitQueue(requests *[][]byte, rules params.Rules, evm *vm.EVM, blockAccessIndex uint32, blockAccessList accessListMerger) error {
 	return processRequestsSystemCall(requests, rules, evm, 0x04, params.BuilderExitAddress, blockAccessIndex, blockAccessList)
 }
 
-func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.EVM, requestType byte, addr common.Address, blockAccessIndex uint32, blockAccessList *bal.ConstructionBlockAccessList) error {
+func processRequestsSystemCall(requests *[][]byte, rules params.Rules, evm *vm.EVM, requestType byte, addr common.Address, blockAccessIndex uint32, blockAccessList accessListMerger) error {
 	if evm.StateDB.GetCodeSize(addr) == 0 {
 		return fmt.Errorf("empty system contract: no code at %v", addr)
 	}
