@@ -17,6 +17,7 @@
 package override
 
 import (
+	"encoding/json"
 	"maps"
 	"testing"
 
@@ -127,4 +128,27 @@ func TestStateOverrideMovePrecompile(t *testing.T) {
 func hex2Bytes(str string) *hexutil.Bytes {
 	rpcBytes := hexutil.Bytes(common.FromHex(str))
 	return &rpcBytes
+}
+
+func TestStateOverrideUnmarshalJSON(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		err   string
+	}{
+		{input: `{"0xc000000000000000000000000000000000000000":{"balance":"0x1","nonce":"0x2","code":"0x6000","state":{},"stateDiff":{},"movePrecompileToAddress":"0xc100000000000000000000000000000000000000"}}`},
+		{input: `null`},
+		{input: `{}`},
+		{input: `{"0xc000000000000000000000000000000000000000":{"bogusField":"0x1"}}`, err: `unknown field "bogusField" in state override for 0xC000000000000000000000000000000000000000`},
+		{input: `{"0xc000000000000000000000000000000000000000":{"Code":"0x00"}}`},
+		{input: `{"0xc000000000000000000000000000000000000000":{"code":"0x00","Code":"0x01"}}`, err: `keys "Code" and "code" in state override for 0xC000000000000000000000000000000000000000 name the same field`},
+	} {
+		var s StateOverride
+		err := json.Unmarshal([]byte(tc.input), &s)
+		switch {
+		case tc.err == "" && err != nil:
+			t.Errorf("%s: unexpected error: %v", tc.input, err)
+		case tc.err != "" && (err == nil || err.Error() != tc.err):
+			t.Errorf("%s: error mismatch: have %v, want %s", tc.input, err, tc.err)
+		}
+	}
 }
