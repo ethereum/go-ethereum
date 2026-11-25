@@ -120,7 +120,10 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			eventIdentifiers    = make(map[string]bool)
 		)
 
-		for _, input := range evmABI.Constructor.Inputs {
+		for j, input := range evmABI.Constructor.Inputs {
+			if input.Name == "" || isKeyWord(input.Name) {
+				evmABI.Constructor.Inputs[j].Name = fmt.Sprintf("arg%d", j)
+			}
 			if hasStruct(input.Type) {
 				bindStructType(input.Type, structs)
 			}
