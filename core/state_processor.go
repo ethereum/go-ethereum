@@ -177,6 +177,9 @@ func PreExecution(ctx context.Context, beaconRoot *common.Hash, parent *types.He
 
 	var blockAccessList *bal.ConstructionBlockAccessList
 	if config.IsAmsterdam(number, time) {
+		// The EIP-4788 and EIP-2935 system calls write to disjoint state.
+		// TODO(rjl) If pre-execution calls start sharing writes, net them
+		// over index 0.
 		blockAccessList = bal.NewConstructionBlockAccessList()
 	}
 	// Mutate the state according to any hard-fork specs
