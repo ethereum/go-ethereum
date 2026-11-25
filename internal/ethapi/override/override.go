@@ -17,7 +17,6 @@
 package override
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 	"math/big"
@@ -126,6 +125,11 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 	return nil
 }
 
+type invalidParamsError struct{ message string }
+
+func (e *invalidParamsError) Error() string  { return e.message }
+func (e *invalidParamsError) ErrorCode() int { return -32602 }
+
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
 	Number        *hexutil.Big
@@ -146,10 +150,10 @@ func (o *BlockOverrides) Apply(blockCtx *vm.BlockContext) error {
 		return nil
 	}
 	if o.BeaconRoot != nil {
-		return errors.New(`block override "beaconRoot" is not supported for this RPC method`)
+		return &invalidParamsError{`block override "beaconRoot" is not supported for this RPC method`}
 	}
 	if o.Withdrawals != nil {
-		return errors.New(`block override "withdrawals" is not supported for this RPC method`)
+		return &invalidParamsError{`block override "withdrawals" is not supported for this RPC method`}
 	}
 	if o.Number != nil {
 		blockCtx.BlockNumber = o.Number.ToInt()
