@@ -3119,6 +3119,120 @@ func TestSimulateV1TransferLogs(t *testing.T) {
 	})
 }
 
+// TestSimulateV1EmptyOverride checks that an account that the overrides leave empty
+// does not exist, with no storage, unless the override sets a non-zero slot.
+func TestSimulateV1EmptyOverride(t *testing.T) {
+	t.Parallel()
+
+	var (
+		accounts  = newAccounts(3)
+		sender    = accounts[0].addr
+		authority = accounts[1]
+		funded    = accounts[2]
+		contract  = common.Address{0xcc}
+		slot0     = common.HexToHash("0x2a")
+		zero      = hexutil.Uint64(0)
+		empty     = hexutil.Bytes{}
+		// PUSH1 0 SLOAD PUSH1 0 MSTORE PUSH1 32 PUSH1 0 RETURN
+		readSlot0 = hexutil.Bytes(common.FromHex("60005460005260206000f3"))
+	)
+	auth, err := types.SignSetCode(authority.key, types.SetCodeAuthorization{Address: common.Address{0xaa}})
+	require.NoError(t, err)
+	fundedAuth, err := types.SignSetCode(funded.key, types.SetCodeAuthorization{Address: common.Address{0xaa}})
+	require.NoError(t, err)
+
+	run := func(t *testing.T, cfg *params.ChainConfig) {
+		t.Helper()
+		gspec := &core.Genesis{
+			Config: cfg,
+			Alloc: types.GenesisAlloc{
+				sender:      {Balance: big.NewInt(params.Ether)},
+				funded.addr: {Balance: big.NewInt(1)},
+				contract:    {Nonce: 1, Code: []byte{0x00}, Storage: map[common.Hash]common.Hash{{}: slot0}},
+			},
+		}
+		backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+		simulate := func(blocks []simBlock) []*simBlockResult {
+			t.Helper()
+			stateDB, baseHeader, err := backend.StateAndHeaderByNumberOrHash(context.Background(), rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber))
+			require.NoError(t, err)
+			sim := &simulator{
+				b:           backend,
+				state:       stateDB,
+				base:        baseHeader,
+				chainConfig: backend.ChainConfig(),
+				budget:      newGasBudget(0),
+			}
+			results, err := sim.execute(context.Background(), blocks)
+			require.NoError(t, err)
+			require.Len(t, results, len(blocks))
+			return results
+		}
+		authGasOf := func(addr common.Address, auth types.SetCodeAuthorization, authorityOverride *override.OverrideAccount) uint64 {
+			t.Helper()
+			block := simBlock{Calls: []TransactionArgs{{From: &sender, To: &sender, AuthorizationList: []types.SetCodeAuthorization{auth}}}}
+			if authorityOverride != nil {
+				block.StateOverrides = &override.StateOverride{addr: *authorityOverride}
+			}
+			return uint64(simulate([]simBlock{block})[0].Calls[0].GasUsed)
+		}
+		authGas := func(authorityOverride *override.OverrideAccount) uint64 {
+			t.Helper()
+			return authGasOf(authority.addr, auth, authorityOverride)
+		}
+		var (
+			missing   = authGas(nil)
+			emptied   = authGas(&override.OverrideAccount{Code: &empty})
+			zeroSlots = authGas(&override.OverrideAccount{StateDiff: map[common.Hash]common.Hash{{}: {}}})
+			existing  = authGas(&override.OverrideAccount{Balance: (*hexutil.Big)(big.NewInt(1))})
+		)
+		if emptied != missing {
+			t.Errorf("gas used with an empty override = %d, want %d as for a missing account", emptied, missing)
+		}
+		if zeroSlots != missing {
+			t.Errorf("gas used with a zero-slot override = %d, want %d as for a missing account", zeroSlots, missing)
+		}
+		if existing >= missing {
+			t.Errorf("gas used for an existing authority = %d, want less than %d", existing, missing)
+		}
+		if got := authGasOf(funded.addr, fundedAuth, &override.OverrideAccount{Balance: (*hexutil.Big)(new(big.Int))}); got != missing {
+			t.Errorf("gas used for an existing authority that an override empties = %d, want %d as for a missing account", got, missing)
+		}
+
+		readsSlot0 := func(addr common.Address, first override.OverrideAccount) common.Hash {
+			t.Helper()
+			results := simulate([]simBlock{
+				{StateOverrides: &override.StateOverride{addr: first}},
+				{
+					StateOverrides: &override.StateOverride{addr: override.OverrideAccount{Code: &readSlot0}},
+					Calls:          []TransactionArgs{{From: &sender, To: &addr}},
+				},
+			})
+			return common.BytesToHash(results[1].Calls[0].ReturnValue)
+		}
+		emptyAccount := override.OverrideAccount{Nonce: &zero, Balance: (*hexutil.Big)(new(big.Int)), Code: &empty}
+		if got := readsSlot0(contract, emptyAccount); got != (common.Hash{}) {
+			t.Errorf("emptied contract: slot 0 = %x, want zero", got)
+		}
+		emptyWithStorage := override.OverrideAccount{Code: &empty, StateDiff: map[common.Hash]common.Hash{{}: slot0}}
+		if got := readsSlot0(common.Address{0xdd}, emptyWithStorage); got != slot0 {
+			t.Errorf("empty account with a storage override: slot 0 = %x, want %x", got, slot0)
+		}
+		fundedContract := override.OverrideAccount{Nonce: &zero, Balance: (*hexutil.Big)(big.NewInt(1)), Code: &empty}
+		if got := readsSlot0(contract, fundedContract); got != slot0 {
+			t.Errorf("funded contract: slot 0 = %x, want %x", got, slot0)
+		}
+	}
+	t.Run("pre-amsterdam", func(t *testing.T) {
+		run(t, params.MergedTestChainConfig)
+	})
+	t.Run("post-amsterdam", func(t *testing.T) {
+		cfg := *params.MergedTestChainConfig
+		cfg.AmsterdamTime = new(uint64)
+		run(t, &cfg)
+	})
+}
+
 // TestSimulateV1NonceLimit checks that a call from a sender whose nonce is 2^64-1 fails in
 // both validation modes (EIP-2681), instead of wrapping the nonce when validation is off.
 func TestSimulateV1NonceLimit(t *testing.T) {

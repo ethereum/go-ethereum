@@ -56,8 +56,9 @@ func (diff *StateOverride) has(address common.Address) bool {
 	return ok
 }
 
-// Apply overrides the fields of specified accounts into the given state.
-func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.PrecompiledContracts) error {
+// Apply overrides the fields of specified accounts into the given state. With
+// deleteEmptyObjects, an account that the overrides leave empty is removed.
+func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.PrecompiledContracts, deleteEmptyObjects bool) error {
 	if diff == nil {
 		return nil
 	}
@@ -119,11 +120,40 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 			}
 		}
 	}
+	// Where EIP-158 is active, overrides do not leave an empty account (EIP-161,
+	// EIP-7523), unless the caller sets a non-zero storage slot. Finalise with
+	// deleteEmptyObjects would also remove those, as it ignores storage.
+	if deleteEmptyObjects {
+		for _, addr := range addrs {
+			account := (*diff)[addr]
+			if account.writesAccount() && statedb.Empty(addr) && !account.hasStorage() {
+				statedb.SelfDestruct(addr)
+			}
+		}
+	}
 	// Now finalize the changes. Finalize is normally performed between transactions.
 	// By using finalize, the overrides are semantically behaving as
 	// if they were created in a transaction just before the tracing occur.
 	statedb.Finalise(params.Rules{})
 	return nil
+}
+
+// writesAccount reports whether the override sets a field or a storage slot of
+// the account. An override that only moves a precompile leaves it unchanged.
+func (account OverrideAccount) writesAccount() bool {
+	return account.Nonce != nil || account.Code != nil || account.Balance != nil || account.State != nil || len(account.StateDiff) > 0
+}
+
+// hasStorage reports whether the override sets a non-zero storage slot.
+func (account OverrideAccount) hasStorage() bool {
+	for _, slots := range []map[common.Hash]common.Hash{account.State, account.StateDiff} {
+		for _, value := range slots {
+			if value != (common.Hash{}) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // BlockOverrides is a set of header fields to override.

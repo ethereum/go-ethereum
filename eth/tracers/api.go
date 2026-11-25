@@ -939,7 +939,7 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 		}
 		rules := api.backend.ChainConfig().Rules(blockContext.BlockNumber, blockContext.Random != nil, blockContext.Time)
 		precompiles = vm.ActivePrecompiledContracts(rules)
-		if err := config.StateOverrides.Apply(statedb, precompiles); err != nil {
+		if err := config.StateOverrides.Apply(statedb, precompiles, rules.IsEIP158); err != nil {
 			return nil, err
 		}
 	}
