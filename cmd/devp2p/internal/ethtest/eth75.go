@@ -19,6 +19,7 @@ package ethtest
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"slices"
 	"time"
 
@@ -312,6 +313,23 @@ func (s *Suite) testViolation(t *utesting.T, version uint, name string, code uin
 	}
 }
 
+// testMalformedAnnouncement sends a malformed announcement, which the node must discard
+// and may penalize: it must not request the announced wrappers, whether or not it
+// disconnects.
+func (s *Suite) testMalformedAnnouncement(t *utesting.T, version uint, name string, payload []byte, hashes ...common.Hash) {
+	conn, err := s.dialWrapperPeer(version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.writeWrapperMsg(newProofWrapperHashesMsg, payload); err != nil {
+		t.Fatalf("%s: write failed: %v", name, err)
+	}
+	if err := conn.expectNoRequest(quietPeriod, hashes...); errors.Is(err, errUnexpectedRequest) {
+		t.Errorf("%s: %v", name, err)
+	}
+}
+
 func randomAnnouncements(n int) []wrapperAnnouncement {
 	anns := make([]wrapperAnnouncement, n)
 	for i := range anns {
@@ -326,8 +344,8 @@ func randomAnnouncements(n int) []wrapperAnnouncement {
 func (s *Suite) TestWrapperAnnouncementLimits(t *utesting.T) {
 	t.Log(`This test sends NewProofWrapperHashes messages that violate the item-count,
 byte-length and ordering rules: no entries, 65 entries, unordered hashes, a length of zero
-or above MAX_WRAPPER_BYTES, an extra field, and a message above 2 MiB. Each must cause
-disconnection.`)
+or above MAX_WRAPPER_BYTES, and a message above 2 MiB. Each should cause disconnection.
+An entry with an extra field is malformed: the node must discard it, and may disconnect.`)
 	s.testAnnouncementLimits(t, eth75)
 }
 
@@ -355,9 +373,10 @@ func (s *Suite) testAnnouncementLimits(t *utesting.T, version uint) {
 	oversize[0].Length = maxWrapperBytes + 1
 	s.testViolation(t, version, "length above MAX_WRAPPER_BYTES", newProofWrapperHashesMsg, encode(oversize))
 
-	// An extra trailing field in an entry.
+	// An extra trailing field in an entry is a malformed encoding.
+	one := randomAnnouncements(1)
 	var entry []rlp.RawValue
-	if err := rlp.DecodeBytes(encode(randomAnnouncements(1)), &entry); err != nil {
+	if err := rlp.DecodeBytes(encode(one), &entry); err != nil {
 		t.Fatal(err)
 	}
 	var fields []rlp.RawValue
@@ -366,7 +385,7 @@ func (s *Suite) testAnnouncementLimits(t *utesting.T, version uint) {
 	}
 	fields = append(fields, rlp.RawValue{0x80})
 	extra, _ := rlp.EncodeToBytes([][]rlp.RawValue{fields})
-	s.testViolation(t, version, "extra announcement field", newProofWrapperHashesMsg, extra)
+	s.testMalformedAnnouncement(t, version, "extra announcement field", extra, one[0].Hash)
 
 	// An entry of an unsupported mode is ignored, but the payload bound applies first.
 	large := randomAnnouncements(1)
