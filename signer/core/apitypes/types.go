@@ -788,51 +788,53 @@ func (typedData *TypedData) formatData(primaryType string, data map[string]inter
 
 	// Add field contents. Structs and arrays have special handlers.
 	for _, field := range typedData.Types[primaryType] {
-		encName := field.Name
-		encValue := data[encName]
-		item := &NameValueType{
-			Name: encName,
-			Typ:  field.Type,
-		}
-		if field.isArray() {
-			arrayValue, _ := convertDataToSlice(encValue)
-			parsedType := field.typeName()
-			for _, v := range arrayValue {
-				if typedData.Types[parsedType] != nil {
-					mapValue, _ := v.(map[string]interface{})
-					mapOutput, err := typedData.formatData(parsedType, mapValue)
-					if err != nil {
-						return nil, err
-					}
-					item.Value = mapOutput
-				} else {
-					primitiveOutput, err := formatPrimitiveValue(field.Type, encValue)
-					if err != nil {
-						return nil, err
-					}
-					item.Value = primitiveOutput
-				}
-			}
-		} else if typedData.Types[field.Type] != nil {
-			if mapValue, ok := encValue.(map[string]interface{}); ok {
-				mapOutput, err := typedData.formatData(field.Type, mapValue)
-				if err != nil {
-					return nil, err
-				}
-				item.Value = mapOutput
-			} else {
-				item.Value = "<nil>"
-			}
-		} else {
-			primitiveOutput, err := formatPrimitiveValue(field.Type, encValue)
-			if err != nil {
-				return nil, err
-			}
-			item.Value = primitiveOutput
+		item, err := typedData.formatValue(field.Name, field.Type, data[field.Name])
+		if err != nil {
+			return nil, err
 		}
 		output = append(output, item)
 	}
 	return output, nil
+}
+
+// formatValue formats a single value of the given type. Arrays are listed
+// element by element under their index, so that every element that goes into
+// the signed hash is also shown.
+func (typedData *TypedData) formatValue(name, encType string, encValue interface{}) (*NameValueType, error) {
+	item := &NameValueType{
+		Name: name,
+		Typ:  encType,
+	}
+	if i := strings.LastIndexByte(encType, '['); i > 0 && strings.HasSuffix(encType, "]") {
+		elemType := encType[:i]
+		arrayValue, _ := convertDataToSlice(encValue)
+		elems := make([]*NameValueType, 0, len(arrayValue))
+		for j, v := range arrayValue {
+			elem, err := typedData.formatValue(fmt.Sprintf("[%d]", j), elemType, v)
+			if err != nil {
+				return nil, err
+			}
+			elems = append(elems, elem)
+		}
+		item.Value = elems
+	} else if typedData.Types[encType] != nil {
+		if mapValue, ok := encValue.(map[string]interface{}); ok {
+			mapOutput, err := typedData.formatData(encType, mapValue)
+			if err != nil {
+				return nil, err
+			}
+			item.Value = mapOutput
+		} else {
+			item.Value = "<nil>"
+		}
+	} else {
+		primitiveOutput, err := formatPrimitiveValue(encType, encValue)
+		if err != nil {
+			return nil, err
+		}
+		item.Value = primitiveOutput
+	}
+	return item, nil
 }
 
 func formatPrimitiveValue(encType string, encValue interface{}) (string, error) {
