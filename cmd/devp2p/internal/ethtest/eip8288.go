@@ -446,6 +446,7 @@ type wrapperCodec interface {
 
 var wrapperCodecs = map[uint]wrapperCodec{
 	eth75: codec75{},
+	eth76: codec76{},
 }
 
 func (c *Conn) codec() wrapperCodec { return wrapperCodecs[c.negotiatedProtoVersion] }
@@ -849,8 +850,8 @@ func relayWrappers(conn *Conn, fixtures ...*wrapperFixture) error {
 	return serveRequests(conn, fixtures...)
 }
 
-// serveRequests serves the node's requests for the fixtures, which the connection
-// announced, until the node requested all of them.
+// serveRequests serves the node's wrapper and manifest requests for the fixtures, which
+// the connection announced, until the node requested all of them.
 func serveRequests(conn *Conn, fixtures ...*wrapperFixture) error {
 	announced := make([]common.Hash, len(fixtures))
 	for i, f := range fixtures {
@@ -878,6 +879,10 @@ func serveRequests(conn *Conn, fixtures ...*wrapperFixture) error {
 				return fmt.Errorf("serve failed: %v", err)
 			}
 			pending = slices.DeleteFunc(pending, func(h common.Hash) bool { return slices.Contains(req.hashes, h) })
+		case getProofWrapperManifestsMsg:
+			if err := conn.serveManifests(msg.data, trueManifest, fixtures...); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
