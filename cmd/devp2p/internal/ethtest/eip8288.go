@@ -846,6 +846,12 @@ func relayWrappers(conn *Conn, fixtures ...*wrapperFixture) error {
 	if err := conn.announce(fixtures...); err != nil {
 		return fmt.Errorf("announce failed: %v", err)
 	}
+	return serveRequests(conn, fixtures...)
+}
+
+// serveRequests serves the node's requests for the fixtures, which the connection
+// announced, until the node requested all of them.
+func serveRequests(conn *Conn, fixtures ...*wrapperFixture) error {
 	announced := make([]common.Hash, len(fixtures))
 	for i, f := range fixtures {
 		announced[i] = f.hash()

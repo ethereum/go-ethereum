@@ -247,12 +247,8 @@ func (s *Suite) testAnnouncementMismatch(t *utesting.T, version uint, f *wrapper
 	if err := liar.writeAnnouncements(ann); err != nil {
 		t.Fatal(err)
 	}
-	req, err := liar.expectRequest(f.hash(), []common.Hash{f.hash()}, wrapperTimeout)
-	if err != nil {
+	if err := serveRequests(liar, f); err != nil {
 		t.Fatalf("node did not fetch the wrapper: %v", err)
-	}
-	if err := liar.serve(req, f); err != nil {
-		t.Fatal(err)
 	}
 	if err := liar.expectDisconnect(wrapperTimeout); err != nil {
 		t.Fatalf("announcement mismatch: %v", err)
