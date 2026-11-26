@@ -51,6 +51,13 @@ type Suite struct {
 	// requireAvailableBALs is enabled only by the in-process geth tests.
 	// External conformance runs must continue accepting unavailable BALs.
 	requireAvailableBALs bool
+
+	// chainDir holds the test chain, and the EIP-8288 wrapper fixtures in its eip8288
+	// subdirectory.
+	chainDir string
+	wrappers fixturePool
+	headOnce sync.Once
+	headErr  error
 }
 
 // NewSuite creates and returns a new eth-test suite that can
@@ -64,9 +71,10 @@ func NewSuite(dest *enode.Node, chainDir, engineURL, jwt string) (*Suite, error)
 	engine := NewEngineClient(engineURL, jwt, chain)
 
 	return &Suite{
-		Dest:   dest,
-		chain:  chain,
-		engine: engine,
+		Dest:     dest,
+		chain:    chain,
+		engine:   engine,
+		chainDir: chainDir,
 	}, nil
 }
 

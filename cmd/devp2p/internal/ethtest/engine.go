@@ -94,3 +94,14 @@ func (ec *EngineClient) sendForkchoiceUpdated(custody *types.CustodyBitmap) erro
 	}
 	return ec.call("engine_forkchoiceUpdatedV3", state, nil)
 }
+
+// selectHead sends an fcu making the given block the head, safe and finalized block. Nodes
+// running a chain other than the generated one use it to leave sync and admit transactions.
+func (ec *EngineClient) selectHead(head common.Hash) error {
+	state := engine.ForkchoiceStateV1{
+		HeadBlockHash:      head,
+		SafeBlockHash:      head,
+		FinalizedBlockHash: head,
+	}
+	return ec.call("engine_forkchoiceUpdatedV3", state, nil)
+}
