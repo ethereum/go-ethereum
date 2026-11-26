@@ -687,6 +687,8 @@ func (c *Conn) expectRequest(hash common.Hash, announced []common.Hash, wait tim
 	}
 }
 
+var errUnexpectedRequest = errors.New("node requested")
+
 // expectNoRequest checks the node requests none of the hashes for the given period.
 func (c *Conn) expectNoRequest(wait time.Duration, hashes ...common.Hash) error {
 	deadline := time.Now().Add(wait)
@@ -707,7 +709,7 @@ func (c *Conn) expectNoRequest(wait time.Duration, hashes ...common.Hash) error 
 		}
 		for _, h := range req.hashes {
 			if slices.Contains(hashes, h) {
-				return fmt.Errorf("node requested %v", h)
+				return fmt.Errorf("%w %v", errUnexpectedRequest, h)
 			}
 		}
 	}
