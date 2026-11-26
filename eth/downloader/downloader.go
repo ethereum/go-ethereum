@@ -179,6 +179,9 @@ type BlockChain interface {
 	// HasState checks if state trie is fully present in the database or not.
 	HasState(root common.Hash) bool
 
+	// StateRecoverable checks if a missing state can be restored from history.
+	StateRecoverable(root common.Hash) bool
+
 	// GetHeaderByHash retrieves a header from the local chain.
 	GetHeaderByHash(common.Hash) *types.Header
 
