@@ -18,10 +18,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
+	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -31,11 +33,17 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/evm/internal/t8ntool"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
 	"github.com/ethereum/go-ethereum/internal/reexec"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/tests"
+	"github.com/holiman/uint256"
 )
 
 func TestMain(m *testing.M) {
@@ -1480,5 +1488,124 @@ func TestEVMTracing(t *testing.T) {
 				//t.Logf("%v\n", want)
 			}
 		}
+	}
+}
+
+// runT9n runs `evm t9n` on the given transaction and returns the reported error
+// and intrinsic gas.
+func runT9n(t *testing.T, fork string, tx *types.Transaction) (string, uint64) {
+	t.Helper()
+
+	body, err := rlp.EncodeToBytes([]*types.Transaction{tx})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input, err := json.Marshal(hexutil.Bytes(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	txsFile := filepath.Join(t.TempDir(), "txs.rlp")
+	if err := os.WriteFile(txsFile, input, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tt := new(testT8n)
+	tt.TestCmd = cmdtest.NewTestCmd(t, tt)
+	tt.Run("evm-test", "t9n", "--input.txs", txsFile, "--state.fork", fork)
+	var results []struct {
+		Error        string         `json:"error"`
+		IntrinsicGas hexutil.Uint64 `json:"intrinsicGas"`
+	}
+	if err := json.Unmarshal(tt.Output(), &results); err != nil {
+		t.Fatalf("invalid t9n output: %v", err)
+	}
+	tt.WaitExit()
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	return results[0].Error, uint64(results[0].IntrinsicGas)
+}
+
+// TestT9nAmsterdamIntrinsicCap checks that t9n rejects an Amsterdam transaction
+// whose calldata floor exceeds params.MaxTxGas, as block execution does, and
+// still reports its intrinsic gas.
+func TestT9nAmsterdamIntrinsicCap(t *testing.T) {
+	t.Parallel()
+
+	config := tests.Forks["Amsterdam"]
+	key, _ := crypto.GenerateKey()
+	to := common.Address{0xaa}
+	tx := types.MustSignNewTx(key, types.LatestSigner(config), &types.DynamicFeeTx{
+		ChainID:   config.ChainID,
+		GasTipCap: big.NewInt(1),
+		GasFeeCap: big.NewInt(1),
+		Gas:       2 * params.MaxTxGas,
+		To:        &to,
+		Data:      bytes.Repeat([]byte{0x01}, 300_000),
+	})
+	errMsg, intrinsic := runT9n(t, "Amsterdam", tx)
+	if !strings.Contains(errMsg, core.ErrFloorDataGas.Error()) {
+		t.Fatalf("got error %q, want %q", errMsg, core.ErrFloorDataGas)
+	}
+	if intrinsic == 0 {
+		t.Fatal("intrinsic gas not reported")
+	}
+}
+
+// TestT9nGasLimitCap checks that t9n applies the transaction gas limit cap of
+// each fork, as block execution and the txpool do.
+func TestT9nGasLimitCap(t *testing.T) {
+	t.Parallel()
+
+	key, _ := crypto.GenerateKey()
+	to := common.Address{0xaa}
+	for _, tc := range []struct {
+		fork string
+		gas  uint64
+		fail bool
+	}{
+		{"Osaka", params.MaxTxGas, false},
+		{"Osaka", params.MaxTxGas + 1, true},
+		{"Amsterdam", params.MaxTxGas + 1, false},
+		{"Amsterdam", params.MaxTxTotalGas, false},
+		{"Amsterdam", params.MaxTxTotalGas + 1, true},
+	} {
+		t.Run(fmt.Sprintf("%s/%d", tc.fork, tc.gas), func(t *testing.T) {
+			config := tests.Forks[tc.fork]
+			tx := types.MustSignNewTx(key, types.LatestSigner(config), &types.DynamicFeeTx{
+				ChainID:   config.ChainID,
+				GasTipCap: big.NewInt(1),
+				GasFeeCap: big.NewInt(1),
+				Gas:       tc.gas,
+				To:        &to,
+			})
+			errMsg, _ := runT9n(t, tc.fork, tx)
+			if tc.fail != strings.Contains(errMsg, core.ErrGasLimitTooHigh.Error()) || (!tc.fail && errMsg != "") {
+				t.Fatalf("got error %q, want failure %v", errMsg, tc.fail)
+			}
+		})
+	}
+}
+
+// TestT9nEmptyAuthList checks that t9n rejects a set code transaction without
+// any authorization, as block execution and the txpool do.
+func TestT9nEmptyAuthList(t *testing.T) {
+	t.Parallel()
+
+	key, _ := crypto.GenerateKey()
+	for _, fork := range []string{"Prague", "Amsterdam"} {
+		t.Run(fork, func(t *testing.T) {
+			config := tests.Forks[fork]
+			tx := types.MustSignNewTx(key, types.LatestSigner(config), &types.SetCodeTx{
+				ChainID:   uint256.MustFromBig(config.ChainID),
+				GasTipCap: uint256.NewInt(1),
+				GasFeeCap: uint256.NewInt(1),
+				Gas:       100_000,
+				To:        common.Address{0xaa},
+			})
+			errMsg, _ := runT9n(t, fork, tx)
+			if !strings.Contains(errMsg, core.ErrEmptyAuthList.Error()) {
+				t.Fatalf("got error %q, want %q", errMsg, core.ErrEmptyAuthList)
+			}
+		})
 	}
 }
