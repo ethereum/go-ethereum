@@ -17,10 +17,13 @@
 package override
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"math/big"
+	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -142,6 +145,53 @@ type BlockOverrides struct {
 	BlobBaseFee   *hexutil.Big
 	BeaconRoot    *common.Hash
 	Withdrawals   *types.Withdrawals
+}
+
+// UnmarshalJSON rejects block override keys that are not defined.
+// encoding/json alone ignores unknown keys.
+func (o *BlockOverrides) UnmarshalJSON(input []byte) error {
+	if err := CheckOverrideKeys(input, reflect.TypeFor[BlockOverrides](), "block override"); err != nil {
+		return err
+	}
+	type plain BlockOverrides
+	return json.Unmarshal(input, (*plain)(o))
+}
+
+// CheckOverrideKeys returns an error for a key of the JSON object that does not
+// name a field of t, or that names a field another key already names. Names
+// match case-insensitively, as in encoding/json. Repeated identical keys cannot
+// be seen here; encoding/json keeps the last one.
+func CheckOverrideKeys(input json.RawMessage, t reflect.Type, what string) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(input, &keys); err != nil || keys == nil {
+		return nil
+	}
+	seen := make(map[int]string)
+	for _, key := range slices.Sorted(maps.Keys(keys)) {
+		field := -1
+		for i := 0; i < t.NumField(); i++ {
+			f := t.Field(i)
+			name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+			if !f.IsExported() || name == "-" {
+				continue
+			}
+			if name == "" {
+				name = f.Name
+			}
+			if strings.EqualFold(key, name) {
+				field = i
+				break
+			}
+		}
+		if field < 0 {
+			return fmt.Errorf("unknown field %q in %s", key, what)
+		}
+		if prev, ok := seen[field]; ok {
+			return fmt.Errorf("keys %q and %q in %s name the same field", prev, key, what)
+		}
+		seen[field] = key
+	}
+	return nil
 }
 
 // Apply overrides the given header fields into the given block context.

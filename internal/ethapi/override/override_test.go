@@ -17,6 +17,7 @@
 package override
 
 import (
+	"encoding/json"
 	"errors"
 	"maps"
 	"testing"
@@ -143,6 +144,29 @@ func TestBlockOverridesUnsupported(t *testing.T) {
 		}
 		if code := rpcErr.ErrorCode(); code != -32602 {
 			t.Errorf("%s: want error code -32602, have %d", tt.name, code)
+		}
+	}
+}
+
+func TestBlockOverridesUnmarshalJSON(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		err   string
+	}{
+		{input: `{"number":"0x1","difficulty":"0x0","time":"0x2","gasLimit":"0x3","feeRecipient":"0xc000000000000000000000000000000000000000","prevRandao":"0x0000000000000000000000000000000000000000000000000000000000000001","baseFeePerGas":"0x4","blobBaseFee":"0x5"}`},
+		{input: `null`},
+		{input: `{}`},
+		{input: `{"fooBar":"0x1"}`, err: `unknown field "fooBar" in block override`},
+		{input: `{"Time":"0x1"}`},
+		{input: `{"time":"0x1","Time":"0x1"}`, err: `keys "Time" and "time" in block override name the same field`},
+	} {
+		var o *BlockOverrides
+		err := json.Unmarshal([]byte(tc.input), &o)
+		switch {
+		case tc.err == "" && err != nil:
+			t.Errorf("%s: unexpected error: %v", tc.input, err)
+		case tc.err != "" && (err == nil || err.Error() != tc.err):
+			t.Errorf("%s: error mismatch: have %v, want %s", tc.input, err, tc.err)
 		}
 	}
 }

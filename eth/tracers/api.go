@@ -165,6 +165,12 @@ type TraceCallConfig struct {
 	TxIndex        *hexutil.Uint
 }
 
+// invalidParamsError is returned for a request parameter that is not valid.
+type invalidParamsError struct{ message string }
+
+func (e *invalidParamsError) Error() string  { return e.message }
+func (e *invalidParamsError) ErrorCode() int { return -32602 }
+
 // StdTraceConfig holds extra parameters to standard-json trace functions.
 type StdTraceConfig struct {
 	logger.Config
@@ -933,6 +939,9 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 			// GetHash function can correctly return n.
 			h.ParentHash = h.Hash()
 			h.Number.Add(h.Number, big.NewInt(1))
+		}
+		if config.BlockOverrides != nil && config.BlockOverrides.Difficulty != nil && h.Difficulty.Sign() == 0 {
+			return nil, &invalidParamsError{"difficulty override is not allowed after the merge"}
 		}
 		if err := config.BlockOverrides.Apply(&blockContext); err != nil {
 			return nil, err

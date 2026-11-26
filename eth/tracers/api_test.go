@@ -577,6 +577,62 @@ func TestTraceCallExecutionGasCapAmsterdam(t *testing.T) {
 	}
 }
 
+// TestTraceCallBlockOverridesRPC checks that debug_traceCall rejects block
+// override keys the schema does not define, case-duplicate keys, and a
+// difficulty override on a post-merge block, each with error code -32602.
+func TestTraceCallBlockOverridesRPC(t *testing.T) {
+	t.Parallel()
+
+	var (
+		accounts = newAccounts(1)
+		genesis  = &core.Genesis{
+			Config:     params.MergedTestChainConfig,
+			Difficulty: common.Big0,
+			GasLimit:   60_000_000,
+			Alloc:      types.GenesisAlloc{accounts[0].addr: {Balance: big.NewInt(params.Ether)}},
+		}
+	)
+	backend := newTestBackend(t, 0, genesis, nil)
+	defer backend.teardown()
+
+	server := rpc.NewServer()
+	defer server.Stop()
+	if err := server.RegisterName("debug", NewAPI(backend)); err != nil {
+		t.Fatalf("failed to register API: %v", err)
+	}
+	client := rpc.DialInProc(server)
+	defer client.Close()
+
+	for _, tc := range []struct {
+		overrides string
+		wantErr   string
+	}{
+		{overrides: `{"gasLimit":"0x1000000"}`},
+		{overrides: `{"GasLimit":"0x1000000"}`},
+		{overrides: `{"fooBar":"0x1"}`, wantErr: `invalid argument 2: unknown field "fooBar" in block override`},
+		{overrides: `{"gasLimit":"0x1000000","GasLimit":"0x1000000"}`, wantErr: `invalid argument 2: keys "GasLimit" and "gasLimit" in block override name the same field`},
+		{overrides: `{"difficulty":"0x1"}`, wantErr: "difficulty override is not allowed after the merge"},
+	} {
+		config := fmt.Sprintf(`{"blockOverrides":%s}`, tc.overrides)
+		var result json.RawMessage
+		err := client.Call(&result, "debug_traceCall", ethapi.TransactionArgs{From: &accounts[0].addr, To: &accounts[0].addr}, "latest", json.RawMessage(config))
+		if tc.wantErr == "" {
+			if err != nil {
+				t.Errorf("%s: unexpected error: %v", tc.overrides, err)
+			}
+			continue
+		}
+		var rpcErr rpc.Error
+		if !errors.As(err, &rpcErr) {
+			t.Errorf("%s: want rpc error, have %v", tc.overrides, err)
+			continue
+		}
+		if rpcErr.ErrorCode() != -32602 || rpcErr.Error() != tc.wantErr {
+			t.Errorf("%s: have %d %q, want -32602 %q", tc.overrides, rpcErr.ErrorCode(), rpcErr.Error(), tc.wantErr)
+		}
+	}
+}
+
 func TestTraceTransaction(t *testing.T) {
 	t.Parallel()
 
