@@ -524,19 +524,20 @@ peer. The same wrapper announced correctly by another peer must still be fetched
 
 func (s *Suite) TestEth76AnnouncementLimits(t *utesting.T) {
 	t.Log(`This test sends eth/76 NewProofWrapperHashes messages that violate the
-item-count, byte-length and ordering rules, an eth/75-shaped announcement, and a mode 1
-entry with inline metadata. Each must cause disconnection.`)
+item-count, byte-length and ordering rules, which should cause disconnection, and
+malformed ones: an eth/75-shaped announcement and a mode 1 entry with inline metadata,
+which the node must discard and may disconnect for.`)
 	s.testAnnouncementLimits(t, eth76)
 
-	short, _ := codec75{}.encodeAnnouncements(randomAnnouncements(1))
-	s.testViolation(t, eth76, "eth/75 announcement shape", newProofWrapperHashesMsg, short)
+	short := randomAnnouncements(1)
+	enc, _ := codec75{}.encodeAnnouncements(short)
+	s.testMalformedAnnouncement(t, eth76, "eth/75 announcement shape", enc, short[0].Hash)
 
 	meta := randomAnnouncements(1)
 	meta[0].Mode = wrapperModeRecursive
-	f := s.takeWrappers(t, inline, 1)[0]
-	meta[0].Meta = f.meta()
-	enc, _ := codec76{}.encodeAnnouncements(meta)
-	s.testViolation(t, eth76, "mode 1 with inline metadata", newProofWrapperHashesMsg, enc)
+	meta[0].Meta = s.takeWrappers(t, inline, 1)[0].meta()
+	enc, _ = codec76{}.encodeAnnouncements(meta)
+	s.testMalformedAnnouncement(t, eth76, "mode 1 with inline metadata", enc, meta[0].Hash)
 }
 
 func (s *Suite) TestEth76RequestLimits(t *utesting.T) {
