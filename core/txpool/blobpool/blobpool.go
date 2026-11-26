@@ -1250,7 +1250,22 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	waitStart := time.Now()
 	p.lock.Lock()
 	resetwaitHist.Update(time.Since(waitStart).Nanoseconds())
-	defer p.lock.Unlock()
+
+	var (
+		adds        []*types.Transaction
+		announcable []*types.Transaction
+	)
+	defer func() {
+		p.lock.Unlock()
+
+		// Subscribers may access the pool, so notify them only after unlocking
+		if len(adds) > 0 {
+			p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
+		}
+		if len(announcable) > 0 {
+			p.discoverFeed.Send(core.NewTxsEvent{Txs: announcable})
+		}
+	}()
 
 	defer func(start time.Time) {
 		resettimeHist.Update(time.Since(start).Nanoseconds())
@@ -1270,7 +1285,6 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 	// Run the reorg between the old and new head and figure out which accounts
 	// need to be rechecked and which transactions need to be readded
 	if reinject, inclusions := p.reorg(oldHead, newHead); reinject != nil {
-		var adds []*types.Transaction
 		for addr, txs := range reinject {
 			// Blindly push all the lost transactions back into the pool
 			for _, tx := range txs {
@@ -1281,9 +1295,6 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 			// Recheck the account's pooled transactions to drop included and
 			// invalidated ones
 			p.recheck(addr, inclusions)
-		}
-		if len(adds) > 0 {
-			p.insertFeed.Send(core.NewTxsEvent{Txs: adds})
 		}
 	}
 	// Flush out any blobs from limbo that are older than the latest finality
@@ -1299,13 +1310,17 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 		blobfee = uint256.MustFromBig(eip4844.CalcBlobFee(p.chain.Config(), newHead))
 	}
 	p.evict.reinit(basefee, blobfee, false)
+
 	// The new head may have filled nonce gaps, promote what became executable
 	for from := range p.gapped {
-		p.promoteGapped(from)
+		promoted := p.promoteGapped(from)
+
+		// Buffer the promoted transactions for notification
+		adds = append(adds, promoted...)
+		announcable = append(announcable, promoted...)
 	}
 
 	// Announce transactions that became announcable due to fee changes
-	var announcable []*types.Transaction
 	for addr, txs := range p.index {
 		for i, meta := range txs {
 			if !meta.announced && (i == 0 || txs[i-1].announced) && p.isAnnouncable(meta) {
@@ -1330,10 +1345,6 @@ func (p *BlobPool) Reset(oldHead, newHead *types.Header) {
 			}
 		}
 	}
-	if len(announcable) > 0 {
-		p.discoverFeed.Send(core.NewTxsEvent{Txs: announcable})
-	}
-
 	// Update the basefee and blobfee metrics
 	basefeeGauge.Update(int64(basefee.Uint64()))
 	blobfeeGauge.Update(int64(blobfee.Uint64()))
@@ -1541,6 +1552,7 @@ func (p *BlobPool) reinject(addr common.Address, txhash common.Hash) error {
 		return err
 	}
 	meta := newBlobTxMeta(id, p.store.Size(id), ptx)
+
 	if _, ok := p.index[addr]; !ok {
 		if err := p.reserver.Hold(addr); err != nil {
 			log.Warn("Failed to reserve account for blob pool", "tx", ptx.Tx.Hash(), "from", addr, "err", err)
@@ -2085,19 +2097,28 @@ func (p *BlobPool) AddPooledTx(ptx *BlobTxForPool) (err error) {
 	waitStart := time.Now()
 	p.lock.Lock()
 	addwaitHist.Update(time.Since(waitStart).Nanoseconds())
-	defer p.lock.Unlock()
+
+	var announcable []*types.Transaction
+	defer func() {
+		// Subscribers may access the pool, so notify them only after unlocking.
+		p.lock.Unlock()
+		if len(announcable) > 0 {
+			p.discoverFeed.Send(core.NewTxsEvent{Txs: announcable})
+			p.insertFeed.Send(core.NewTxsEvent{Txs: announcable})
+		}
+	}()
 
 	defer func(start time.Time) {
 		addtimeHist.Update(time.Since(start).Nanoseconds())
 	}(time.Now())
 
-	return p.addLocked(ptx, true)
+	announcable, err = p.addLocked(ptx, true)
+	return err
 }
 
 // addLocked inserts a new blob transaction into the pool if it passes validation (both
-// consensus validity and pool restrictions). It must be called with the pool lock held.
-// Only for internal use.
-func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
+// consensus validity and pool restrictions).
+func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (announcable []*types.Transaction, err error) {
 	tx := ptx.Tx
 
 	// Ensure the transaction is valid from all perspectives
@@ -2120,7 +2141,7 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 				p.gappedSource[tx.Hash()] = from
 				gappedGauge.Update(int64(len(p.gappedSource)))
 				log.Trace("added tx to gapped blob queue", "allowance", allowance, "hash", tx.Hash(), "from", from, "nonce", tx.Nonce(), "qlen", len(p.gapped[from]))
-				return nil
+				return nil, nil
 			} else {
 				// if maxGapped is reached, it is better to give time to gapped
 				// transactions by keeping the old and dropping this one.
@@ -2138,7 +2159,7 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 		default:
 			addInvalidMeter.Mark(1)
 		}
-		return err
+		return nil, err
 	}
 	// If the address is not yet known, request exclusivity to track the account
 	// only by this subpool until all transactions are evicted
@@ -2146,7 +2167,7 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 	if _, ok := p.index[from]; !ok {
 		if err := p.reserver.Hold(from); err != nil {
 			addNonExclusiveMeter.Mark(1)
-			return err
+			return nil, err
 		}
 		defer func() {
 			// If the transaction is rejected by some post-validation check, remove
@@ -2165,11 +2186,11 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 	blob, err := rlp.EncodeToBytes(ptx)
 	if err != nil {
 		log.Error("Failed to encode transaction for storage", "hash", tx.Hash(), "err", err)
-		return err
+		return nil, err
 	}
 	id, err := p.store.Put(blob)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	meta := newBlobTxMeta(id, p.store.Size(id), ptx)
 
@@ -2241,6 +2262,7 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 	}
 	isBlocked := p.blockedAccount[from] > 0
 	p.updateBlocked(from)
+
 	// Update the eviction heap with the new information:
 	//   - If the transaction is from a new account, add it to the heap
 	//   - If the account had a singleton tx replaced, update the heap (new price caps)
@@ -2274,22 +2296,21 @@ func (p *BlobPool) addLocked(ptx *BlobTxForPool, checkGapped bool) (err error) {
 	// includable and the previous one was already announced.
 	if p.isAnnouncable(meta) && (meta.nonce == next || (len(txs) > 1 && txs[offset-1].announced)) {
 		meta.announced = true
-		p.discoverFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
-		p.insertFeed.Send(core.NewTxsEvent{Txs: []*types.Transaction{tx.WithoutBlobTxSidecar()}})
+		announcable = append(announcable, tx.WithoutBlobTxSidecar())
 	} else {
 		log.Trace("Blob transaction not announcable yet", "hash", tx.Hash(), "nonce", tx.Nonce())
 	}
 
-	//check the gapped queue for this account and try to promote
+	// check the gapped queue for this account and try to promote
 	if checkGapped {
-		p.promoteGapped(from)
+		announcable = append(announcable, p.promoteGapped(from)...)
 	}
-	return nil
+	return announcable, nil
 }
 
 // promoteGapped moves gapped transactions of an account into the pool once their
-// nonce gap is filled. The caller must hold the pool lock.
-func (p *BlobPool) promoteGapped(from common.Address) {
+// nonce gap is filled.
+func (p *BlobPool) promoteGapped(from common.Address) (announcable []*types.Transaction) {
 	if gtxs, ok := p.gapped[from]; ok && len(gtxs) > 0 {
 		// We have to add in nonce order, but we want to stable sort to cater for situations
 		// where transactions are replaced, keeping the original receive order for same nonce
@@ -2320,10 +2341,13 @@ func (p *BlobPool) promoteGapped(from common.Address) {
 			}
 
 			if ptx.Tx.Nonce() <= firstgap {
-				// If we hit the pending range, including the first gap, add it and continue to try to add more.
-				// We do not recurse here, but continue to loop instead.
+				// If we hit the pending range, including the first gap, add it and
+				// continue to try to add more. We do not recurse here, but continue
+				// to loop instead.
+				//
 				// We are under lock, so we can add the transaction directly.
-				if err := p.addLocked(ptx, false); err == nil {
+				if promoted, err := p.addLocked(ptx, false); err == nil {
+					announcable = append(announcable, promoted...)
 					gappedPromotedMeter.Mark(1)
 					log.Trace("Gapped blob transaction added to pool", "hash", ptx.Tx.Hash(), "from", from, "nonce", ptx.Tx.Nonce(), "qlen", len(p.gapped[from]))
 				} else {
@@ -2338,6 +2362,7 @@ func (p *BlobPool) promoteGapped(from common.Address) {
 		}
 		gappedGauge.Update(int64(len(p.gappedSource)))
 	}
+	return announcable
 }
 
 // drop removes the worst transaction from the pool. It is primarily used when a
@@ -2596,9 +2621,11 @@ func (p *BlobPool) evictGapped() {
 	cutoff := time.Now().Add(-gappedLifetime)
 	for from, txs := range p.gapped {
 		nonce := p.state.GetNonce(from)
+
 		// Reuse the original slice to avoid extra allocations.
-		// This is safe because we only keep references to the original gappedTx objects,
-		// and we overwrite the slice for this account after filtering.
+		// This is safe because we only keep references to the
+		// original gappedTx objects, and we overwrite the slice
+		// for this account after filtering.
 		keep := txs[:0]
 		for i, gtx := range txs {
 			if gtx.Tx.Time().Before(cutoff) || gtx.Tx.Nonce() < nonce {
@@ -2614,6 +2641,8 @@ func (p *BlobPool) evictGapped() {
 			gappedEvictedMeter.Mark(int64(evicted))
 			log.Trace("Evicting old gapped blob transactions", "count", evicted, "from", from)
 		}
+		clear(txs[len(keep):])
+
 		if len(keep) == 0 {
 			delete(p.gapped, from)
 		} else {

@@ -169,8 +169,9 @@ type simBlockResult struct {
 	chainConfig *params.ChainConfig
 	Block       *types.Block
 	Calls       []simCallResult
-	// senders is a map of transaction hashes to their senders.
-	senders map[common.Hash]common.Address
+	// senders holds the sender of each transaction, by transaction index. Simulated
+	// transactions are unsigned, so two of them can have the same hash.
+	senders []common.Address
 }
 
 func (r *simBlockResult) MarshalJSON() ([]byte, error) {
@@ -179,9 +180,9 @@ func (r *simBlockResult) MarshalJSON() ([]byte, error) {
 	// Set tx sender if user requested full tx objects.
 	if r.fullTx {
 		if raw, ok := blockData["transactions"].([]any); ok {
-			for _, tx := range raw {
+			for i, tx := range raw {
 				if tx, ok := tx.(*RPCTransaction); ok {
-					tx.From = r.senders[tx.Hash]
+					tx.From = r.senders[i]
 				} else {
 					return nil, errors.New("simulated transaction result has invalid type")
 				}
@@ -336,7 +337,7 @@ func (sim *simulator) execute(ctx context.Context, blocks []simBlock) ([]*simBlo
 	return results, nil
 }
 
-func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header, parent *types.Header, headers []*types.Header, timeout time.Duration) (*types.Block, []simCallResult, map[common.Hash]common.Address, error) {
+func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header, parent *types.Header, headers []*types.Header, timeout time.Duration) (*types.Block, []simCallResult, []common.Address, error) {
 	// Set header fields that depend only on parent block.
 	// Parent hash is needed for evm.GetHashFn to work.
 	header.ParentHash = parent.Hash()
@@ -388,10 +389,9 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			NoBaseFee: !sim.validate,
 			Tracer:    tracer.Hooks(),
 		}
-		// senders is a map of transaction hashes to their senders.
 		// Transaction objects contain only the signature, and we lose track
 		// of the sender when translating the arguments into a transaction object.
-		senders = make(map[common.Hash]common.Address)
+		senders = make([]common.Address, len(block.Calls))
 	)
 	tracingStateDB := vm.StateDB(sim.state)
 	if hooks := tracer.Hooks(); hooks != nil {
@@ -429,11 +429,15 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			txHash = tx.Hash()
 		)
 		txes[i] = tx
-		senders[txHash] = call.from()
+		senders[i] = call.from()
 		tracer.reset(txHash, uint(i))
 
 		// EoA check is always skipped, even in validation mode.
 		sim.state.SetTxContext(txHash, i, uint32(i+1))
+		// Simulated transactions are unsigned, so an earlier call can have the same
+		// hash. The state keys logs by transaction hash and still holds the logs of
+		// that call. Count them, so that the receipt keeps only the logs of this call.
+		earlierLogs := len(sim.state.GetLogs(txHash, blockContext.BlockNumber.Uint64(), common.Hash{}, blockContext.Time))
 		msg := call.ToMessage(header.BaseFee, !sim.validate)
 		if !sim.validate {
 			msg.SkipExecutionGasCapCheck()
@@ -451,6 +455,10 @@ func (sim *simulator) processBlock(ctx context.Context, block *simBlock, header,
 			root = sim.state.IntermediateRoot(evm.GetRules()).Bytes()
 		}
 		receipts[i] = core.MakeReceipt(evm, result, sim.state, blockContext.BlockNumber, common.Hash{}, blockContext.Time, tx, gp.CumulativeUsed(), root)
+		if earlierLogs > 0 {
+			receipts[i].Logs = receipts[i].Logs[earlierLogs:]
+			receipts[i].Bloom = types.CreateBloom(receipts[i])
+		}
 		blobGasUsed += receipts[i].BlobGasUsed
 
 		// Make sure the gas cap is still enforced. It's only for

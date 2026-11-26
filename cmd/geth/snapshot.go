@@ -31,7 +31,8 @@ import (
 	"syscall"
 	"time"
 
-	pebbleimpl "github.com/cockroachdb/pebble"
+	pebblev1 "github.com/cockroachdb/pebble"
+	pebblev2 "github.com/cockroachdb/pebble/v2"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -40,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state/snapshot"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -306,7 +308,7 @@ func verifyState(ctx *cli.Context) error {
 }
 
 // benchGenerateTrie runs triedb.GenerateTrie against a hard-linked checkpoint
-// of the chaindata so the source datadir is never written to.
+// of the chaindata so trie reconstruction writes go to the checkpoint.
 func benchGenerateTrie(ctx *cli.Context) error {
 	stack, _ := makeConfigNode(ctx)
 	defer stack.Close()
@@ -397,17 +399,24 @@ func benchGenerateTrie(ctx *cli.Context) error {
 		close(cancelCh)
 	}()
 
-	// Open the checkpoint writable. Reuse source ancient. Checkpoint only
-	// hard-links the pebble SSTs (not the freezer), and GenerateTrie never
-	// writes to ancient, so sharing it is safe.
-	srcAncient := stack.ResolveAncient("chaindata", "")
-	kv, err := pebble.New(ckpt, 4096, 1024, "gentrie-bench", false)
+	// Open the checkpoint writable and reuse the source freezer in read-only mode.
+	var (
+		kv  ethdb.KeyValueStore
+		err error
+	)
+	if pebble.NeedsV1(ckpt) {
+		kv, err = pebble.NewV1(ckpt, 4096, 1024, "gentrie-bench", false)
+	} else {
+		kv, err = pebble.New(ckpt, 4096, 1024, "gentrie-bench", false)
+	}
 	if err != nil {
 		return fmt.Errorf("open checkpoint: %w", err)
 	}
 	chaindb, err := rawdb.Open(kv, rawdb.OpenOptions{
-		Ancient:          srcAncient,
+		Ancient:          stack.ResolveAncient("chaindata", ctx.String(utils.AncientFlag.Name)),
+		Era:              ctx.String(utils.EraFlag.Name),
 		MetricsNamespace: "gentrie-bench",
+		ReadOnly:         true,
 	})
 	if err != nil {
 		kv.Close()
@@ -415,10 +424,10 @@ func benchGenerateTrie(ctx *cli.Context) error {
 	}
 	defer chaindb.Close()
 
-	// Pick up the trie scheme already in use (path or hash).
-	triedbInst := utils.MakeTrieDatabase(ctx, stack, chaindb, false, true, false)
-	scheme := triedbInst.Scheme()
-	triedbInst.Close()
+	scheme, err := rawdb.ParseStateScheme(ctx.String(utils.StateSchemeFlag.Name), chaindb)
+	if err != nil {
+		return err
+	}
 
 	log.Info("running GenerateTrie", "scheme", scheme, "root", root)
 	runStart := time.Now()
@@ -448,7 +457,15 @@ func benchGenerateTrie(ctx *cli.Context) error {
 // Checkpoint then fails trying to hard-link the missing OPTIONS file. The
 // read-write open does no more than a normal geth startup would.
 func makeCheckpoint(srcDir, dstDir string) error {
-	db, err := pebbleimpl.Open(srcDir, &pebbleimpl.Options{})
+	if pebble.NeedsV1(srcDir) {
+		db, err := pebblev1.Open(srcDir, &pebblev1.Options{ErrorIfNotExists: true})
+		if err != nil {
+			return fmt.Errorf("open source pebble: %w", err)
+		}
+		defer db.Close()
+		return db.Checkpoint(dstDir)
+	}
+	db, err := pebblev2.Open(srcDir, &pebblev2.Options{ErrorIfNotExists: true})
 	if err != nil {
 		return fmt.Errorf("open source pebble: %w", err)
 	}
