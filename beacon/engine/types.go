@@ -251,14 +251,12 @@ func encodeTransactions(txs []*types.Transaction) [][]byte {
 func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 	txs := make([]*types.Transaction, len(enc))
 	workers := decodeWorkers(enc, runtime.GOMAXPROCS(0))
-	if workers < 2 {
+	if workers < 2 || !decodeParallel(enc, txs, workers) {
+		// Decode serially, which also reports the lowest failing index if the
+		// parallel decode found an invalid transaction.
 		if err := decodeRange(enc, txs, 0, len(enc)); err != nil {
 			return nil, err
 		}
-		return txs, nil
-	}
-	if err := decodeParallel(enc, txs, workers); err != nil {
-		return nil, err
 	}
 	return txs, nil
 }
@@ -268,17 +266,13 @@ func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
 // load a worker unevenly when a few transactions are much larger than the rest,
 // the workers pull transactions from a shared cursor: whoever finishes first
 // takes the next transaction, so the work balances itself regardless of how
-// transaction sizes are distributed. It returns the error of the lowest-indexed
-// transaction that failed to decode, matching the serial decode order.
-func decodeParallel(enc [][]byte, txs []*types.Transaction, workers int) error {
+// transaction sizes are distributed. It reports whether every transaction
+// decoded; on failure the caller re-decodes serially to report the lowest
+// failing index.
+func decodeParallel(enc [][]byte, txs []*types.Transaction, workers int) bool {
 	var (
 		cursor atomic.Int64
 		failed atomic.Bool
-		// lowIdx and lowErr track the lowest-indexed decode failure. They are
-		// guarded by mu, which is only taken on the (rare) decode-error path.
-		mu     sync.Mutex
-		lowIdx = len(enc)
-		lowErr error
 		wg     sync.WaitGroup
 	)
 	for range workers {
@@ -289,15 +283,7 @@ func decodeParallel(enc [][]byte, txs []*types.Transaction, workers int) error {
 					return
 				}
 				var tx types.Transaction
-				if err := tx.UnmarshalBinary(enc[i]); err != nil {
-					mu.Lock()
-					if i < lowIdx {
-						lowIdx, lowErr = i, fmt.Errorf("invalid transaction %d: %v", i, err)
-					}
-					mu.Unlock()
-					// Stop handing out new transactions: the cursor is monotonic,
-					// so every index below this failure has already been dispatched
-					// and will still be decoded, keeping the reported index lowest.
+				if tx.UnmarshalBinary(enc[i]) != nil {
 					failed.Store(true)
 					return
 				}
@@ -306,7 +292,7 @@ func decodeParallel(enc [][]byte, txs []*types.Transaction, workers int) error {
 		})
 	}
 	wg.Wait()
-	return lowErr
+	return !failed.Load()
 }
 
 // decodeBatchSize is the fewest transactions worth handing to a decode worker.
@@ -324,7 +310,7 @@ const decodeByteBatchSize = 256 * 1024
 // which would otherwise decode serially. Total bytes is only a coarse proxy for
 // decode cost (calldata is barely more than a copy, whereas e.g. EIP-7702
 // authorization tuples cost far more per byte), so it is used only to decide
-// whether a block is worth parallelizing; DecodeTransactions balances the actual
+// whether a block is worth parallelizing; decodeParallel balances the actual
 // per-worker load with a shared cursor, so misjudging the cost here changes only
 // how many workers start, never how evenly the work is shared.
 func decodeWorkers(enc [][]byte, maxProcs int) int {

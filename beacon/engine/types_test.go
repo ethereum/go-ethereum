@@ -217,8 +217,8 @@ func TestDecodeTransactionsLowestError(t *testing.T) {
 	if w := decodeWorkers(enc, runtime.GOMAXPROCS(0)); w < 2 {
 		t.Fatalf("test needs the parallel path, got %d workers", w)
 	}
-	// Run repeatedly: the parallel path is nondeterministic, so a single pass can
-	// miss a scheduling that would report the wrong index.
+	// Run repeatedly: which worker trips the failure flag is nondeterministic, so
+	// loop to confirm the serial fallback always reports the lowest index.
 	for range 50 {
 		_, err := DecodeTransactions(enc)
 		if err == nil {
