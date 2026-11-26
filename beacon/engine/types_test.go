@@ -18,6 +18,7 @@ package engine
 
 import (
 	"math/big"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -157,5 +158,74 @@ func TestDecodeTransactionsRoundtrip(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "transaction 2") {
 		t.Errorf("error %q does not name failing index 2", err)
+	}
+}
+
+// TestDecodeTransactionsSkewed decodes a block whose transaction sizes are highly
+// uneven (a few large transactions among many small ones). The shared-cursor
+// distribution must still return every transaction correctly regardless of where
+// the large ones sit.
+func TestDecodeTransactionsSkewed(t *testing.T) {
+	const n = 300
+	enc := make([][]byte, n)
+	want := make([]common.Hash, n)
+	for i := range enc {
+		dataLen := 64
+		if i%40 == 0 {
+			dataLen = 400 * 1024 // a few large txs; enough total bytes to force parallel decode
+		}
+		enc[i] = makeEncTx(t, uint64(i), dataLen)
+		var tx types.Transaction
+		if err := tx.UnmarshalBinary(enc[i]); err != nil {
+			t.Fatalf("setup decode %d: %v", i, err)
+		}
+		want[i] = tx.Hash()
+	}
+	if w := decodeWorkers(enc, runtime.GOMAXPROCS(0)); w < 2 {
+		t.Fatalf("test needs the parallel path, got %d workers", w)
+	}
+	got, err := DecodeTransactions(enc)
+	if err != nil {
+		t.Fatalf("DecodeTransactions: %v", err)
+	}
+	if len(got) != n {
+		t.Fatalf("got %d txs, want %d", len(got), n)
+	}
+	for i, tx := range got {
+		if tx == nil {
+			t.Fatalf("tx %d is nil", i)
+		}
+		if tx.Hash() != want[i] {
+			t.Errorf("tx %d hash mismatch", i)
+		}
+	}
+}
+
+// TestDecodeTransactionsLowestError checks that on the parallel path a block with
+// several malformed transactions reports the error for the lowest-indexed one,
+// matching serial decode order, even though workers decode out of order.
+func TestDecodeTransactionsLowestError(t *testing.T) {
+	const n = 256
+	enc := make([][]byte, n)
+	for i := range enc {
+		enc[i] = makeEncTx(t, uint64(i), 64)
+	}
+	// Corrupt several transactions; the lowest index must be the one reported.
+	for _, i := range []int{37, 100, 211} {
+		enc[i] = []byte{0x02, 0xff} // typed (dynamic-fee) prefix with a garbage payload
+	}
+	if w := decodeWorkers(enc, runtime.GOMAXPROCS(0)); w < 2 {
+		t.Fatalf("test needs the parallel path, got %d workers", w)
+	}
+	// Run repeatedly: the parallel path is nondeterministic, so a single pass can
+	// miss a scheduling that would report the wrong index.
+	for range 50 {
+		_, err := DecodeTransactions(enc)
+		if err == nil {
+			t.Fatal("expected error for malformed transactions, got nil")
+		}
+		if !strings.Contains(err.Error(), "transaction 37") {
+			t.Fatalf("error %q does not name lowest failing index 37", err)
+		}
 	}
 }
