@@ -766,6 +766,37 @@ func TestTruncateTail(t *testing.T) {
 	assertTableSize(t, f, expected)
 }
 
+// TestTruncateTailSizeGauge checks that the size gauge follows the table size
+// when the tail is truncated one item at a time, as the path database does
+// with its state and trienode histories.
+func TestTruncateTailSizeGauge(t *testing.T) {
+	t.Parallel()
+	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()
+	fname := fmt.Sprintf("truncate-tail-gauge-%d", rand.Uint64())
+
+	// 20 items of 20 bytes, five per data file
+	f, err := newTable(os.TempDir(), fname, rm, wm, sg, 100, freezerTableConfig{noSnappy: true}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	batch := f.newBatch()
+	for i := 0; i < 20; i++ {
+		require.NoError(t, batch.AppendRaw(uint64(i), getChunk(20, i)))
+	}
+	require.NoError(t, batch.commit())
+
+	for tail := uint64(1); tail <= 20; tail++ {
+		require.NoError(t, f.truncateTail(tail))
+		size, err := f.size()
+		require.NoError(t, err)
+		if got := sg.Snapshot().Value(); got != int64(size) {
+			t.Fatalf("tail %d: size gauge %d, table size %d", tail, got, size)
+		}
+	}
+}
+
 func TestTruncateHead(t *testing.T) {
 	t.Parallel()
 	rm, wm, sg := metrics.NewMeter(), metrics.NewMeter(), metrics.NewGauge()

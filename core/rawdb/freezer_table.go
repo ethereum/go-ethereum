@@ -758,8 +758,14 @@ func (t *freezerTable) truncateTail(items uint64) error {
 		return err
 	}
 	// Hidden items still fall in the current tail file, no data file
-	// can be dropped.
+	// can be dropped. The hidden items no longer count towards the table
+	// size, so the gauge is updated here as well.
 	if t.tailId == newTailId {
+		newSize, err := t.sizeNolock()
+		if err != nil {
+			return err
+		}
+		t.sizeGauge.Dec(int64(oldSize - newSize))
 		return nil
 	}
 	// Hidden items fall in the incorrect range, returns the error.
