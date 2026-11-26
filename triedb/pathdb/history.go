@@ -433,15 +433,21 @@ func repairHistory(db ethdb.Database, readOnly bool, stateID uint64, enableTrien
 		if stateID <= thead {
 			truncTo = min(truncTo, thead)
 		} else {
-			if thead == 0 {
-				_, err = trienodes.TruncateTail(rawdb.DefaultHistoryGroup, stateID)
-				if err != nil {
-					return nil, nil, err
+			// The trienode history ends before the persisted state: it was
+			// never enabled, or it was disabled for a while. Drop what's left
+			// of it, with its index, and start it again from the state.
+			if thead != 0 {
+				if readOnly {
+					return nil, nil, fmt.Errorf("gap between state [#%d] and trienode history [#%d]", stateID, thead)
 				}
-				log.Warn("Initialized trienode history")
-			} else {
-				return nil, nil, fmt.Errorf("gap between state [#%d] and trienode history [#%d]", stateID, thead)
+				log.Warn("Resetting stale trienode history", "head", thead, "state", stateID)
+				purgeHistory(trienodes, db, typeTrienodeHistory)
 			}
+			_, err = trienodes.TruncateTail(rawdb.DefaultHistoryGroup, stateID)
+			if err != nil {
+				return nil, nil, err
+			}
+			log.Warn("Initialized trienode history")
 		}
 	}
 	// Truncate the extra history elements above in freezer in case it's not

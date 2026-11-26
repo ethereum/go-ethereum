@@ -735,3 +735,58 @@ func TestSearchSingle(t *testing.T) {
 		}
 	}
 }
+
+// TestRepairStaleTrienodeHistory checks that a trienode history which ends
+// before the persisted state, left by a run before the trienode history was
+// disabled, is reset when it's enabled again.
+func TestRepairStaleTrienodeHistory(t *testing.T) {
+	ancient := t.TempDir()
+	db, err := rawdb.Open(rawdb.NewMemoryDatabase(), rawdb.OpenOptions{Ancient: ancient})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	// Both histories reached state 5, then only the state history was kept,
+	// up to state 10.
+	states, err := rawdb.NewStateFreezer(ancient, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id := uint64(1); id <= 10; id++ {
+		if err := rawdb.WriteStateHistory(states, id, []byte{0}, []byte{0}, []byte{0}, []byte{0}, []byte{0}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	states.Close()
+
+	trienodes, err := rawdb.NewTrienodeFreezer(ancient, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id := uint64(1); id <= 5; id++ {
+		if err := rawdb.WriteTrienodeHistory(trienodes, id, []byte{0}, []byte{0}, []byte{0}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	trienodes.Close()
+
+	states, trienodes, err = repairHistory(db, false, 10, true)
+	if err != nil {
+		t.Fatalf("Failed to repair history: %v", err)
+	}
+	defer states.Close()
+	defer trienodes.Close()
+
+	tail, err := trienodes.Tail(rawdb.DefaultHistoryGroup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := trienodes.Ancients()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tail != 10 || head != 10 {
+		t.Fatalf("Unexpected trienode history, tail: %d, head: %d, want 10 and 10", tail, head)
+	}
+}
