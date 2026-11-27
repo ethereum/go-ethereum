@@ -288,10 +288,8 @@ func (dB *DB) UnpackInsertEvent(log *types.Log) (*DBInsert, error) {
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DBInsert)
-	if len(log.Data) > 0 {
-		if err := dB.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := dB.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range dB.abi.Events[event].Inputs {
@@ -333,10 +331,8 @@ func (dB *DB) UnpackKeyedInsertEvent(log *types.Log) (*DBKeyedInsert, error) {
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(DBKeyedInsert)
-	if len(log.Data) > 0 {
-		if err := dB.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := dB.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range dB.abi.Events[event].Inputs {

@@ -195,10 +195,8 @@ var (
 				return nil, bind.ErrEventSignatureMismatch
 			}
 			out := new({{$contract.Type}}{{.Normalized.Name}})
-			if len(log.Data) > 0 {
-				if err := {{ decapitalise $contract.Type}}.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-					return nil, err
-				}
+			if err := {{ decapitalise $contract.Type}}.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+				return nil, err
 			}
 			var indexed abi.Arguments
 			for _, arg := range {{ decapitalise $contract.Type}}.abi.Events[event].Inputs {

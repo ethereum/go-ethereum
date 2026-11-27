@@ -205,10 +205,8 @@ func (tuple *Tuple) UnpackTupleEventEvent(log *types.Log) (*TupleTupleEvent, err
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(TupleTupleEvent)
-	if len(log.Data) > 0 {
-		if err := tuple.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := tuple.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range tuple.abi.Events[event].Inputs {
@@ -249,10 +247,8 @@ func (tuple *Tuple) UnpackTupleEvent2Event(log *types.Log) (*TupleTupleEvent2, e
 		return nil, bind.ErrEventSignatureMismatch
 	}
 	out := new(TupleTupleEvent2)
-	if len(log.Data) > 0 {
-		if err := tuple.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
-			return nil, err
-		}
+	if err := tuple.abi.UnpackIntoInterface(out, event, log.Data); err != nil {
+		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range tuple.abi.Events[event].Inputs {
