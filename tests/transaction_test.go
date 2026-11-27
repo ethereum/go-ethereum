@@ -17,9 +17,16 @@
 package tests
 
 import (
+	"bytes"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/holiman/uint256"
 )
 
 func TestTransaction(t *testing.T) {
@@ -74,4 +81,46 @@ func TestExecutionSpecTransaction(t *testing.T) {
 			t.Error(err)
 		}
 	})
+}
+
+// TestTransactionAmsterdamIntrinsicCap checks that an Amsterdam transaction whose
+// calldata floor exceeds params.MaxTxGas is rejected, even though its gas limit
+// covers the floor.
+func TestTransactionAmsterdamIntrinsicCap(t *testing.T) {
+	t.Parallel()
+
+	config := Forks["Amsterdam"]
+	rules := config.Rules(new(big.Int), true, 0)
+	key, _ := crypto.GenerateKey()
+	from := crypto.PubkeyToAddress(key.PublicKey)
+	to := common.Address{0xaa}
+	data := bytes.Repeat([]byte{0x01}, 300_000)
+
+	floor, err := core.FloorDataGas(rules, from, &to, new(uint256.Int), data, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if floor <= params.MaxTxGas {
+		t.Fatalf("calldata floor %d does not exceed the cap %d", floor, params.MaxTxGas)
+	}
+	tx := types.MustSignNewTx(key, types.MakeSigner(config, new(big.Int), 0), &types.DynamicFeeTx{
+		ChainID:   config.ChainID,
+		GasTipCap: big.NewInt(1),
+		GasFeeCap: big.NewInt(1),
+		Gas:       floor,
+		To:        &to,
+		Data:      data,
+	})
+	txBytes, err := tx.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	exception := "intrinsic gas above the cap"
+	tt := &TransactionTest{
+		Txbytes: txBytes,
+		Result:  map[string]*ttFork{"Amsterdam": {Exception: &exception}},
+	}
+	if err := tt.Run(); err != nil {
+		t.Fatal(err)
+	}
 }
