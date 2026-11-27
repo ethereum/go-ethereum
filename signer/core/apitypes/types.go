@@ -522,45 +522,51 @@ func (typedData *TypedData) encodeArrayValue(encValue interface{}, encType strin
 	if err != nil {
 		return nil, dataMismatchError(encType, encValue)
 	}
+	// Split off the outermost dimension, so 'uint256[2][]' is a dynamic array
+	// of 'uint256[2]' elements, and check the length if it is fixed.
+	open := strings.LastIndexByte(encType, '[')
+	if open <= 0 || !strings.HasSuffix(encType, "]") {
+		return nil, fmt.Errorf("invalid array type %q", encType)
+	}
+	elemType := encType[:open]
+	if size := encType[open+1 : len(encType)-1]; size != "" {
+		n, err := strconv.ParseUint(size, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid array size in type %q", encType)
+		}
+		if uint64(len(arrayValue)) != n {
+			return nil, fmt.Errorf("array length mismatch for type %q: have %d, want %d", encType, len(arrayValue), n)
+		}
+	}
 
 	arrayBuffer := new(bytes.Buffer)
-	parsedType := strings.Split(encType, "[")[0]
 	for _, item := range arrayValue {
-		if reflect.TypeOf(item).Kind() == reflect.Slice ||
-			reflect.TypeOf(item).Kind() == reflect.Array {
-			var (
-				encodedData hexutil.Bytes
-				err         error
-			)
-			if reflect.TypeOf(item).Elem().Kind() == reflect.Uint8 {
-				// the item type is bytes.  encode the bytes array directly instead of recursing.
-				encodedData, err = typedData.EncodePrimitiveValue(parsedType, item, depth+1)
-			} else {
-				encodedData, err = typedData.encodeArrayValue(item, parsedType, depth+1)
-			}
+		if item == nil {
+			return nil, dataMismatchError(elemType, item)
+		}
+		switch {
+		case strings.HasSuffix(elemType, "]"):
+			encodedData, err := typedData.encodeArrayValue(item, elemType, depth+1)
 			if err != nil {
 				return nil, err
 			}
 			arrayBuffer.Write(encodedData)
-		} else {
-			if typedData.Types[parsedType] != nil {
-				mapValue, ok := item.(map[string]interface{})
-				if !ok {
-					return nil, dataMismatchError(parsedType, item)
-				}
-				encodedData, err := typedData.EncodeData(parsedType, mapValue, depth+1)
-				if err != nil {
-					return nil, err
-				}
-				digest := crypto.Keccak256(encodedData)
-				arrayBuffer.Write(digest)
-			} else {
-				bytesValue, err := typedData.EncodePrimitiveValue(parsedType, item, depth)
-				if err != nil {
-					return nil, err
-				}
-				arrayBuffer.Write(bytesValue)
+		case typedData.Types[elemType] != nil:
+			mapValue, ok := item.(map[string]interface{})
+			if !ok {
+				return nil, dataMismatchError(elemType, item)
 			}
+			encodedData, err := typedData.EncodeData(elemType, mapValue, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			arrayBuffer.Write(crypto.Keccak256(encodedData))
+		default:
+			bytesValue, err := typedData.EncodePrimitiveValue(elemType, item, depth)
+			if err != nil {
+				return nil, err
+			}
+			arrayBuffer.Write(bytesValue)
 		}
 	}
 	return crypto.Keccak256(arrayBuffer.Bytes()), nil
@@ -923,6 +929,9 @@ func init() {
 
 // Checks if the primitive value is valid
 func isPrimitiveTypeValid(primitiveType string) bool {
+	if !typedDataReferenceTypeRegexp.MatchString(primitiveType) {
+		return false
+	}
 	input := strings.Split(primitiveType, "[")[0]
 	_, ok := validPrimitiveTypes[input]
 	return ok
