@@ -146,6 +146,7 @@ type Downloader struct {
 
 	// State sync
 	pivotHeader *types.Header
+	exactPivot  bool // Pin the snap pivot to the exact head instead of head-fsMinFullBlocks
 
 	snapSyncer     snap.Syncer // snap/1 or snap/2 state syncer, selected at construction
 	stateSyncStart chan *stateSync
@@ -273,6 +274,13 @@ func New(stateDb ethdb.Database, mode ethconfig.SyncMode, chain BlockChain, drop
 
 	go dl.stateFetcher()
 	return dl
+}
+
+// SetExactPivot pins the snap sync pivot to the exact announced head instead of
+// head-fsMinFullBlocks, so the downloaded state root equals stateRoot(head).
+// Must be set before synchronisation starts.
+func (d *Downloader) SetExactPivot(v bool) {
+	d.exactPivot = v
 }
 
 // Progress retrieves the synchronisation boundaries, specifically the origin
@@ -487,7 +495,12 @@ func (d *Downloader) syncToHead(beaconPing chan struct{}) (err error) {
 	if err != nil {
 		return err
 	}
-	if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
+	if d.exactPivot {
+		// With --snap.exactpivot, pin the pivot to the exact announced head
+		// instead of head-fsMinFullBlocks, so the synced state root equals
+		// stateRoot(head). Safe only against a fixed, non-reorging head.
+		pivot = latest
+	} else if latest.Number.Uint64() > uint64(fsMinFullBlocks) {
 		number := latest.Number.Uint64() - uint64(fsMinFullBlocks)
 
 		// Retrieve the pivot header from the skeleton chain segment but
@@ -1102,6 +1115,9 @@ func (d *Downloader) movePivotIfStale() error {
 		return nil
 	}
 	number := head.Number.Uint64() - uint64(fsMinFullBlocks)
+	if d.exactPivot {
+		number = head.Number.Uint64()
+	}
 	log.Warn("Pivot seemingly stale, moving", "old", d.pivotHeader.Number, "new", number)
 
 	// Retrieve the next pivot header, either from the skeleton chain or, for
