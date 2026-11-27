@@ -212,6 +212,24 @@ func TestPartialStackTrieWrongNibble(t *testing.T) {
 // through the triedb single-partition tests.
 func TestMountPartitionRoot(t *testing.T) {
 	const n = byte(3)
+	t.Run("embedded branch", func(t *testing.T) {
+		keys := [][]byte{{0x30}, {0x31}}
+		values := [][]byte{{1}, {2}}
+		child := partitionRoot(t, n, keys, values)
+		if len(child) >= common.HashLength {
+			t.Fatalf("branch is %d bytes, want an embedded branch", len(child))
+		}
+		ref := NewStackTrie(nil)
+		for i := range keys {
+			if err := ref.Update(keys[i], values[i]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		got, _, _, err := MountPartitionRoot(child, n)
+		if want := ref.Hash(); err != nil || got != want {
+			t.Fatalf("mounted root %x, want %x, err %v", got, want, err)
+		}
+	})
 	cases := []struct {
 		name         string
 		keys         []string
