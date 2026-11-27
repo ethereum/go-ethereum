@@ -1410,6 +1410,13 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		}
 	}
 
+	// Enforce the configured EVM timeout, matching DoCall.
+	if timeout := b.RPCEVMTimeout(); timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
 	// Create an initial tracer
 	prevTracer := logger.NewAccessListTracer(nil, addressesToExclude)
 	if args.AccessList != nil {
@@ -1442,8 +1449,13 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if msg.BlobGasFeeCap != nil && msg.BlobGasFeeCap.BitLen() == 0 {
 			evm.Context.BlobBaseFee = new(big.Int)
 		}
+		stop := context.AfterFunc(ctx, evm.Cancel)
 		res, err := core.ApplyMessage(evm, msg, nil)
+		stop()
 		evm.Release()
+		if evm.Cancelled() {
+			return nil, 0, nil, ctx.Err()
+		}
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.ToTransaction(types.LegacyTxType).Hash(), err)
 		}

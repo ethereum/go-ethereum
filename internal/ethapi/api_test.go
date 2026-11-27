@@ -4419,6 +4419,39 @@ func TestCreateAccessListFeeDefaults(t *testing.T) {
 	}
 }
 
+func TestCreateAccessListCancel(t *testing.T) {
+	var (
+		from   = common.HexToAddress("0x71562b71999873db5b286df957af199ec94617f7")
+		target = common.HexToAddress("0x1234567890123456789012345678901234567890")
+		// Infinite loop: JUMPDEST; PUSH1 0x00; JUMP
+		loopCode = common.FromHex("5b600056")
+	)
+	genesis := &core.Genesis{
+		Config:   params.TestChainConfig,
+		GasLimit: 50_000_000,
+		Alloc: types.GenesisAlloc{
+			from:   {Balance: big.NewInt(1e18)},
+			target: {Code: loopCode},
+		},
+	}
+	backend := newTestBackend(t, 1, genesis, ethash.NewFaker(), nil)
+	api := NewBlockChainAPI(backend)
+
+	gas := hexutil.Uint64(50_000_000)
+	args := TransactionArgs{
+		From: &from,
+		To:   &target,
+		Gas:  &gas,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+
+	res, err := api.CreateAccessList(ctx, args, nil, nil)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected context.DeadlineExceeded, got res=%+v err=%v", res, err)
+	}
+}
+
 // TestCreateAccessListBlobFeeDefault tests that eth_createAccessList keeps the
 // default blob fee cap for a request with blob hashes, so BLOBBASEFEE reads the
 // block's blob base fee.

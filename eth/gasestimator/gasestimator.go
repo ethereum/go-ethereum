@@ -125,7 +125,10 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	if len(call.Data) == 0 {
 		if call.To != nil && opts.State.GetCodeSize(*call.To) == 0 {
 			failed, result, err := execute(ctx, call, opts, params.TxGas)
-			if !failed && err == nil {
+			if err != nil {
+				return 0, nil, err
+			}
+			if !failed {
 				return result.UsedGas, nil, nil
 			}
 		}
@@ -156,9 +159,11 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 	if optimisticGasLimit < hi {
 		failed, _, err = execute(ctx, call, opts, optimisticGasLimit)
 		if err != nil {
-			// This should not happen under normal conditions since if we make it this far the
-			// transaction had run without error at least once before.
-			log.Error("Execution error in estimate gas", "err", err)
+			if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				// This should not happen under normal conditions since if we make it this far the
+				// transaction had run without error at least once before.
+				log.Error("Execution error in estimate gas", "err", err)
+			}
 			return 0, nil, err
 		}
 		if failed {
@@ -187,9 +192,11 @@ func Estimate(ctx context.Context, call *core.Message, opts *Options, gasCap uin
 		}
 		failed, _, err = execute(ctx, call, opts, mid)
 		if err != nil {
-			// This should not happen under normal conditions since if we make it this far the
-			// transaction had run without error at least once before.
-			log.Error("Execution error in estimate gas", "err", err)
+			if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+				// This should not happen under normal conditions since if we make it this far the
+				// transaction had run without error at least once before.
+				log.Error("Execution error in estimate gas", "err", err)
+			}
 			return 0, nil, err
 		}
 		if failed {
@@ -228,6 +235,9 @@ func execute(ctx context.Context, call *core.Message, opts *Options, gasLimit ui
 // run assembles the EVM as defined by the consensus rules and runs the requested
 // call invocation.
 func run(ctx context.Context, call *core.Message, opts *Options) (*core.ExecutionResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// Assemble the call and the call context
 	var (
 		evmContext = core.NewEVMBlockContext(opts.Header, opts.Chain, nil)
@@ -247,20 +257,17 @@ func run(ctx context.Context, call *core.Message, opts *Options) (*core.Executio
 	evm := vm.NewEVM(evmContext, dirtyState, opts.Config, vm.Config{NoBaseFee: true})
 	defer evm.Release()
 
-	// Monitor the outer context and interrupt the EVM upon cancellation. To avoid
-	// a dangling goroutine until the outer estimation finishes, create an internal
-	// context for the lifetime of this method call.
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	// Monitor the outer context and interrupt the EVM upon cancellation.
+	stop := context.AfterFunc(ctx, evm.Cancel)
+	defer stop()
 
-	go func() {
-		<-ctx.Done()
-		evm.Cancel()
-	}()
 	// Execute the call, returning a wrapped error or the result
 	result, err := core.ApplyMessage(evm, call, nil)
 	if vmerr := dirtyState.Error(); vmerr != nil {
 		return nil, vmerr
+	}
+	if evm.Cancelled() {
+		return nil, ctx.Err()
 	}
 	if err != nil {
 		return result, fmt.Errorf("failed with %d gas: %w", call.GasLimit, err)
