@@ -562,6 +562,76 @@ func TestForkchoiceUpdatedCanonicalAboveHead(t *testing.T) {
 	}
 }
 
+func TestForkchoiceUpdatedAncestry(t *testing.T) {
+	genesis, blocks := generateMergeChain(4, true)
+	n, ethservice := startEthService(t, genesis, blocks)
+	defer n.Close()
+
+	api := newConsensusAPIWithoutHeartbeat(ethservice)
+	chain := ethservice.BlockChain()
+	initial := engine.ForkchoiceStateV1{
+		HeadBlockHash:      blocks[3].Hash(),
+		SafeBlockHash:      blocks[1].Hash(),
+		FinalizedBlockHash: chain.Genesis().Hash(),
+	}
+	if _, err := api.ForkchoiceUpdatedV1(t.Context(), initial, nil); err != nil {
+		t.Fatalf("set initial forkchoice state: %v", err)
+	}
+	_, side, _ := core.GenerateChainWithGenesis(genesis, beacon.New(ethash.NewFaker()), 3, func(_ int, b *core.BlockGen) {
+		b.SetExtra([]byte("side chain"))
+	})
+	for _, block := range side {
+		if _, err := chain.InsertBlockWithoutSetHead(t.Context(), block, false); err != nil {
+			t.Fatalf("insert side block %d: %v", block.NumberU64(), err)
+		}
+	}
+	checkState := func(want engine.ForkchoiceStateV1) {
+		t.Helper()
+		for _, entry := range []struct {
+			name string
+			have *types.Header
+			want common.Hash
+		}{
+			{"head", chain.CurrentBlock(), want.HeadBlockHash},
+			{"safe", chain.CurrentSafeBlock(), want.SafeBlockHash},
+			{"finalized", chain.CurrentFinalBlock(), want.FinalizedBlockHash},
+		} {
+			if entry.have == nil {
+				t.Fatalf("missing %s block, want %v", entry.name, entry.want)
+			}
+			if hash := entry.have.Hash(); hash != entry.want {
+				t.Fatalf("%s block: have %v, want %v", entry.name, hash, entry.want)
+			}
+		}
+	}
+	for _, update := range []engine.ForkchoiceStateV1{
+		// The head is on the side chain and finalized is on the original chain.
+		{HeadBlockHash: side[2].Hash(), FinalizedBlockHash: blocks[0].Hash()},
+
+		// Finalized is a descendant of the requested head on the canonical chain.
+		{HeadBlockHash: blocks[1].Hash(), FinalizedBlockHash: blocks[2].Hash()},
+	
+		// Finalized is on the head's chain. Safe is on the original chain.
+		{HeadBlockHash: side[2].Hash(), SafeBlockHash: initial.SafeBlockHash, FinalizedBlockHash: side[0].Hash()},
+	} {
+		_, err := api.ForkchoiceUpdatedV1(t.Context(), update, nil)
+		var apiErr *engine.EngineAPIError
+		if !errors.As(err, &apiErr) || apiErr.ErrorCode() != engine.InvalidForkChoiceState.ErrorCode() {
+			t.Fatalf("unexpected forkchoice error: have %v, want %v", err, engine.InvalidForkChoiceState)
+		}
+		checkState(initial)
+	}
+	valid := engine.ForkchoiceStateV1{
+		HeadBlockHash:      side[2].Hash(),
+		SafeBlockHash:      side[1].Hash(),
+		FinalizedBlockHash: side[0].Hash(),
+	}
+	if resp, err := api.ForkchoiceUpdatedV1(t.Context(), valid, nil); err != nil || resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("valid forkchoice update: status %s, error %v", resp.PayloadStatus.Status, err)
+	}
+	checkState(valid)
+}
+
 func TestFullAPI(t *testing.T) {
 	genesis, preMergeBlocks := generateMergeChain(10, false)
 	n, ethservice := startEthService(t, genesis, preMergeBlocks)

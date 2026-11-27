@@ -292,7 +292,8 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 	// Check whether we have the block yet in our database or not. If not, we'll
 	// need to either trigger a sync, or to reject this forkchoice update for a
 	// reason.
-	block := api.eth.BlockChain().GetBlockByHash(update.HeadBlockHash)
+	chain := api.eth.BlockChain()
+	block := chain.GetBlockByHash(update.HeadBlockHash)
 	if block == nil {
 		// If this block was previously invalidated, keep rejecting it here too
 		if res := api.checkInvalidAncestor(update.HeadBlockHash, update.HeadBlockHash); res != nil {
@@ -352,23 +353,26 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 			PayloadID: id,
 		}
 	}
-	if rawdb.ReadCanonicalHash(api.eth.ChainDb(), block.NumberU64()) != update.HeadBlockHash {
-		// Block is not canonical, set head.
-		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
-			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
-		}
-	} else if api.eth.BlockChain().CurrentBlock().Hash() == update.HeadBlockHash {
-		// If the specified head matches with our local head, do nothing and keep
-		// generating the payload. It's a special corner case that a few slots are
-		// missing and we are requested to generate the payload in slot.
-	} else {
-		if finalized := api.eth.BlockChain().CurrentFinalBlock(); finalized != nil && block.NumberU64() < finalized.Number.Uint64() {
+	var (
+		// canonical whether the specified head block is already canonical
+		canonical = chain.GetCanonicalHash(block.NumberU64()) == update.HeadBlockHash
+
+		// moveHead whether the chain head move is required:
+		// - new head is on a side chain
+		// - new head is canonical, but is different with current head
+		moveHead = !canonical || chain.CurrentBlock().Hash() != update.HeadBlockHash
+	)
+	// The specified head block is already canonicalized and it's different
+	// with the current chain head (above or below), check if the movement
+	// is allowed.
+	if canonical && moveHead {
+		if finalized := chain.CurrentFinalBlock(); finalized != nil && block.NumberU64() < finalized.Number.Uint64() {
 			log.Info("Skipping beacon update to finalized ancestor", "number", block.NumberU64(), "hash", update.HeadBlockHash)
 			return valid(nil), nil
 		}
 		// A canonical block above the current head (the index outlived a head
 		// rewind, e.g. after an unclean shutdown) is a forward move, not a reorg.
-		if current := api.eth.BlockChain().CurrentBlock().Number.Uint64(); block.NumberU64() < current {
+		if current := chain.CurrentBlock().Number.Uint64(); block.NumberU64() < current {
 			depth := current - block.NumberU64()
 			if api.maxReorgDepth > 0 && depth > api.maxReorgDepth {
 				log.Warn("Refusing too deep reorg", "depth", depth, "head", update.HeadBlockHash)
@@ -379,41 +383,29 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 			log.Info("Ignoring beacon update to old head while syncing", "number", block.NumberU64(), "hash", update.HeadBlockHash)
 			return valid(nil), nil
 		}
-		if latestValid, err := api.eth.BlockChain().SetCanonical(block); err != nil {
+	}
+	// Check finalized and safe against the requested head before applying the update.
+	finalBlock, err := checkForkchoiceBlock(chain, block, update.FinalizedBlockHash, "final")
+	if err != nil {
+		return engine.STATUS_INVALID, err
+	}
+	safeBlock, err := checkForkchoiceBlock(chain, block, update.SafeBlockHash, "safe")
+	if err != nil {
+		return engine.STATUS_INVALID, err
+	}
+	if moveHead {
+		if latestValid, err := chain.SetCanonical(block); err != nil {
 			log.Error("Error setting canonical", "number", block.NumberU64(), "hash", update.HeadBlockHash, "error", err)
 			return engine.ForkChoiceResponse{PayloadStatus: engine.PayloadStatusV1{Status: engine.INVALID, LatestValidHash: &latestValid}}, err
 		}
 	}
 	api.eth.SetSynced()
 
-	// If the beacon client also advertised a finalized block, mark the local
-	// chain final and completely in PoS mode.
-	if update.FinalizedBlockHash != (common.Hash{}) {
-		// If the finalized block is not in our canonical tree, something is wrong
-		finalBlock := api.eth.BlockChain().GetBlockByHash(update.FinalizedBlockHash)
-		if finalBlock == nil {
-			log.Warn("Final block not available in database", "hash", update.FinalizedBlockHash)
-			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("final block not available in database"))
-		} else if rawdb.ReadCanonicalHash(api.eth.ChainDb(), finalBlock.NumberU64()) != update.FinalizedBlockHash {
-			log.Warn("Final block not in canonical chain", "number", finalBlock.NumberU64(), "hash", update.FinalizedBlockHash)
-			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("final block not in canonical chain"))
-		}
-		// Set the finalized block
-		api.eth.BlockChain().SetFinalized(finalBlock.Header())
+	if finalBlock != nil {
+		chain.SetFinalized(finalBlock.Header())
 	}
-	// Check if the safe block hash is in our canonical tree, if not something is wrong
-	if update.SafeBlockHash != (common.Hash{}) {
-		safeBlock := api.eth.BlockChain().GetBlockByHash(update.SafeBlockHash)
-		if safeBlock == nil {
-			log.Warn("Safe block not available in database")
-			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("safe block not available in database"))
-		}
-		if rawdb.ReadCanonicalHash(api.eth.ChainDb(), safeBlock.NumberU64()) != update.SafeBlockHash {
-			log.Warn("Safe block not in canonical chain")
-			return engine.STATUS_INVALID, engine.InvalidForkChoiceState.With(errors.New("safe block not in canonical chain"))
-		}
-		// Set the safe block
-		api.eth.BlockChain().SetSafe(safeBlock.Header())
+	if safeBlock != nil {
+		chain.SetSafe(safeBlock.Header())
 	}
 	// If payload generation was requested, create a new block to be potentially
 	// sealed by the beacon client. The payload will be requested later, and we
@@ -452,6 +444,38 @@ func (api *ConsensusAPI) forkchoiceUpdated(ctx context.Context, update engine.Fo
 		return valid(&id), nil
 	}
 	return valid(nil), nil
+}
+
+// checkForkchoiceBlock resolves an optional forkchoice block on the head chain.
+func checkForkchoiceBlock(chain *core.BlockChain, head *types.Block, hash common.Hash, name string) (*types.Block, error) {
+	if hash == (common.Hash{}) {
+		return nil, nil
+	}
+	block := chain.GetBlockByHash(hash)
+	if block == nil {
+		log.Warn("Forkchoice block not available in database", "type", name, "hash", hash)
+		return nil, engine.InvalidForkChoiceState.With(fmt.Errorf("%s block not available in database", name))
+	}
+	if !blockOnChain(chain, head, block) {
+		log.Warn("Forkchoice block not on head chain", "type", name, "number", block.NumberU64(), "hash", hash)
+		return nil, engine.InvalidForkChoiceState.With(fmt.Errorf("%s block not in canonical chain", name))
+	}
+	return block, nil
+}
+
+// blockOnChain reports whether block belongs to the chain ending at head.
+func blockOnChain(chain *core.BlockChain, head, block *types.Block) bool {
+	headNumber, number := head.NumberU64(), block.NumberU64()
+	if number >= headNumber {
+		return number == headNumber && block.Hash() == head.Hash()
+	}
+	// Start from the known parent link and walk only until the canonical index
+	// can answer the lookup, or until we reach the requested height.
+	parentNumber := headNumber - 1
+	distance := parentNumber - number
+	maxNonCanonical := distance
+	hash, _ := chain.GetAncestor(head.ParentHash(), parentNumber, distance, &maxNonCanonical)
+	return hash == block.Hash()
 }
 
 // ExchangeTransitionConfigurationV1 checks the given configuration against
