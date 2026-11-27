@@ -1178,3 +1178,46 @@ func TestPeerCellDeliveryMerge(t *testing.T) {
 		}
 	}
 }
+
+// TestBlobFetcherUnavailablePartialAnnounce verifies that a blob announced
+// with a partial cell set leaves no fetcher state behind, and that nothing is
+// left behind after the announcing peer disconnects either.
+//
+// Such an announcement can make no progress: a full fetch needs an announcer
+// holding all the cells, and the availability check that precedes a partial
+// fetch is only started from a full-custody announcement. The tx must
+// therefore be left undecided. Recording it in the partial/waitlist/waittime
+// maps instead keeps per-hash state that the per-peer announce limit does not
+// count and that the drop handler never reclaims (the peer is in neither
+// waitslots nor announces for the hash), so a peer could grow this state
+// without bound.
+func TestBlobFetcherUnavailablePartialAnnounce(t *testing.T) {
+	testBlobFetcher(t, blobFetcherTest{
+		init: func() *BlobFetcher {
+			return NewBlobFetcher(
+				BlobFetcherFunctions{
+					HasPayload:    func(common.Hash) bool { return false },
+					AddCells:      func(common.Hash, map[string]*PeerCellDelivery, types.CustodyBitmap) {},
+					FetchPayloads: func(string, []common.Hash, types.CustodyBitmap) error { return nil },
+					DropPeer:      func(string) {},
+				},
+				custody,
+				// 60 >= fetchProbability (15) and the node's custody is below
+				// DataPerBlob, so an undecided tx takes the partial branch.
+				&mockRand{value: 60},
+				15,
+			)
+		},
+		steps: []interface{}{
+			// Peer A announces a blob while holding only a partial cell set.
+			// The tx cannot start the availability check, so no state should be
+			// recorded for it.
+			doBlobNotify{peer: "A", hashes: []common.Hash{testBlobTxHashes[0]}, custody: halfCustody},
+			isWaitingAvailability{},
+
+			// Dropping the peer must not leave anything behind either.
+			doDrop("A"),
+			isWaitingAvailability{},
+		},
+	})
+}
