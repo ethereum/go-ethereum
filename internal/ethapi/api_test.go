@@ -5261,3 +5261,123 @@ func TestGetHeaderByNumberUnresolvedTag(t *testing.T) {
 		}
 	}
 }
+
+// TestSimulateV1DelegationToPrecompile verifies EIP-7702 delegation behavior when
+// precompile addresses are overridden or moved across simulated blocks.
+func TestSimulateV1DelegationToPrecompile(t *testing.T) {
+	t.Parallel()
+
+	var (
+		sender       = common.HexToAddress("0xc000000000000000000000000000000000000000")
+		delegator    = common.HexToAddress("0xc300000000000000000000000000000000000000")
+		sha256Addr   = common.BytesToAddress([]byte{0x02})
+		destAddr     = common.HexToAddress("0x0000000000000000000000000000000000123456")
+		return42Code = hexutil.Bytes(common.Hex2Bytes("602a60005260206000f3"))
+		want42       = common.LeftPadBytes([]byte{0x2a}, 32)
+		input        = hexutil.Bytes(common.Hex2Bytes("1234"))
+		wantSHA256   = common.Hex2Bytes("3a103a4e5729ad68c02a678ae39accfbc0ae208096437401b7ceab63cca0622f")
+		delegTo02    = hexutil.Bytes(types.AddressToDelegation(sha256Addr))
+		delegToDest  = hexutil.Bytes(types.AddressToDelegation(destAddr))
+	)
+	cfg := *params.MergedTestChainConfig
+	cfg.PragueTime = new(uint64)
+
+	t.Run("later-block-restored-precompile", func(t *testing.T) {
+		gspec := &core.Genesis{
+			Config: &cfg,
+			Alloc:  types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}},
+		}
+		backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+		api := NewBlockChainAPI(backend)
+		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+		res, err := api.SimulateV1(context.Background(), simOpts{
+			BlockStateCalls: []simBlock{
+				{
+					StateOverrides: &override.StateOverride{
+						sha256Addr: {Code: &return42Code},
+						delegator:  {Code: &delegTo02},
+					},
+					Calls: []TransactionArgs{
+						{From: &sender, To: &delegator, Input: &input},
+					},
+				},
+				{
+					Calls: []TransactionArgs{
+						{From: &sender, To: &delegator, Input: &input},
+						{From: &sender, To: &sha256Addr, Input: &input},
+					},
+				},
+			},
+		}, &latest)
+		require.NoError(t, err)
+		require.Len(t, res, 2)
+		require.Equal(t, hexutil.Bytes(want42), res[0].Calls[0].ReturnValue, "block 1 delegation to overridden precompile should run override code")
+		require.Empty(t, res[1].Calls[0].ReturnValue, "block 2 delegation to restored precompile should run empty code")
+		require.Equal(t, hexutil.Bytes(wantSHA256), res[1].Calls[1].ReturnValue, "block 2 direct call to 0x02 should run SHA-256")
+	})
+
+	t.Run("later-block-moved-again", func(t *testing.T) {
+		gspec := &core.Genesis{
+			Config: &cfg,
+			Alloc:  types.GenesisAlloc{sender: {Balance: big.NewInt(params.Ether)}},
+		}
+		backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+		api := NewBlockChainAPI(backend)
+		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+		res, err := api.SimulateV1(context.Background(), simOpts{
+			BlockStateCalls: []simBlock{
+				{
+					StateOverrides: &override.StateOverride{
+						sha256Addr: {Code: &return42Code},
+						delegator:  {Code: &delegTo02},
+					},
+				},
+				{
+					StateOverrides: &override.StateOverride{
+						sha256Addr: {MovePrecompileTo: &destAddr},
+					},
+					Calls: []TransactionArgs{
+						{From: &sender, To: &delegator, Input: &input},
+					},
+				},
+			},
+		}, &latest)
+		require.NoError(t, err)
+		require.Len(t, res, 2)
+		require.Equal(t, hexutil.Bytes(want42), res[1].Calls[0].ReturnValue, "block 2 delegation to moved-away precompile should run stored code")
+	})
+
+	t.Run("move-destination-with-code", func(t *testing.T) {
+		gspec := &core.Genesis{
+			Config: &cfg,
+			Alloc: types.GenesisAlloc{
+				sender:   {Balance: big.NewInt(params.Ether)},
+				destAddr: {Code: return42Code},
+			},
+		}
+		backend := newTestBackend(t, 1, gspec, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {})
+		api := NewBlockChainAPI(backend)
+		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
+		res, err := api.SimulateV1(context.Background(), simOpts{
+			BlockStateCalls: []simBlock{
+				{
+					StateOverrides: &override.StateOverride{
+						sha256Addr: {MovePrecompileTo: &destAddr},
+						delegator:  {Code: &delegToDest},
+					},
+					Calls: []TransactionArgs{
+						{From: &sender, To: &destAddr, Input: &input},
+						{From: &sender, To: &delegator, Input: &input},
+					},
+				},
+			},
+		}, &latest)
+		require.NoError(t, err)
+		require.Len(t, res, 1)
+		require.Equal(t, hexutil.Bytes(wantSHA256), res[0].Calls[0].ReturnValue, "direct call to move destination should run moved precompile")
+		require.Equal(t, hexutil.Bytes(want42), res[0].Calls[1].ReturnValue, "delegation to non-precompile move destination should run destination contract code")
+	})
+}

@@ -707,6 +707,17 @@ func (evm *EVM) Create2(caller common.Address, code []byte, gas GasBudget, endow
 	return evm.create(caller, code, gas, endowment, contractAddr, CREATE2)
 }
 
+// isActiveForkPrecompile reports whether addr is a precompile address in the
+// active fork that is still enabled in evm.precompiles (i.e. not disabled by a
+// state override).
+func (evm *EVM) isActiveForkPrecompile(addr common.Address) bool {
+	if _, ok := evm.precompile(addr); !ok {
+		return false
+	}
+	_, ok := (*activePrecompiledContracts(evm.chainRules))[addr]
+	return ok
+}
+
 // resolveCode returns the code associated with the provided account. After
 // Prague, it can also resolve code pointed to by a delegation designator.
 func (evm *EVM) resolveCode(addr common.Address) []byte {
@@ -715,6 +726,11 @@ func (evm *EVM) resolveCode(addr common.Address) []byte {
 		return code
 	}
 	if target, ok := types.ParseDelegation(code); ok {
+		// Per EIP-7702, a delegation targeting an active fork precompile
+		// resolves to empty code even if state overrides left code at target.
+		if evm.isActiveForkPrecompile(target) {
+			return nil
+		}
 		// Note we only follow one level of delegation.
 		return evm.StateDB.GetCode(target)
 	}
@@ -729,6 +745,9 @@ func (evm *EVM) resolveCodeHash(addr common.Address) common.Hash {
 	if evm.chainRules.IsPrague {
 		code := evm.StateDB.GetCode(addr)
 		if target, ok := types.ParseDelegation(code); ok {
+			if evm.isActiveForkPrecompile(target) {
+				return types.EmptyCodeHash
+			}
 			// Note we only follow one level of delegation.
 			return evm.StateDB.GetCodeHash(target)
 		}
