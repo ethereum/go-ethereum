@@ -99,7 +99,8 @@ func (m *syncModer) get(report bool) ethconfig.SyncMode {
 	// We are in a full sync, but the associated head state is missing. To complete
 	// the head state, forcefully rerun the snap sync. Note it doesn't mean the
 	// persistent state is corrupted, just mismatch with the head block.
-	if !m.chain.HasState(head.Root) {
+	// A head state recoverable from the state history is not missing.
+	if !m.chain.HasState(head.Root) && !m.chain.StateRecoverable(head.Root) {
 		logger("Reenabled snap-sync as chain is stateless")
 		return ethconfig.SnapSync
 	}

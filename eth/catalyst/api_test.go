@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/ethash"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/txpool/blobpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
@@ -2303,5 +2304,74 @@ func TestForkchoiceUpdatedV4(t *testing.T) {
 	}
 	if resp.PayloadStatus.Status != engine.VALID {
 		t.Fatalf("Unexpected status with nil custody bitmap: got %s, want %s", resp.PayloadStatus.Status, engine.VALID)
+	}
+}
+
+// TestNewPayloadsWithoutForkchoicePastTriesInMemory tests that more than
+// TriesInMemory payloads without a forkchoice update keep a path-scheme node
+// in full sync.
+func TestNewPayloadsWithoutForkchoicePastTriesInMemory(t *testing.T) {
+	genesis, preMergeBlocks := generateMergeChain(10, false)
+	n, ethservice := startEthService(t, genesis, preMergeBlocks, func(c *ethconfig.Config) {
+		c.StateScheme = rawdb.PathScheme
+	})
+	defer n.Close()
+
+	var (
+		api    = newConsensusAPIWithoutHeartbeat(ethservice)
+		chain  = ethservice.BlockChain()
+		signer = types.LatestSigner(chain.Config())
+		head   = chain.CurrentBlock()
+		parent = head
+		last   *engine.ExecutableData
+	)
+	statedb, err := chain.StateAt(head.Root, head.Number, head.Time)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := statedb.GetNonce(testAddr)
+	for i := 0; i < int(state.TriesInMemory)+10; i++ {
+		// Empty blocks would reuse the parent's state root.
+		tx, err := types.SignTx(types.NewTransaction(nonce+uint64(i), common.Address{0x01}, big.NewInt(1), params.TxGas, big.NewInt(2*params.InitialBaseFee), nil), signer, testKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if errs := ethservice.TxPool().Add([]*types.Transaction{tx}, true); errs[0] != nil {
+			t.Fatalf("payload %d: failed to add its transaction: %v", i, errs[0])
+		}
+		envelope := getNewEnvelope(t, api, parent, nil, nil)
+		if len(envelope.ExecutionPayload.Transactions) == 0 {
+			t.Fatalf("payload %d: built without its transaction", i)
+		}
+		resp, err := api.newPayload(context.Background(), *envelope.ExecutionPayload, []common.Hash{}, nil, envelope.Requests, false)
+		if err != nil {
+			t.Fatalf("payload %d: %v", i, err)
+		}
+		if resp.Status != engine.VALID {
+			t.Fatalf("payload %d (block %d): have status %s, want %s", i, envelope.ExecutionPayload.Number, resp.Status, engine.VALID)
+		}
+		last = envelope.ExecutionPayload
+		parent = chain.GetHeaderByHash(last.BlockHash)
+	}
+	if chain.CurrentBlock().Hash() != head.Hash() {
+		t.Fatal("payloads moved the head without a forkchoice update")
+	}
+	if chain.HasState(head.Root) {
+		t.Fatal("head state still in memory; the payloads did not push it below the disk layer")
+	}
+	fcState := engine.ForkchoiceStateV1{
+		HeadBlockHash:      last.BlockHash,
+		SafeBlockHash:      head.Hash(),
+		FinalizedBlockHash: head.Hash(),
+	}
+	resp, err := api.ForkchoiceUpdatedV1(context.Background(), fcState, nil)
+	if err != nil {
+		t.Fatalf("forkchoice update: %v", err)
+	}
+	if resp.PayloadStatus.Status != engine.VALID {
+		t.Fatalf("forkchoice update: have status %s, want %s", resp.PayloadStatus.Status, engine.VALID)
+	}
+	if chain.CurrentBlock().Hash() != last.BlockHash {
+		t.Fatalf("head after the forkchoice update: have %d, want %d", chain.CurrentBlock().Number, last.Number)
 	}
 }
