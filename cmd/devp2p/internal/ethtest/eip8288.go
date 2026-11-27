@@ -402,8 +402,13 @@ type wrapperMsg struct {
 }
 
 // readWrapperMsg returns the next wrapper message the node sends before the deadline,
-// answering pings and skipping other messages.
+// answering pings and skipping other messages. Messages queued by fetchWrappers come first.
 func (c *Conn) readWrapperMsg(deadline time.Time) (*wrapperMsg, error) {
+	if len(c.pendingWrapperMsgs) > 0 {
+		msg := c.pendingWrapperMsgs[0]
+		c.pendingWrapperMsgs = c.pendingWrapperMsgs[1:]
+		return msg, nil
+	}
 	c.SetReadDeadline(deadline)
 	for {
 		code, data, _, err := c.Conn.Read()
@@ -739,12 +744,15 @@ func (c *Conn) fetchWrappers(hashes ...common.Hash) (*proofWrappersPacket, error
 		return nil, err
 	}
 	deadline := time.Now().Add(wrapperTimeout)
+	var skipped []*wrapperMsg
+	defer func() { c.pendingWrapperMsgs = append(c.pendingWrapperMsgs, skipped...) }()
 	for {
 		msg, err := c.readWrapperMsg(deadline)
 		if err != nil {
 			return nil, fmt.Errorf("no ProofWrappers response: %v", err)
 		}
 		if msg.code != proofWrappersMsg {
+			skipped = append(skipped, msg)
 			continue
 		}
 		var resp proofWrappersPacket
