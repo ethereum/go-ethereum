@@ -330,6 +330,27 @@ func TestNormalizeArgs(t *testing.T) {
 	}
 }
 
+// TestConstructorArgNames checks that constructor parameters which are unnamed
+// or named after a Go keyword still produce valid bindings.
+func TestConstructorArgNames(t *testing.T) {
+	const abiJSON = `[{"type":"constructor","inputs":[{"name":"","type":"uint256"},{"name":"range","type":"address"},{"name":"owner","type":"address"}],"stateMutability":"nonpayable"}]`
+
+	code, err := BindV2([]string{"Test"}, []string{abiJSON}, []string{"0x00"}, "bindtest", nil, nil)
+	if err != nil {
+		t.Fatalf("BindV2 failed: %v", err)
+	}
+	if want := "PackConstructor(arg0 *big.Int, arg1 common.Address, owner common.Address)"; !strings.Contains(code, want) {
+		t.Fatalf("BindV2 output is missing %q", want)
+	}
+	code, err = Bind([]string{"Test"}, []string{abiJSON}, []string{"0x00"}, []map[string]string{nil}, "bindtest", nil, nil)
+	if err != nil {
+		t.Fatalf("Bind failed: %v", err)
+	}
+	if want := "backend bind.ContractBackend, arg0 *big.Int, arg1 common.Address, owner common.Address)"; !strings.Contains(code, want) {
+		t.Fatalf("Bind output is missing %q", want)
+	}
+}
+
 // returns a "pretty diff" on two strings. Useful if the strings are large.
 func prettyDiff(have, want string) string {
 	if have == want {

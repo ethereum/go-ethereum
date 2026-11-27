@@ -307,7 +307,10 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 			return "", err
 		}
 
-		for _, input := range evmABI.Constructor.Inputs {
+		for j, input := range evmABI.Constructor.Inputs {
+			if input.Name == "" || isKeyWord(input.Name) {
+				evmABI.Constructor.Inputs[j].Name = fmt.Sprintf("arg%d", j)
+			}
 			if hasStruct(input.Type) {
 				bindStructType(input.Type, b.structs)
 			}
