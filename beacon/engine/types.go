@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -248,39 +249,81 @@ func encodeTransactions(txs []*types.Transaction) [][]byte {
 }
 
 func DecodeTransactions(enc [][]byte) ([]*types.Transaction, error) {
-	var (
-		txs     = make([]*types.Transaction, len(enc))
-		workers = min(runtime.GOMAXPROCS(0), len(enc)/decodeBatchSize)
-	)
-	if workers < 2 {
+	txs := make([]*types.Transaction, len(enc))
+	workers := decodeWorkers(enc, runtime.GOMAXPROCS(0))
+	if workers < 2 || !decodeParallel(enc, txs, workers) {
+		// Decode serially, which also reports the lowest failing index if the
+		// parallel decode found an invalid transaction.
 		if err := decodeRange(enc, txs, 0, len(enc)); err != nil {
-			return nil, err
-		}
-		return txs, nil
-	}
-	// Each worker decodes a contiguous run and stops at its first error, so the
-	// first failed run holds the lowest failing index.
-	var (
-		errs  = make([]error, workers)
-		chunk = (len(enc) + workers - 1) / workers
-		wg    sync.WaitGroup
-	)
-	for w := range workers {
-		wg.Go(func() {
-			errs[w] = decodeRange(enc, txs, w*chunk, min((w+1)*chunk, len(enc)))
-		})
-	}
-	wg.Wait()
-	for _, err := range errs {
-		if err != nil {
 			return nil, err
 		}
 	}
 	return txs, nil
 }
 
+// decodeParallel decodes enc into txs concurrently using the given number of
+// workers. Rather than splitting enc into fixed contiguous ranges, which can
+// load a worker unevenly when a few transactions are much larger than the rest,
+// the workers pull transactions from a shared cursor: whoever finishes first
+// takes the next transaction, so the work balances itself regardless of how
+// transaction sizes are distributed. It reports whether every transaction
+// decoded; on failure the caller re-decodes serially to report the lowest
+// failing index.
+func decodeParallel(enc [][]byte, txs []*types.Transaction, workers int) bool {
+	var (
+		cursor atomic.Int64
+		failed atomic.Bool
+		wg     sync.WaitGroup
+	)
+	for range workers {
+		wg.Go(func() {
+			for !failed.Load() {
+				i := int(cursor.Add(1)) - 1
+				if i >= len(enc) {
+					return
+				}
+				var tx types.Transaction
+				if tx.UnmarshalBinary(enc[i]) != nil {
+					failed.Store(true)
+					return
+				}
+				txs[i] = &tx
+			}
+		})
+	}
+	wg.Wait()
+	return !failed.Load()
+}
+
 // decodeBatchSize is the fewest transactions worth handing to a decode worker.
 const decodeBatchSize = 32
+
+// decodeByteBatchSize is the fewest encoded bytes worth handing to a decode
+// worker. Sizing the worker pool by total bytes as well as by transaction count
+// keeps a block of a few very large transactions (large calldata or many
+// EIP-7702 authorizations) from being decoded on a single worker.
+const decodeByteBatchSize = 256 * 1024
+
+// decodeWorkers sizes the transaction-decode worker pool from both the number of
+// transactions and their total encoded size, bounded by maxProcs. Transaction
+// count alone understates the work for a block of a few very large transactions,
+// which would otherwise decode serially. Total bytes is only a coarse proxy for
+// decode cost (calldata is barely more than a copy, whereas e.g. EIP-7702
+// authorization tuples cost far more per byte), so it is used only to decide
+// whether a block is worth parallelizing; decodeParallel balances the actual
+// per-worker load with a shared cursor, so misjudging the cost here changes only
+// how many workers start, never how evenly the work is shared.
+func decodeWorkers(enc [][]byte, maxProcs int) int {
+	var totalBytes int
+	for _, e := range enc {
+		totalBytes += len(e)
+	}
+	// Never use more workers than there are transactions: a single large
+	// transaction cannot be decoded in parallel, so extra workers would only add
+	// scheduling overhead. For a block below both thresholds this returns < 2 and
+	// the caller decodes serially, exactly as before this byte-based sizing.
+	return min(maxProcs, len(enc), max(len(enc)/decodeBatchSize, totalBytes/decodeByteBatchSize))
+}
 
 // decodeRange decodes enc[from:to] into txs.
 func decodeRange(enc [][]byte, txs []*types.Transaction, from, to int) error {
