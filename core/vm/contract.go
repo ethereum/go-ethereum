@@ -46,6 +46,9 @@ type Contract struct {
 	// reservoir, and per-frame usage accumulators. See GasBudget.
 	Gas   GasBudget
 	value *uint256.Int
+
+	// Snapshot for opcode tracers. Dynamic gas metering can change the refund.
+	refundBeforeOpcode uint64
 }
 
 // NewContract returns a new contract environment for the execution of EVM.

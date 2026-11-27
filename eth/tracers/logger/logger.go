@@ -343,6 +343,14 @@ func (l *StructLogger) Hooks() *tracing.Hooks {
 	}
 }
 
+// Older hook callers may only supply the base OpContext.
+func (l *StructLogger) refundBeforeOpcode(scope tracing.OpContext) uint64 {
+	if s, ok := scope.(interface{ RefundBeforeOpcode() uint64 }); ok {
+		return s.RefundBeforeOpcode()
+	}
+	return l.env.StateDB.GetRefund()
+}
+
 // OnOpcode logs a new structured log message and pushes it out to the environment
 //
 // OnOpcode also tracks SLOAD/SSTORE ops to track storage change.
@@ -377,7 +385,7 @@ func (l *StructLogger) OnOpcode(pc uint64, opcode byte, gas tracing.Gas, cost tr
 		StateGasCost:      cost.State,
 		MemorySize:        len(memory),
 		Depth:             depth,
-		RefundCounter:     l.env.StateDB.GetRefund(),
+		RefundCounter:     l.refundBeforeOpcode(scope),
 		Err:               err,
 	}
 	if l.cfg.EnableMemory {

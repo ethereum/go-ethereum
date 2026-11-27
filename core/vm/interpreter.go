@@ -61,6 +61,12 @@ func (ctx *ScopeContext) StackData() []uint256.Int {
 	return ctx.Stack.Data()
 }
 
+// RefundBeforeOpcode returns the transaction refund counter before the current
+// opcode was metered. It is available to opcode tracing hooks.
+func (ctx *ScopeContext) RefundBeforeOpcode() uint64 {
+	return ctx.Contract.refundBeforeOpcode
+}
+
 // Caller returns the current caller.
 func (ctx *ScopeContext) Caller() common.Address {
 	return ctx.Contract.Caller()
@@ -186,6 +192,9 @@ func (evm *EVM) execTraced(scope *ScopeContext) (ret []byte, err error) {
 		if debug {
 			// Capture pre-execution values for tracing.
 			logged, pcCopy, gasCopy = false, pc, contract.Gas
+			if evm.Config.Tracer.HasOpcodeHook() {
+				contract.refundBeforeOpcode = evm.StateDB.GetRefund()
+			}
 		}
 		// Get the operation from the jump table and validate the stack to ensure there are
 		// enough stack items available to perform the operation.
