@@ -177,7 +177,7 @@ func (g *trieGenerator) generatePartition(ctx context.Context, cancel <-chan str
 		if err != nil {
 			return nil, fmt.Errorf("decode account %x: %w", accountHash, err)
 		}
-		computed, err := g.generateAccountStorage(ctx, cancel, iters, batches, accountHash)
+		computed, err := g.generateAccountStorage(ctx, cancel, iters, batches, acctTrie, accountHash)
 		if err != nil {
 			return nil, err
 		}
@@ -253,7 +253,7 @@ func (g *trieGenerator) generatePartition(ctx context.Context, cancel <-chan str
 
 // generateAccountStorage builds one storage trie and leaves the scans positioned
 // to continue with the next account.
-func (g *trieGenerator) generateAccountStorage(ctx context.Context, cancel <-chan struct{}, iters *rangeIterators, batches *partitionBatches, accountHash common.Hash) (common.Hash, error) {
+func (g *trieGenerator) generateAccountStorage(ctx context.Context, cancel <-chan struct{}, iters *rangeIterators, batches *partitionBatches, acctTrie *trie.PartialStackTrie, accountHash common.Hash) (common.Hash, error) {
 	var (
 		storageTrie         *trie.StackTrie
 		lastDanglingAccount []byte
@@ -305,14 +305,9 @@ func (g *trieGenerator) generateAccountStorage(ctx context.Context, cancel <-cha
 			if split {
 				return g.generateSplitStorage(ctx, cancel, iters, batches, accountHash)
 			}
-			onNode := func(path []byte, hash common.Hash, blob []byte) {
+			storageTrie = acctTrie.NewStorageTrie(func(path []byte, hash common.Hash, blob []byte) {
 				g.writeStorageNode(batches.storage, accountHash, path, hash, blob)
-			}
-			if g.ingester != nil {
-				storageTrie = trie.NewReverseStackTrie(onNode)
-			} else {
-				storageTrie = trie.NewStackTrie(onNode)
-			}
+			})
 		}
 		if err := storageTrie.Update(slotHash, iters.stor.Value()); err != nil {
 			return common.Hash{}, fmt.Errorf("storage stack trie update for %x: %w", accountHash, err)
