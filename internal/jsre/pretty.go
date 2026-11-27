@@ -291,11 +291,14 @@ func (ctx ppctx) isBigNumber(v *goja.Object) bool {
 		}
 	}
 	// Handle default constructor.
-	BigNumber := ctx.vm.Get("BigNumber").ToObject(ctx.vm)
+	BigNumber := toObject(ctx.vm, ctx.vm.Get("BigNumber"))
 	if BigNumber == nil {
 		return false
 	}
-	prototype := BigNumber.Get("prototype").ToObject(ctx.vm)
+	prototype := toObject(ctx.vm, BigNumber.Get("prototype"))
+	if prototype == nil {
+		return false
+	}
 	isPrototypeOf, callable := goja.AssertFunction(prototype.Get("isPrototypeOf"))
 	if !callable {
 		return false

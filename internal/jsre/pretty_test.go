@@ -63,3 +63,41 @@ func TestPrettyPrintUnusualConstructor(t *testing.T) {
 		}
 	}
 }
+
+// TestPrettyPrintBrokenBigNumber checks that objects can still be printed when
+// the BigNumber global is not a usable constructor. The console always defines
+// it, but a script running in the same runtime can replace or clear it.
+func TestPrettyPrintBrokenBigNumber(t *testing.T) {
+	t.Parallel()
+
+	for _, setup := range []string{
+		"BigNumber = null",
+		"BigNumber = 1",
+		"BigNumber = {}",
+		"BigNumber.prototype = null",
+	} {
+		vm := goja.New()
+		if _, err := vm.RunString("function BigNumber() {}"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := vm.RunString(setup); err != nil {
+			t.Fatalf("%s: %v", setup, err)
+		}
+		val, err := vm.RunString("({a: 1})")
+		if err != nil {
+			t.Fatalf("%s: %v", setup, err)
+		}
+		var buf bytes.Buffer
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("%s: prettyPrint panicked: %v", setup, r)
+				}
+			}()
+			prettyPrint(vm, val, &buf)
+		}()
+		if want := "{\n  a: 1\n}"; buf.String() != want {
+			t.Errorf("%s: got %q, want %q", setup, buf.String(), want)
+		}
+	}
+}
