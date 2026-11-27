@@ -1567,6 +1567,71 @@ func TestBALWithdrawalNonZeroAmountRecordsBalance(t *testing.T) {
 	}
 }
 
+// TestBALWithdrawalsAndDequeuesNetBalanceAtLastIndex: withdrawals and the
+// post-execution system calls share the last block access index, so their
+// balance effects net. A withdrawal credits each post-execution predeploy,
+// whose own dequeue call then forwards that balance on: forwarding all of it
+// records no change, forwarding half records the kept half.
+func TestBALWithdrawalsAndDequeuesNetBalanceAtLastIndex(t *testing.T) {
+	predeploys := []common.Address{
+		params.WithdrawalQueueAddress,
+		params.ConsolidationQueueAddress,
+		params.BuilderDepositAddress,
+		params.BuilderExitAddress,
+	}
+	sink := common.HexToAddress("0x5151")
+	withdrawal := newGwei(1)
+
+	for _, tc := range []struct {
+		name  string
+		value []byte // pushes the forwarded value
+		kept  *big.Int
+	}{
+		{"forward_all", []byte{0x47}, new(big.Int)},                                       // SELFBALANCE
+		{"forward_half", []byte{0x60, 0x02, 0x47, 0x04}, new(big.Int).Rsh(withdrawal, 1)}, // SELFBALANCE / 2
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// CALL(GAS, sink, value, 0, 0, 0, 0), POP, STOP
+			code := []byte{0x60, 0x00, 0x60, 0x00, 0x60, 0x00, 0x60, 0x00}
+			code = append(code, tc.value...)
+			code = append(code, 0x73)
+			code = append(code, sink.Bytes()...)
+			code = append(code, 0x5a, 0xf1, 0x50, 0x00)
+
+			extra := types.GenesisAlloc{sink: {Balance: big.NewInt(1)}}
+			for _, addr := range predeploys {
+				extra[addr] = types.Account{Nonce: 1, Code: code, Balance: common.Big0}
+			}
+			env := newBALTestEnv(extra)
+
+			b, _ := env.run(t, func(g *BlockGen) {
+				g.SetCoinbase(common.Address{0xc0})
+				for i, addr := range predeploys {
+					g.AddWithdrawal(&types.Withdrawal{Index: uint64(i), Validator: uint64(i), Address: addr, Amount: 1})
+				}
+			})
+			for _, addr := range predeploys {
+				aa := assertPresent(t, b, addr)
+				if tc.kept.Sign() == 0 {
+					if len(aa.BalanceChanges) != 0 {
+						t.Fatalf("predeploy %x: net-zero balance must not be recorded: %+v", addr, aa.BalanceChanges)
+					}
+					continue
+				}
+				if len(aa.BalanceChanges) != 1 || aa.BalanceChanges[0].BlockAccessIndex != 1 || aa.BalanceChanges[0].PostBalance.ToBig().Cmp(tc.kept) != 0 {
+					t.Fatalf("predeploy %x: want balance %v at index 1, have %+v", addr, tc.kept, aa.BalanceChanges)
+				}
+			}
+			forwarded := new(big.Int).Sub(withdrawal, tc.kept)
+			want := new(big.Int).Add(big.NewInt(1), new(big.Int).Mul(forwarded, big.NewInt(int64(len(predeploys)))))
+			s := assertPresent(t, b, sink)
+			if len(s.BalanceChanges) != 1 || s.BalanceChanges[0].BlockAccessIndex != 1 || s.BalanceChanges[0].PostBalance.ToBig().Cmp(want) != 0 {
+				t.Fatalf("sink: want balance %v at index 1, have %+v", want, s.BalanceChanges)
+			}
+		})
+	}
+}
+
 // ============================== EIP-7702 authority ==============================
 
 // TestBALAuthorityIncludedOnSetCodeTx: the authority of an EIP-7702 set-code
