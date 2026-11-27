@@ -169,6 +169,24 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 	return &nofreezedb{KeyValueStore: db}
 }
 
+// KeyValueStore returns the store used to discover optional key-value
+// capabilities. Wrappers that preserve key-value semantics can expose their
+// wrapped store through UnwrapKeyValueStore.
+func KeyValueStore(db ethdb.KeyValueStore) ethdb.KeyValueStore {
+	for {
+		switch wrapped := db.(type) {
+		case *freezerdb:
+			db = wrapped.KeyValueStore
+		case *nofreezedb:
+			db = wrapped.KeyValueStore
+		case interface{ UnwrapKeyValueStore() ethdb.KeyValueStore }:
+			db = wrapped.UnwrapKeyValueStore()
+		default:
+			return db
+		}
+	}
+}
+
 // resolveChainFreezerDir is a helper function which resolves the absolute path
 // of chain freezer by considering backward compatibility.
 func resolveChainFreezerDir(ancient string) string {

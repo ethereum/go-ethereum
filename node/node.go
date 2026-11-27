@@ -772,6 +772,10 @@ type closeTrackingDB struct {
 	n *Node
 }
 
+func (db *closeTrackingDB) UnwrapKeyValueStore() ethdb.KeyValueStore {
+	return db.Database
+}
+
 func (db *closeTrackingDB) Close() error {
 	err := db.Database.Close()
 	if err == nil {

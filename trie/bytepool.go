@@ -42,15 +42,6 @@ func (bp *bytesPool) get() []byte {
 	}
 }
 
-// getWithSize returns a slice with specified byte slice size.
-func (bp *bytesPool) getWithSize(s int) []byte {
-	b := bp.get()
-	if cap(b) < s {
-		return make([]byte, s)
-	}
-	return b[:s]
-}
-
 // put returns a slice to the pool. Safe for concurrent use. This method
 // will ignore slices that are too small or too large (>3x the cap)
 func (bp *bytesPool) put(b []byte) {

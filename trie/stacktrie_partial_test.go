@@ -206,12 +206,68 @@ func TestPartialStackTrieWrongNibble(t *testing.T) {
 	}
 }
 
+func TestReversePartialStackTrie(t *testing.T) {
+	const nibble = 3
+	keys, vals := sortedPairs([]string{"30", "3105", "310a", "3f00", "3f0f"})
+
+	var wantRoot common.Hash
+	want := collect(func(onNode OnTrieNode) {
+		forward := NewPartialStackTrie(nibble, onNode)
+		for i, key := range keys {
+			if err := forward.Update(key, vals[i]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		wantRoot = forward.Hash()
+	})
+	var prev []byte
+	reverse := NewReversePartialStackTrie(nibble, func(path []byte, hash common.Hash, blob []byte) {
+		if prev != nil && bytes.Compare(prev, path) <= 0 {
+			t.Fatalf("paths out of descending order: %x then %x", prev, path)
+		}
+		prev = append(prev[:0], path...)
+		if rec, ok := want[string(path)]; !ok || rec.hash != hash || !bytes.Equal(rec.blob, blob) {
+			t.Fatalf("node mismatch at path %x", path)
+		}
+		delete(want, string(path))
+	})
+	for i := len(keys) - 1; i >= 0; i-- {
+		if err := reverse.Update(keys[i], vals[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := reverse.Hash(); got != wantRoot {
+		t.Fatalf("reverse root %x, want %x", got, wantRoot)
+	}
+	if len(want) != 0 {
+		t.Fatalf("reverse trie omitted %d nodes", len(want))
+	}
+}
+
 // TestMountPartitionRoot checks that folding the leading nibble back into a
 // single partition's subtree root reproduces the canonical trie root, for every
 // root shape (leaf, extension, branch). The branch case is the one not reachable
 // through the triedb single-partition tests.
 func TestMountPartitionRoot(t *testing.T) {
 	const n = byte(3)
+	t.Run("embedded branch", func(t *testing.T) {
+		keys := [][]byte{{0x30}, {0x31}}
+		values := [][]byte{{1}, {2}}
+		child := partitionRoot(t, n, keys, values)
+		if len(child) >= common.HashLength {
+			t.Fatalf("branch is %d bytes, want an embedded branch", len(child))
+		}
+		ref := NewStackTrie(nil)
+		for i := range keys {
+			if err := ref.Update(keys[i], values[i]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		got, _, _, err := MountPartitionRoot(child, n)
+		if want := ref.Hash(); err != nil || got != want {
+			t.Fatalf("mounted root %x, want %x, err %v", got, want, err)
+		}
+	})
 	cases := []struct {
 		name         string
 		keys         []string

@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/ethdb/pebble"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
@@ -2769,6 +2770,90 @@ func TestInterruptedGenerationRecovery(t *testing.T) {
 	if loader.getPhase() != phaseComplete {
 		t.Fatal("sync status should reach the complete phase after generation completes")
 	}
+}
+
+func TestInterruptedIngestGenerationRecovery(t *testing.T) {
+	t.Parallel()
+
+	const scheme = rawdb.PathScheme
+	dir := t.TempDir()
+	open := func(t *testing.T) *pebble.Database {
+		t.Helper()
+		store, err := pebble.New(dir, 16, 16, t.Name()+"/", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			if err := store.Close(); err != nil {
+				t.Error(err)
+			}
+		})
+		return store
+	}
+	_, _, plain, _ := makeAccountTrieWithAddresses(24, scheme)
+	contract := common.Address{0x42}
+	owner := crypto.Keccak256Hash(contract[:])
+	_, accounts, _, storage, root := makeStateWithStorageContract(scheme, plain, contract, *types.NewEmptyStateAccount(), map[common.Hash]common.Hash{
+		{1}: {1},
+		{2}: {2},
+	})
+	pivot := mkPivot(100, root)
+	stalePath := bytes.Repeat([]byte{0xf}, 2*common.HashLength-1)
+	staleNode := []byte{0xc2, 0x20, 0x01}
+
+	// Model an interrupted generation with a completed download, a journal
+	// frozen at the pivot, and some trie nodes already installed by ingestion.
+	if !t.Run("persist partial generation", func(t *testing.T) {
+		store := open(t)
+		db := rawdb.NewDatabase(store)
+		for _, entry := range accounts {
+			var acc types.StateAccount
+			if err := rlp.DecodeBytes(entry.v, &acc); err != nil {
+				t.Fatal(err)
+			}
+			rawdb.WriteAccountSnapshot(db, common.BytesToHash(entry.k), types.SlimAccountRLP(acc))
+		}
+		for _, entry := range storage {
+			rawdb.WriteStorageSnapshot(db, owner, common.BytesToHash(entry.k), entry.v)
+		}
+		s := newSyncerV2(db, scheme)
+		s.pivot = pivot
+		s.setPhase(phaseGenerate)
+		s.saveSyncStatus()
+		if err := db.SyncKeyValue(); err != nil {
+			t.Fatal(err)
+		}
+		batch := store.NewIngestBatch(ethdb.IdealBatchSize)
+		defer batch.Close()
+		rawdb.WriteAccountTrieNode(batch, stalePath, staleNode)
+		rawdb.WriteStorageTrieNode(batch, owner, stalePath, staleNode)
+		if err := batch.Write(); err != nil {
+			t.Fatal(err)
+		}
+	}) {
+		return
+	}
+	db := rawdb.NewDatabase(open(t))
+	if !rawdb.HasAccountTrieNode(db, stalePath) || !rawdb.HasStorageTrieNode(db, owner, stalePath) {
+		t.Fatal("missing ingested nodes after reopening the database")
+	}
+	s := newSyncerV2(db, scheme)
+	if frozen := s.FrozenPivot(); frozen == nil || frozen.Hash() != pivot.Hash() {
+		t.Fatalf("reopened syncer has wrong frozen pivot %v", frozen)
+	}
+	cancel := make(chan struct{})
+	done := checkStall(t, func() { close(cancel) })
+	defer close(done)
+	if err := s.Sync(pivot, cancel); err != nil {
+		t.Fatal(err)
+	}
+	if rawdb.HasAccountTrieNode(db, stalePath) || rawdb.HasStorageTrieNode(db, owner, stalePath) {
+		t.Fatal("stale nodes survived regeneration")
+	}
+	if journal := decodeJournal(t, db); journal.Phase != phaseComplete || journal.Pivot == nil || journal.Pivot.Hash() != pivot.Hash() {
+		t.Fatal("regeneration did not persist generation completion for the pivot")
+	}
+	verifyTrie(scheme, db, root, t)
 }
 
 // TestPruneStaleState verifies that resuming a sync wipes exactly the flat
