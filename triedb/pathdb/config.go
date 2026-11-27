@@ -72,7 +72,7 @@ var (
 
 // Defaults contains default settings for Ethereum mainnet.
 var Defaults = &Config{
-	StateHistory:        params.FullImmutabilityThreshold,
+	StateHistory:        params.ReorgRetentionWindow,
 	TrienodeHistory:     -1,
 	FullValueCheckpoint: defaultFullValueCheckpoint,
 	EnableStateIndexing: false,

@@ -22,8 +22,18 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/history"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
 )
+
+// TestDefaultStateHistoryIsReorgRetentionWindow pins the default state-history
+// retention that the --history.state flag and every node inherit to EIP-8252's
+// REORG_RETENTION_WINDOW.
+func TestDefaultStateHistoryIsReorgRetentionWindow(t *testing.T) {
+	if Defaults.StateHistory != params.ReorgRetentionWindow {
+		t.Fatalf("Defaults.StateHistory = %d, want ReorgRetentionWindow = %d", Defaults.StateHistory, params.ReorgRetentionWindow)
+	}
+}
 
 // TestHistoryModeTOML checks that the chain history retention round trips through
 // the config file in the same text form --history.chain takes, including a custom

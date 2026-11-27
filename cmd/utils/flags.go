@@ -297,7 +297,7 @@ var (
 	}
 	StateHistoryFlag = &cli.Uint64Flag{
 		Name:     "history.state",
-		Usage:    "Number of recent blocks to retain state history for, only relevant in state.scheme=path (default = 90,000 blocks, 0 = entire chain)",
+		Usage:    fmt.Sprintf("Number of recent blocks to retain state history for, only relevant in state.scheme=path (default = %d blocks, the EIP-8252 reorg-retention window; 0 = entire chain)", params.ReorgRetentionWindow),
 		Value:    ethconfig.Defaults.StateHistory,
 		Category: flags.StateCategory,
 	}

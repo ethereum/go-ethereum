@@ -23,8 +23,17 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/eth/ethconfig"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/urfave/cli/v2"
 )
+
+// TestStateHistoryFlagDefault pins the --history.state default, which users and
+// nodes inherit when the flag is unset, to EIP-8252's REORG_RETENTION_WINDOW.
+func TestStateHistoryFlagDefault(t *testing.T) {
+	if got := StateHistoryFlag.Value; got != params.ReorgRetentionWindow {
+		t.Fatalf("StateHistoryFlag default = %d, want ReorgRetentionWindow = %d", got, params.ReorgRetentionWindow)
+	}
+}
 
 func Test_SplitTagsFlag(t *testing.T) {
 	t.Parallel()

@@ -130,15 +130,21 @@ func (f *chainFreezer) readFinalizedNumber(db ethdb.KeyValueReader) uint64 {
 }
 
 // freezeThreshold returns the threshold for chain freezing. It's determined
-// by formula: max(finality, HEAD-params.FullImmutabilityThreshold).
+// by formula: max(finality, HEAD-params.ReorgRetentionWindow).
+//
+// The head-distance term is ReorgRetentionWindow rather than
+// FullImmutabilityThreshold so that during a finality stall every block within
+// the EIP-8252 reorg-retention window stays in the key-value store, where a
+// reorg can still rewrite its canonical hash. Under healthy finality the
+// finalized number dominates the max, so the deeper window has no effect.
 func (f *chainFreezer) freezeThreshold(db ethdb.KeyValueReader) (uint64, error) {
 	var (
 		head      = f.readHeadNumber(db)
 		final     = f.readFinalizedNumber(db)
 		headLimit uint64
 	)
-	if head > params.FullImmutabilityThreshold {
-		headLimit = head - params.FullImmutabilityThreshold
+	if head > params.ReorgRetentionWindow {
+		headLimit = head - params.ReorgRetentionWindow
 	}
 	if final == 0 && headLimit == 0 {
 		return 0, errors.New("freezing threshold is not available")

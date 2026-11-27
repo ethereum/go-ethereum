@@ -25,4 +25,12 @@ const (
 	// hard limit against deep ancestors, by the blockchain against deep reorgs, by
 	// the freezer as the cutoff threshold and by clique as the snapshot trust limit.
 	FullImmutabilityThreshold = 90000
+
+	// ReorgRetentionWindow is the number of recent blocks across which a client
+	// must be able to reconstruct state without resyncing, so that the execution
+	// layer can validate a reorg to any branch forking within the window. It is
+	// EIP-8252's REORG_RETENTION_WINDOW: 8192 epochs * 32 slots = 2^18 blocks
+	// (~36.4 days), the span of non-finality bounded by the consensus-layer
+	// inactivity leak.
+	ReorgRetentionWindow = 262144
 )
