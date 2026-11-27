@@ -797,9 +797,11 @@ func (d *Downloader) processHeaders(origin uint64) error {
 				return nil
 			}
 			// Restrict block access list retrieval to the immutability window
-			// below the head of the network chain. Access lists further back
-			// are not guaranteed to be retained by the network, so fetching
-			// them is not even attempted.
+			// below the head of the network chain, the span for which peers
+			// retain access lists. This is FullImmutabilityThreshold, not the
+			// deeper EIP-8252 reorg window used for fork ancestry: access lists
+			// older than the immutability window are not served by the network,
+			// so fetching them is not even attempted.
 			//
 			// Resolving the skeleton bounds hits the database, so only refresh
 			// the cutoff occasionally. Staleness is harmless: the cutoff only
@@ -808,8 +810,8 @@ func (d *Downloader) processHeaders(origin uint64) error {
 			// access lists are attempted and dropped on failure anyway.
 			if time.Since(lastBALCutoffUpdate) > time.Minute {
 				if latest, _, _, err := d.skeleton.Bounds(); err == nil {
-					if head := latest.Number.Uint64(); head > fullMaxForkAncestry {
-						d.queue.SetBALCutoff(head - fullMaxForkAncestry)
+					if head := latest.Number.Uint64(); head > params.FullImmutabilityThreshold {
+						d.queue.SetBALCutoff(head - params.FullImmutabilityThreshold)
 					} else {
 						d.queue.SetBALCutoff(0)
 					}
