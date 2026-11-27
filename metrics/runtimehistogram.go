@@ -115,9 +115,6 @@ func (h *runtimeHistogramSnapshot) calc() {
 	h.min = min
 	h.max = int64(max)
 	if count > 0 {
-		// The histogram can have bucket edges but no samples at all, e.g. the
-		// GC pause histogram of a process that has not collected yet. The mean
-		// of an empty sample is zero, not NaN.
 		h.mean = sum / float64(count)
 	}
 	h.count = count
