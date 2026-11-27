@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/core/vm/program"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/trie"
@@ -1528,6 +1529,26 @@ func TestBALPostExecutionQueueReads(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The post-execution calls restore a slot to the value written by a user
+// transaction. That earlier write remains in the BAL and precludes a read.
+func TestBALPostExecutionNetStorageKeepsEarlierWrite(t *testing.T) {
+	queue := params.ConsolidationQueueAddress
+	flip := program.New().Push(1).Op(vm.SLOAD, vm.ISZERO).Push(1).Op(vm.SSTORE).Bytes()
+	env := newBALTestEnv(types.GenesisAlloc{
+		params.WithdrawalQueueAddress: {Code: makeStubCaller(byte(vm.CALL), queue), Nonce: 1},
+		queue:                         {Code: flip, Nonce: 1},
+	})
+	list, _ := env.run(t, func(b *BlockGen) {
+		b.AddTx(env.tx(0, &queue, common.Big0, 1_000_000, 0, nil))
+	})
+	slot := common.BigToHash(common.Big1)
+	account := assertPresent(t, list, queue)
+	assertStorageChanges(t, account, slot, []balStorageChangeExpectation{{index: 1, value: slot}})
+	if hasSlotIn(account.StorageReads, slot) {
+		t.Fatal("earlier write also recorded as a read")
 	}
 }
 

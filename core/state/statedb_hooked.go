@@ -50,6 +50,11 @@ func NewHookedState(stateDb *StateDB, hooks *tracing.Hooks) *hookedStateDB {
 	return s
 }
 
+// Copy returns an independent state without tracing hooks.
+func (s *hookedStateDB) Copy() *StateDB {
+	return s.inner.Copy()
+}
+
 func (s *hookedStateDB) CreateAccount(addr common.Address) {
 	s.inner.CreateAccount(addr)
 }
