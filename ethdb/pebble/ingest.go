@@ -142,17 +142,27 @@ func (b *ingestBatch) Write() (err error) {
 }
 
 func (b *ingestBatch) sortedOps(yield func(ingestOp) bool) {
-	// Iterate strictly descending batches backwards so the SST writer
-	// receives ascending keys without a sort.
-	descending := true
+	// Strictly ordered batches can be read in ascending key order without
+	// sorting. Repeated keys use the same fallback as unordered batches.
+	direction := -1
 	for i := 1; i < len(b.ops); i++ {
 		prev, cur := b.ops[i-1], b.ops[i]
-		if bytes.Compare(b.buf[prev.key:prev.value], b.buf[cur.key:cur.value]) <= 0 {
-			descending = false
+		order := bytes.Compare(b.buf[prev.key:prev.value], b.buf[cur.key:cur.value])
+		if order == 0 || (i > 1 && order != direction) {
+			direction = 0
 			break
 		}
+		direction = order
 	}
-	if descending {
+	switch direction {
+	case -1:
+		for _, op := range b.ops {
+			if !yield(op) {
+				return
+			}
+		}
+		return
+	case 1:
 		for _, op := range slices.Backward(b.ops) {
 			if !yield(op) {
 				return

@@ -548,7 +548,18 @@ func reverseUpperBound(prefix, start []byte) []byte {
 // Stat returns the internal metrics of Pebble in a text format. It's a developer
 // method to read everything there is to read, independent of Pebble version.
 func (d *Database) Stat() (string, error) {
-	return d.db.Metrics().String(), nil
+	return d.Metrics().String(), nil
+}
+
+// Metrics returns a snapshot of the underlying Pebble v2 metrics.
+func (d *Database) Metrics() *pebble.Metrics {
+	return d.db.Metrics()
+}
+
+// WriteStallStats returns the number of write stalls started since opening the
+// database and the cumulative duration of completed stalls.
+func (d *Database) WriteStallStats() (count int64, duration time.Duration) {
+	return d.writeDelayCount.Load(), time.Duration(d.writeDelayTime.Load())
 }
 
 // Compact flattens the underlying data store for the given key range. In essence,
