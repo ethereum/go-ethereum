@@ -27,6 +27,7 @@ import (
 	"os"
 	"reflect"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -2088,5 +2089,96 @@ func TestTraceCallDefaultsToLatest(t *testing.T) {
 	}
 	if !bytes.Equal(omitted, latest) {
 		t.Errorf("omitted-block result %s != latest result %s", omitted, latest)
+	}
+}
+
+// TestTraceCallBlockOverrideKeys checks that debug_traceCall rejects block
+// override keys that are not defined, keys that differ only in case and name
+// the same field, and a difficulty override after the merge.
+func TestTraceCallBlockOverrideKeys(t *testing.T) {
+	t.Parallel()
+
+	accounts := newAccounts(2)
+	alloc := types.GenesisAlloc{
+		accounts[0].addr: {Balance: big.NewInt(params.Ether)},
+		accounts[1].addr: {Balance: big.NewInt(params.Ether)},
+	}
+	merged := newTestBackend(t, 0, &core.Genesis{Config: params.MergedTestChainConfig, Difficulty: common.Big0, Alloc: alloc}, nil)
+	defer merged.teardown()
+	premerge := newTestBackend(t, 1, &core.Genesis{Config: params.TestChainConfig, Alloc: alloc}, nil)
+	defer premerge.teardown()
+
+	args := ethapi.TransactionArgs{
+		From:  &accounts[0].addr,
+		To:    &accounts[1].addr,
+		Value: (*hexutil.Big)(big.NewInt(1000)),
+	}
+	for _, tc := range []struct {
+		name    string
+		backend *testBackend
+		config  string
+		err     string // empty if the call must succeed
+	}{
+		{
+			name:    "unknown key",
+			backend: merged,
+			config:  `{"blockOverrides":{"fooBar":"0x1"}}`,
+			err:     `unknown field "fooBar" in block override`,
+		},
+		{
+			name:    "case-duplicate keys",
+			backend: merged,
+			config:  `{"blockOverrides":{"time":"0x10","Time":"0x10"}}`,
+			err:     `keys "Time" and "time" in block override name the same field`,
+		},
+		{
+			name:    "difficulty after the merge",
+			backend: merged,
+			config:  `{"blockOverrides":{"difficulty":"0x1"}}`,
+			err:     "difficulty override is not allowed after the merge",
+		},
+		{
+			name:    "valid overrides after the merge",
+			backend: merged,
+			config:  `{"blockOverrides":{"time":"0x100","gasLimit":"0x1000000","feeRecipient":"0x0000000000000000000000000000000000000001"}}`,
+		},
+		{
+			name:    "key in other case",
+			backend: merged,
+			config:  `{"blockOverrides":{"Time":"0x100"}}`,
+		},
+		{
+			name:    "difficulty before the merge",
+			backend: premerge,
+			config:  `{"blockOverrides":{"difficulty":"0x1"}}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := rpc.NewServer()
+			if err := srv.RegisterName("debug", NewAPI(tc.backend)); err != nil {
+				t.Fatal(err)
+			}
+			client := rpc.DialInProc(srv)
+			defer client.Close()
+
+			var result json.RawMessage
+			err := client.Call(&result, "debug_traceCall", args, "latest", json.RawMessage(tc.config))
+			if tc.err == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error %q, got result %s", tc.err, result)
+			}
+			if !strings.Contains(err.Error(), tc.err) {
+				t.Errorf("error mismatch: have %q, want %q", err, tc.err)
+			}
+			var rpcErr rpc.Error
+			if !errors.As(err, &rpcErr) || rpcErr.ErrorCode() != -32602 {
+				t.Errorf("expected error code -32602, have %v", err)
+			}
+		})
 	}
 }

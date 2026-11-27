@@ -22,9 +22,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"os"
+	"reflect"
 	"runtime"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -164,6 +168,57 @@ type TraceCallConfig struct {
 	BlockOverrides *override.BlockOverrides
 	TxIndex        *hexutil.Uint
 }
+
+// UnmarshalJSON rejects block override keys that are not defined, as
+// eth_simulateV1 does. encoding/json alone ignores unknown keys.
+func (c *TraceCallConfig) UnmarshalJSON(input []byte) error {
+	var dec struct {
+		BlockOverrides json.RawMessage
+	}
+	if err := json.Unmarshal(input, &dec); err != nil {
+		return err
+	}
+	if err := checkBlockOverrideKeys(dec.BlockOverrides); err != nil {
+		return err
+	}
+	type config TraceCallConfig
+	return json.Unmarshal(input, (*config)(c))
+}
+
+// checkBlockOverrideKeys returns an error for a key of the JSON object that does
+// not name a field of override.BlockOverrides, or that names a field another key
+// already names. Names match case-insensitively, as in encoding/json.
+func checkBlockOverrideKeys(input json.RawMessage) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(input, &keys); err != nil || keys == nil {
+		return nil
+	}
+	t := reflect.TypeFor[override.BlockOverrides]()
+	seen := make(map[int]string)
+	for _, key := range slices.Sorted(maps.Keys(keys)) {
+		field := -1
+		for i := 0; i < t.NumField(); i++ {
+			if strings.EqualFold(key, t.Field(i).Name) {
+				field = i
+				break
+			}
+		}
+		if field < 0 {
+			return fmt.Errorf("unknown field %q in block override", key)
+		}
+		if prev, ok := seen[field]; ok {
+			return fmt.Errorf("keys %q and %q in block override name the same field", prev, key)
+		}
+		seen[field] = key
+	}
+	return nil
+}
+
+// invalidParamsError is returned for a request parameter that is not valid.
+type invalidParamsError struct{ message string }
+
+func (e *invalidParamsError) Error() string  { return e.message }
+func (e *invalidParamsError) ErrorCode() int { return -32602 }
 
 // StdTraceConfig holds extra parameters to standard-json trace functions.
 type StdTraceConfig struct {
@@ -923,6 +978,20 @@ func (api *API) TraceCall(ctx context.Context, args ethapi.TransactionArgs, bloc
 
 	// Apply the customization rules if required.
 	if config != nil {
+		if o := config.BlockOverrides; o != nil && o.Difficulty != nil {
+			number, timestamp := h.Number.Uint64(), h.Time
+			if o.Number != nil {
+				number = o.Number.ToInt().Uint64()
+			}
+			if o.Time != nil {
+				timestamp = uint64(*o.Time)
+			}
+			// The difficulty of a block after the merge is 0, so the override
+			// can not be applied.
+			if h.Difficulty.Sign() == 0 || api.backend.ChainConfig().IsPostMerge(number, timestamp) {
+				return nil, &invalidParamsError{"difficulty override is not allowed after the merge"}
+			}
+		}
 		if config.BlockOverrides != nil && config.BlockOverrides.Number != nil && config.BlockOverrides.Number.ToInt().Uint64() == h.Number.Uint64()+1 {
 			// Overriding the block number to n+1 is a common way for wallets to
 			// simulate transactions, however without the following fix, a contract
