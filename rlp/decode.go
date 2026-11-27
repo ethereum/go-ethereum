@@ -90,19 +90,35 @@ func Decode(r io.Reader, val interface{}) error {
 // DecodeBytes parses RLP data from b into val. Please see package-level documentation for
 // the decoding rules. The input must contain exactly one value and no trailing data.
 func DecodeBytes(b []byte, val interface{}) error {
-	r := (*sliceReader)(&b)
+	ss := sliceStreamPool.Get().(*sliceStream)
+	defer ss.release()
 
-	stream := streamPool.Get().(*Stream)
-	defer streamPool.Put(stream)
-
-	stream.Reset(r, uint64(len(b)))
-	if err := stream.Decode(val); err != nil {
+	ss.buf = b
+	ss.Reset(&ss.buf, uint64(len(b)))
+	if err := ss.Decode(val); err != nil {
 		return err
 	}
-	if len(b) > 0 {
+	if len(ss.buf) > 0 {
 		return ErrMoreThanOneValue
 	}
 	return nil
+}
+
+// sliceStream is a Stream together with the reader for DecodeBytes.
+// Keeping the reader in the pooled object avoids an allocation per call.
+type sliceStream struct {
+	Stream
+	buf sliceReader
+}
+
+var sliceStreamPool = sync.Pool{
+	New: func() interface{} { return new(sliceStream) },
+}
+
+func (ss *sliceStream) release() {
+	ss.buf = nil
+	ss.r = nil
+	sliceStreamPool.Put(ss)
 }
 
 type decodeError struct {
