@@ -254,6 +254,12 @@ func (s *stateObject) setState(key common.Hash, value common.Hash, origin common
 func (s *stateObject) finalise() {
 	slotsToPrefetch := make([]common.Hash, 0, len(s.dirtyStorage))
 	for key, value := range s.dirtyStorage {
+		// Resolve the slot value prior to this execution scope, it is used
+		// as the origin of the write in the block-level access list.
+		var prev common.Hash
+		if s.db.stateAccessList != nil {
+			prev = s.GetCommittedState(key)
+		}
 		if origin, exist := s.uncommittedStorage[key]; exist && origin == value {
 			// The slot is reverted to its original value, delete the entry
 			// to avoid thrashing the data structures.
@@ -279,7 +285,7 @@ func (s *stateObject) finalise() {
 		// All slots in the dirtyStorage set must have post-transaction
 		// values that differ from their pre-transaction values.
 		if s.db.stateAccessList != nil {
-			s.db.stateAccessList.StorageWrite(s.db.blockAccessIndex, s.address, key, value)
+			s.db.stateAccessList.StorageWriteWithOrigin(s.db.blockAccessIndex, s.address, key, prev, value)
 		}
 	}
 	if s.db.prefetcher != nil && len(slotsToPrefetch) > 0 && s.data.Root != types.EmptyRootHash {

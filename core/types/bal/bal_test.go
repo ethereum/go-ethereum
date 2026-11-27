@@ -159,6 +159,61 @@ func TestConstructionBALMerge(t *testing.T) {
 	}
 }
 
+// TestConstructionBALMergeNetSameIndex checks that writes from multiple scopes
+// sharing a tx index (e.g. post-execution system calls) are netted against the
+// slot value at the start of that index.
+func TestConstructionBALMergeNetSameIndex(t *testing.T) {
+	var (
+		addr  = common.BytesToAddress([]byte{0xAA})
+		slot1 = common.BytesToHash([]byte{0x01}) // restored, no prior write
+		slot2 = common.BytesToHash([]byte{0x02}) // restored, written at an earlier index
+		slot3 = common.BytesToHash([]byte{0x03}) // changed twice, not restored
+		zero  = common.Hash{}
+		v1    = common.BytesToHash([]byte{0x11})
+		v2    = common.BytesToHash([]byte{0x22})
+	)
+	acc := NewConstructionBlockAccessList()
+	acc.StorageWriteWithOrigin(1, addr, slot2, zero, v1)
+
+	// First system call at the last index.
+	first := NewConstructionBlockAccessList()
+	first.StorageWriteWithOrigin(2, addr, slot1, zero, v1)
+	first.StorageWriteWithOrigin(2, addr, slot2, v1, v2)
+	first.StorageWriteWithOrigin(2, addr, slot3, zero, v1)
+	acc.Merge(first)
+
+	// Second system call at the same index, restoring slot1 and slot2.
+	second := NewConstructionBlockAccessList()
+	second.StorageWriteWithOrigin(2, addr, slot1, v1, zero)
+	second.StorageWriteWithOrigin(2, addr, slot2, v2, v1)
+	second.StorageWriteWithOrigin(2, addr, slot3, v1, v2)
+	acc.Merge(second)
+
+	got := acc.Accounts[addr]
+	wantWrites := map[common.Hash]map[uint32]common.Hash{
+		slot2: {1: v1},
+		slot3: {2: v2},
+	}
+	if !reflect.DeepEqual(got.StorageWrites, wantWrites) {
+		t.Fatalf("storage writes mismatch: got %v, want %v", got.StorageWrites, wantWrites)
+	}
+	wantReads := map[common.Hash]struct{}{slot1: {}}
+	if !reflect.DeepEqual(got.StorageReads, wantReads) {
+		t.Fatalf("storage reads mismatch: got %v, want %v", got.StorageReads, wantReads)
+	}
+
+	// A third call at the same index writing slot1 again must be recorded.
+	third := NewConstructionBlockAccessList()
+	third.StorageWriteWithOrigin(2, addr, slot1, zero, v2)
+	acc.Merge(third)
+	if w := got.StorageWrites[slot1]; len(w) != 1 || w[2] != v2 {
+		t.Fatalf("slot1 write mismatch: %v", w)
+	}
+	if _, ok := got.StorageReads[slot1]; ok {
+		t.Fatal("written slot1 still listed as read")
+	}
+}
+
 func makeTestAccountAccess(sort bool) AccountAccess {
 	var (
 		storageWrites []encodingSlotChanges
