@@ -22,15 +22,15 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// TestDefaultStateHistoryCoversReorgRetentionWindow guards EIP-8252: the default
-// state history must retain at least REORG_RETENTION_WINDOW recent blocks so the
-// state of any block forking within that window can be reconstructed without
-// resyncing. A zero default (full chain) also satisfies the requirement.
-func TestDefaultStateHistoryCoversReorgRetentionWindow(t *testing.T) {
+// TestDefaultStateHistoryIsReorgRetentionWindow guards EIP-8252: the default
+// state history must retain exactly REORG_RETENTION_WINDOW recent blocks so the
+// state of any block forking within that window can be reconstructed from the
+// engine API without resyncing.
+func TestDefaultStateHistoryIsReorgRetentionWindow(t *testing.T) {
 	if got := params.ReorgRetentionWindow; got != 8192*32 {
 		t.Fatalf("ReorgRetentionWindow = %d, want 8192 epochs * 32 slots = %d", got, 8192*32)
 	}
-	if h := Defaults.StateHistory; h != 0 && h < params.ReorgRetentionWindow {
-		t.Fatalf("default StateHistory = %d is below EIP-8252 REORG_RETENTION_WINDOW = %d", h, params.ReorgRetentionWindow)
+	if h := Defaults.StateHistory; h != params.ReorgRetentionWindow {
+		t.Fatalf("default StateHistory = %d, want EIP-8252 REORG_RETENTION_WINDOW = %d", h, params.ReorgRetentionWindow)
 	}
 }

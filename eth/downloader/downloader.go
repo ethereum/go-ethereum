@@ -46,10 +46,10 @@ var (
 	MaxReceiptFetch = 256 // Number of transaction receipts to allow fetching per request
 	MaxBALFetch     = 128 // Number of block access lists to allow fetching per request
 
-	maxQueuedHeaders           = 32 * 1024                        // [eth/62] Maximum number of headers to queue for import (DOS protection)
-	maxHeadersProcess          = 2048                             // Number of header download results to import at once into the chain
-	maxResultsProcess          = 2048                             // Number of content download results to import at once into the chain
-	fullMaxForkAncestry uint64 = params.FullImmutabilityThreshold // Maximum chain reorganisation (locally redeclared so tests can reduce it)
+	maxQueuedHeaders           = 32 * 1024                   // [eth/62] Maximum number of headers to queue for import (DOS protection)
+	maxHeadersProcess          = 2048                        // Number of header download results to import at once into the chain
+	maxResultsProcess          = 2048                        // Number of content download results to import at once into the chain
+	fullMaxForkAncestry uint64 = params.ReorgRetentionWindow // Maximum chain reorganisation, the EIP-8252 reorg-retention window (locally redeclared so tests can reduce it)
 
 	reorgProtHeaderDelay = 2 // Number of headers to delay delivering to cover mini reorgs
 
