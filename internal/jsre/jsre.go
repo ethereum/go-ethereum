@@ -58,6 +58,7 @@ type jsTimer struct {
 	timer    *time.Timer
 	duration time.Duration
 	interval bool
+	fn       goja.Callable
 	call     goja.FunctionCall
 }
 
@@ -126,12 +127,21 @@ func (re *JSRE) runEventLoop() {
 	ready := make(chan *jsTimer)
 
 	newTimer := func(call goja.FunctionCall, interval bool) (*jsTimer, goja.Value) {
+		fn, isFunc := goja.AssertFunction(call.Argument(0))
+		if !isFunc {
+			name := "setTimeout"
+			if interval {
+				name = "setInterval"
+			}
+			panic(re.vm.NewTypeError("Failed to execute '%s': parameter 1 is not of type 'Function'.", name))
+		}
 		delay := call.Argument(1).ToInteger()
 		if 0 >= delay {
 			delay = 1
 		}
 		timer := &jsTimer{
 			duration: time.Duration(delay) * time.Millisecond,
+			fn:       fn,
 			call:     call,
 			interval: interval,
 		}
@@ -186,22 +196,11 @@ loop:
 		select {
 		case timer := <-ready:
 			// execute callback, remove/reschedule the timer
-			var arguments []interface{}
+			var args []goja.Value
 			if len(timer.call.Arguments) > 2 {
-				tmp := timer.call.Arguments[2:]
-				arguments = make([]interface{}, 2+len(tmp))
-				for i, value := range tmp {
-					arguments[i+2] = value
-				}
-			} else {
-				arguments = make([]interface{}, 1)
+				args = timer.call.Arguments[2:]
 			}
-			arguments[0] = timer.call.Arguments[0]
-			call, isFunc := goja.AssertFunction(timer.call.Arguments[0])
-			if !isFunc {
-				panic(re.vm.ToValue("js error: timer/timeout callback is not a function"))
-			}
-			call(goja.Null(), timer.call.Arguments[2:]...)
+			timer.fn(goja.Null(), args...)
 
 			_, inreg := registry[timer] // when clearInterval is called from within the callback don't reset it
 			if timer.interval && inreg {
