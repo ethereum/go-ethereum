@@ -54,8 +54,21 @@ type PartialStackTrie struct {
 // The onTrieNode callback, if non-nil, is invoked for every committed node with
 // its absolute path already prefixed with the partition nibble.
 func NewPartialStackTrie(nibble byte, onTrieNode OnTrieNode) *PartialStackTrie {
-	p := &PartialStackTrie{nibble: nibble}
-	p.inner = NewStackTrie(func(path []byte, hash common.Hash, blob []byte) {
+	return newPartialStackTrie(nibble, false, onTrieNode)
+}
+
+// NewReversePartialStackTrie creates a partition builder that accepts keys in
+// strictly descending order and emits committed nodes in descending absolute
+// path order.
+func NewReversePartialStackTrie(nibble byte, onTrieNode OnTrieNode) *PartialStackTrie {
+	return newPartialStackTrie(nibble, true, onTrieNode)
+}
+
+func newPartialStackTrie(nibble byte, reverse bool, onTrieNode OnTrieNode) *PartialStackTrie {
+	p := &PartialStackTrie{
+		nibble: nibble,
+	}
+	onNode := func(path []byte, hash common.Hash, blob []byte) {
 		if onTrieNode == nil {
 			return
 		}
@@ -64,7 +77,12 @@ func NewPartialStackTrie(nibble byte, onTrieNode OnTrieNode) *PartialStackTrie {
 		p.pathBuf = append(p.pathBuf[:0], nibble)
 		p.pathBuf = append(p.pathBuf, path...)
 		onTrieNode(p.pathBuf, hash, blob)
-	})
+	}
+	if reverse {
+		p.inner = NewReverseStackTrie(onNode)
+	} else {
+		p.inner = NewStackTrie(onNode)
+	}
 	return p
 }
 

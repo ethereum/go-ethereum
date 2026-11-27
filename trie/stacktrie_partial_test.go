@@ -206,6 +206,44 @@ func TestPartialStackTrieWrongNibble(t *testing.T) {
 	}
 }
 
+func TestReversePartialStackTrie(t *testing.T) {
+	const nibble = 3
+	keys, vals := sortedPairs([]string{"30", "3105", "310a", "3f00", "3f0f"})
+
+	var wantRoot common.Hash
+	want := collect(func(onNode OnTrieNode) {
+		forward := NewPartialStackTrie(nibble, onNode)
+		for i, key := range keys {
+			if err := forward.Update(key, vals[i]); err != nil {
+				t.Fatal(err)
+			}
+		}
+		wantRoot = forward.Hash()
+	})
+	var prev []byte
+	reverse := NewReversePartialStackTrie(nibble, func(path []byte, hash common.Hash, blob []byte) {
+		if prev != nil && bytes.Compare(prev, path) <= 0 {
+			t.Fatalf("paths out of descending order: %x then %x", prev, path)
+		}
+		prev = append(prev[:0], path...)
+		if rec, ok := want[string(path)]; !ok || rec.hash != hash || !bytes.Equal(rec.blob, blob) {
+			t.Fatalf("node mismatch at path %x", path)
+		}
+		delete(want, string(path))
+	})
+	for i := len(keys) - 1; i >= 0; i-- {
+		if err := reverse.Update(keys[i], vals[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := reverse.Hash(); got != wantRoot {
+		t.Fatalf("reverse root %x, want %x", got, wantRoot)
+	}
+	if len(want) != 0 {
+		t.Fatalf("reverse trie omitted %d nodes", len(want))
+	}
+}
+
 // TestMountPartitionRoot checks that folding the leading nibble back into a
 // single partition's subtree root reproduces the canonical trie root, for every
 // root shape (leaf, extension, branch). The branch case is the one not reachable

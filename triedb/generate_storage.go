@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -33,21 +32,27 @@ const (
 	numStoragePartitions = 16   // one subtree per leading slot-hash nibble
 	storageProbeSlots    = 4096 // the number of probes for deciding the contract size
 
-	// More than 4096 slots in the first 1/2048 of the keyspace suggests at
+	// More than 4096 slots in a 1/2048 edge of the keyspace suggests at
 	// least 8 million slots across a uniformly distributed storage trie.
 	storageProbeLimit uint32 = 1 << 21
 )
 
-// probeStorage checks a bounded prefix of one owner's flat storage. The
-// partition iterator stays in place so small contracts can continue in order.
+func (g *trieGenerator) inStorageProbe(slot []byte) bool {
+	position := binary.BigEndian.Uint32(slot)
+	if g.ingester != nil {
+		position = ^position
+	}
+	return position < storageProbeLimit
+}
+
+// probeStorage checks the leading edge of the owner's slots in scan order.
+// The partition iterator stays in place so small contracts can continue.
 func (g *trieGenerator) probeStorage(ctx context.Context, cancel <-chan struct{}, owner common.Hash, firstSlot []byte) (bool, error) {
-	// Short circuit if the first slot indicates the potential slot
-	// number is less than 2k, avoiding opening the iterator.
-	if binary.BigEndian.Uint32(firstSlot) >= storageProbeLimit {
+	if !g.inStorageProbe(firstSlot) {
 		return false, nil
 	}
 	prefix := slices.Concat(rawdb.SnapshotStoragePrefix, owner[:])
-	it := openFlatIterator(g.db, prefix, firstSlot, common.HashLength)
+	it := openFlatIterator(g.newIterator, prefix, firstSlot, common.HashLength)
 	defer it.Release()
 
 	for i := 0; it.Next(); i++ {
@@ -58,7 +63,7 @@ func (g *trieGenerator) probeStorage(ctx context.Context, cancel <-chan struct{}
 			return false, ctx.Err()
 		default:
 		}
-		if binary.BigEndian.Uint32(it.Key()[len(prefix):]) >= storageProbeLimit {
+		if !g.inStorageProbe(it.Key()[len(prefix):]) {
 			return false, nil
 		}
 		if i == storageProbeSlots {
@@ -68,7 +73,26 @@ func (g *trieGenerator) probeStorage(ctx context.Context, cancel <-chan struct{}
 	return false, it.Error()
 }
 
-func (g *trieGenerator) splitStorage(ctx context.Context, cancel <-chan struct{}, owner common.Hash, batch ethdb.Batch) (common.Hash, error) {
+func (g *trieGenerator) generateSplitStorage(ctx context.Context, cancel <-chan struct{}, iters *rangeIterators, batches *partitionBatches, owner common.Hash) (common.Hash, error) {
+	// Release the parent read views while the shards work on this owner.
+	iters.release()
+
+	// Flush buffered storage nodes from earlier owners before reusing this
+	// batch for the large contract's shards. For example, an SST containing
+	// f2/... and f1/0/... would span the f1/1/... shard, since
+	// f1/0/... < f1/1/... < f2/... (owner hashes f1,f2 abbreviated).
+	if err := batches.storage.flush(); err != nil {
+		return common.Hash{}, fmt.Errorf("flush before splitting storage %x: %w", owner, err)
+	}
+	root, err := g.splitStorage(ctx, cancel, owner, batches)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("split storage %x: %w", owner, err)
+	}
+	iters.resumeAfterStorage(owner)
+	return root, nil
+}
+
+func (g *trieGenerator) splitStorage(ctx context.Context, cancel <-chan struct{}, owner common.Hash, batches *partitionBatches) (common.Hash, error) {
 	// The suspended account worker lends its own slot to this contract.
 	ownerSlot := make(chan struct{}, 1)
 	ownerSlot <- struct{}{}
@@ -94,10 +118,25 @@ schedule:
 			slots = g.availableWorkers
 		}
 		group.Go(func() error {
-			defer func() { slots <- struct{}{} }()
-			root, err := g.generateStoragePartition(ctx, cancel, owner, byte(i))
+			var batch *generationBatch
+			if slots == ownerSlot {
+				// The worker of own partition with batch initialized
+				batch = batches.storage
+			} else {
+				// The worker borrowed from other finished partition
+				defer func() { slots <- struct{}{} }()
+				batch = newGenerationBatch(g.db, g.ingester)
+				defer batch.Close()
+			}
+			root, err := g.generateStoragePartition(ctx, cancel, owner, byte(i), batch)
+			if err != nil {
+				return err
+			}
 			roots[i] = root
-			return err
+			if slots == ownerSlot {
+				ownerSlot <- struct{}{}
+			}
+			return nil
 		})
 	}
 	if err := group.Wait(); err != nil {
@@ -106,22 +145,36 @@ schedule:
 	if dispatchErr != nil {
 		return common.Hash{}, dispatchErr
 	}
-	return assemblePartitionRoots(&roots, func(path []byte, hash common.Hash, blob []byte) {
-		g.writeStorageNode(batch, owner, path, hash, blob)
+	root, err := assemblePartitionRoots(&roots, func(path []byte, hash common.Hash, blob []byte) {
+		// An SST containing several shard roots would span descendant
+		// ranges already ingested by other shards.
+		g.writeStorageNode(batches.flat, owner, path, hash, blob)
 	})
+	if err != nil {
+		return common.Hash{}, err
+	}
+	if batches.flat.full() {
+		if err := batches.flat.flush(); err != nil {
+			return common.Hash{}, err
+		}
+	}
+	return root, nil
 }
 
-func (g *trieGenerator) generateStoragePartition(ctx context.Context, cancel <-chan struct{}, owner common.Hash, nibble byte) ([]byte, error) {
+func (g *trieGenerator) generateStoragePartition(ctx context.Context, cancel <-chan struct{}, owner common.Hash, nibble byte, batch *generationBatch) ([]byte, error) {
 	prefix := slices.Concat(rawdb.SnapshotStoragePrefix, owner[:])
 
-	it := openFlatIterator(g.db, prefix, []byte{nibble << 4}, common.HashLength)
-	defer it.Release()
-
-	batch := g.db.NewBatchWithSize(ethdb.IdealBatchSize)
-	defer batch.Close()
+	start := []byte{nibble << 4}
+	if g.ingester != nil {
+		last := common.MaxHash
+		last[0] = nibble<<4 | 0xf
+		start = last[:]
+	}
+	it := openFlatIterator(g.newIterator, prefix, start, common.HashLength)
+	defer func() { it.Release() }()
 
 	var root []byte
-	subtree := trie.NewPartialStackTrie(nibble, func(path []byte, hash common.Hash, blob []byte) {
+	subtree := g.newPartialStackTrie(nibble, func(path []byte, hash common.Hash, blob []byte) {
 		if len(path) == 1 {
 			// The parent may embed or fold this node when assembling the root.
 			root = common.CopyBytes(blob)
@@ -146,21 +199,23 @@ func (g *trieGenerator) generateStoragePartition(ctx context.Context, cancel <-c
 		}
 		g.counters.slots.Add(1)
 
-		if batch.ValueSize() > ethdb.IdealBatchSize {
-			if err := batch.Write(); err != nil {
+		if batch.full() {
+			if err := batch.flush(); err != nil {
 				return nil, fmt.Errorf("flush storage partition %x for %x: %w", nibble, owner, err)
 			}
-			batch.Reset()
+			var err error
+			it, err = reopenFlatIterator(g.newIterator, it, prefix, common.HashLength)
+			if err != nil {
+				return nil, fmt.Errorf("reopen storage partition %x for %x: %w", nibble, owner, err)
+			}
 		}
 	}
 	if err := it.Error(); err != nil {
 		return nil, fmt.Errorf("iterate storage partition %x for %x: %w", nibble, owner, err)
 	}
 	subtree.Hash()
-	if batch.ValueSize() != 0 {
-		if err := batch.Write(); err != nil {
-			return nil, fmt.Errorf("flush storage partition %x for %x: %w", nibble, owner, err)
-		}
+	if err := batch.flush(); err != nil {
+		return nil, fmt.Errorf("flush storage partition %x for %x: %w", nibble, owner, err)
 	}
 	return root, nil
 }
