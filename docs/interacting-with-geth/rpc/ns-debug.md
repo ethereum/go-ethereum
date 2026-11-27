@@ -43,6 +43,15 @@ Returns the internal statistics of the key-value database as human-readable text
 | Console | `debug.chaindbProperty()`                           |
 | RPC     | `{"method": "debug_chaindbProperty", "params": []}` |
 
+### debug_clearTxpool
+
+Removes all pending and queued transactions from the transaction pool, including the blob transaction pool. This method is intended for testing and debugging.
+
+| Client  | Method invocation                               |
+| :------ | ----------------------------------------------- |
+| Console | `debug.clearTxpool()`                           |
+| RPC     | `{"method": "debug_clearTxpool", "params": []}` |
+
 ### debug_cpuProfile
 
 Turns on CPU profiling for the given duration and writes profile data to disk.
@@ -85,6 +94,14 @@ Returns the raw value of a key stored in the database.
 | Console | `debug.dbGet(key string)`                    |
 | RPC     | `{"method": "debug_dbGet", "params": [key]}` |
 
+### debug_discoveryV4Table
+
+Returns the content of the discovery v4 node table, as a list of buckets. Each bucket is a list of objects with the fields `node` (the ENR of the node), `addedToTable`, `addedToBucket`, `checks` and `live`. The result is `null` when discovery v4 is not running, for example with `--nodiscover`. This method is not available in the console.
+
+| Client | Method invocation                                    |
+| :----- | ---------------------------------------------------- |
+| RPC    | `{"method": "debug_discoveryV4Table", "params": []}` |
+
 ### debug_dumpBlock
 
 Retrieves the state that corresponds to the block number and returns a list of accounts (including storage and code).
@@ -120,6 +137,15 @@ Retrieves the state that corresponds to the block number and returns a list of a
   root: "19f4ed94e188dd9c7eb04226bd240fa6b449401a6c656d6d2816a87ccaf206f1"
 }
 ```
+
+### debug_executionWitness
+
+Re-executes the given block on top of its parent state, without writing the result to the database, and returns the execution witness of the block: an object with the fields `headers`, `codes`, `state` and `keys`. The block can be given by number or by hash. The node must have the state of the parent block.
+
+| Client  | Method invocation                                                 |
+| :------ | ----------------------------------------------------------------- |
+| Console | `debug.executionWitness(blockNrOrHash)`                           |
+| RPC     | `{"method": "debug_executionWitness", "params": [blockNrOrHash]}` |
 
 ### debug_freeOSMemory
 
@@ -223,6 +249,15 @@ Returns the consensus-encoding of all receipts in a single block.
 | Console | `debug.getRawReceipts(blockNrOrHash)`                           |
 | RPC     | `{"method": "debug_getRawReceipts", "params": [blockNrOrHash]}` |
 
+### debug_getTrieFlushInterval
+
+Returns the current trie flush interval (see [`debug_setTrieFlushInterval`](#debug_settrieflushinterval)) as a [time.Duration](https://pkg.go.dev/time#Duration) string such as `1h0m0s`. The method returns an error on nodes that use the path-based state scheme, where the interval does not apply.
+
+| Client  | Method invocation                                        |
+| :------ | -------------------------------------------------------- |
+| Console | `debug.getTrieFlushInterval()`                           |
+| RPC     | `{"method": "debug_getTrieFlushInterval", "params": []}` |
+
 ### debug_goTrace
 
 Turns on Go runtime tracing for the given duration and writes trace data to disk.
@@ -310,6 +345,16 @@ Sets the current head of the local chain by block number. **Note**, this is a de
 
 References:
 [Ethash](https://ethereum.org/en/developers/docs/consensus-mechanisms/pow/mining-algorithms/ethash/)
+
+### debug_setMemoryLimit
+
+Sets the soft memory limit of the Go runtime (`GOMEMLIMIT`) to the given number of bytes and returns the previous limit. A negative value leaves the limit unchanged, so `-1` can be used to read the current limit.
+
+| Client  | Method invocation                                       |
+| :------ | ------------------------------------------------------- |
+| Go      | `debug.SetMemoryLimit(limit int64) int64`               |
+| Console | `debug.setMemoryLimit(limit)`                           |
+| RPC     | `{"method": "debug_setMemoryLimit", "params": [limit]}` |
 
 ### debug_setMutexProfileFraction
 
@@ -439,6 +484,15 @@ Returns the storage at the given block height and transaction index. The result 
 | :------ | -------------------------------------------------------------------------------------------------------- |
 | Console | `debug.storageRangeAt(blockHash, txIdx, contractAddress, keyStart, maxResult)`                           |
 | RPC     | `{"method": "debug_storageRangeAt", "params": [blockHash, txIdx, contractAddress, keyStart, maxResult]}` |
+
+### debug_sync
+
+Sets the target of a full sync to the block with the given hash, like the `--synctarget` flag. This is a development and testing feature. The node must run with `--syncmode full`, and the header of the target must be available from peers: Geth gives up with an error after ten attempts to fetch it. A target that is not higher than the current one is rejected, because syncing backwards is not supported.
+
+| Client  | Method invocation                            |
+| :------ | -------------------------------------------- |
+| Console | `debug.sync(hash)`                           |
+| RPC     | `{"method": "debug_sync", "params": [hash]}` |
 
 ### debug_traceBadBlock
 
