@@ -344,8 +344,9 @@ func randomAnnouncements(n int) []wrapperAnnouncement {
 func (s *Suite) TestWrapperAnnouncementLimits(t *utesting.T) {
 	t.Log(`This test sends NewProofWrapperHashes messages that violate the item-count,
 byte-length and ordering rules: no entries, 65 entries, unordered hashes, a length of zero
-or above MAX_WRAPPER_BYTES, and a message above 2 MiB. Each should cause disconnection.
-An entry with an extra field is malformed: the node must discard it, and may disconnect.`)
+or above MAX_WRAPPER_BYTES, and a message one byte above 256 KiB. Each should cause
+disconnection. A message of exactly 256 KiB is within the bound. An entry with an extra
+field is malformed: the node must discard it, and may disconnect.`)
 	s.testAnnouncementLimits(t, eth75)
 }
 
@@ -388,10 +389,39 @@ func (s *Suite) testAnnouncementLimits(t *utesting.T, version uint) {
 	s.testMalformedAnnouncement(t, version, "extra announcement field", extra, one[0].Hash)
 
 	// An entry of an unsupported mode is ignored, but the payload bound applies first.
-	large := randomAnnouncements(1)
-	large[0].Mode = 0x80
-	large[0].Meta, _ = rlp.EncodeToBytes([][]byte{make([]byte, maxAnnouncementBytes)})
-	s.testViolation(t, version, "announcement above 2 MiB", newProofWrapperHashesMsg, encode(large))
+	bound := announcementOfSize(t, encode, maxAnnouncementBytes)
+	conn, err := s.dialWrapperPeer(version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.writeWrapperMsg(newProofWrapperHashesMsg, bound); err != nil {
+		t.Fatalf("announcement of 256 KiB: write failed: %v", err)
+	}
+	if err := conn.expectConnected(quietPeriod); err != nil {
+		t.Errorf("announcement of exactly 256 KiB: %v", err)
+	}
+	s.testViolation(t, version, "announcement above 256 KiB", newProofWrapperHashesMsg,
+		announcementOfSize(t, encode, maxAnnouncementBytes+1))
+}
+
+// announcementOfSize encodes one announcement of an unsupported mode whose metadata pads
+// the payload to exactly size bytes.
+func announcementOfSize(t *utesting.T, encode func([]wrapperAnnouncement) []byte, size int) []byte {
+	anns := randomAnnouncements(1)
+	anns[0].Mode = 0x80
+	pad := size
+	for {
+		anns[0].Meta, _ = rlp.EncodeToBytes([][]byte{make([]byte, pad)})
+		enc := encode(anns)
+		if len(enc) == size {
+			return enc
+		}
+		if len(enc) < size {
+			t.Fatalf("cannot pad an announcement to %d bytes", size)
+		}
+		pad -= len(enc) - size
+	}
 }
 
 func (s *Suite) TestWrapperRequestLimits(t *utesting.T) {
