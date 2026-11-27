@@ -194,6 +194,53 @@ func newBlockReader(blob []byte, hasExt bool) (*blockReader, error) {
 	}, nil
 }
 
+// readAt returns the element at the given block-local ordinal position.
+// The caller must guarantee 0 <= i < entries; entries is the number of
+// elements stored in the block as recorded in its descriptor.
+func (br *blockReader) readAt(i int, entries int) (uint64, error) {
+	if i < 0 || i >= entries {
+		return 0, fmt.Errorf("ordinal out of range, i: %d, entries: %d", i, entries)
+	}
+	section := i / indexBlockRestartLen
+	if section >= len(br.restarts) {
+		return 0, fmt.Errorf("invalid restart section %d, restarts: %d", section, len(br.restarts))
+	}
+	var (
+		pos   = int(br.restarts[section])
+		limit int
+		skip  = i % indexBlockRestartLen
+		val   uint64
+	)
+	if section == len(br.restarts)-1 {
+		limit = len(br.data)
+	} else {
+		limit = int(br.restarts[section+1])
+	}
+	for step := 0; step <= skip; step++ {
+		if pos >= limit {
+			return 0, fmt.Errorf("ordinal walk past section end, pos: %d, limit: %d, step: %d", pos, limit, step)
+		}
+		x, n := binary.Uvarint(br.data[pos:])
+		if n <= 0 {
+			return 0, fmt.Errorf("failed to decode element at pos %d", pos)
+		}
+		if step == 0 {
+			val = x
+		} else {
+			val += x
+		}
+		pos += n
+		if br.hasExt {
+			length, ln := binary.Uvarint(br.data[pos:])
+			if ln <= 0 {
+				return 0, fmt.Errorf("failed to decode extension length at pos %d", pos)
+			}
+			pos += ln + int(length)
+		}
+	}
+	return val, nil
+}
+
 // readGreaterThan locates the first element in the block that is greater than
 // the specified value. If no such element is found, MaxUint64 is returned.
 func (br *blockReader) readGreaterThan(id uint64) (uint64, error) {
