@@ -144,6 +144,13 @@ type (
 	// TxEndHook is called after the execution of a transaction ends.
 	TxEndHook = func(receipt *types.Receipt, err error)
 
+	// TxEndHookV2 is the multi-dimensional successor to TxEndHook. usage is the
+	// transaction's EIP-8037 gas settlement; it is nil before Amsterdam, when the
+	// transaction failed validation, and when the caller executed a message
+	// without settling it as a transaction. If both hooks are set, only V2 is
+	// invoked; register at most one.
+	TxEndHookV2 = func(receipt *types.Receipt, usage *TxGasUsage, err error)
+
 	// EnterHook is invoked when the processing of a message starts.
 	//
 	// Take note that EnterHook, when in the context of a live tracer, can be invoked
@@ -294,6 +301,7 @@ type Hooks struct {
 	// VM events
 	OnTxStart     TxStartHook
 	OnTxEnd       TxEndHook
+	OnTxEndV2     TxEndHookV2
 	OnEnter       EnterHook
 	OnEnterV2     EnterHookV2
 	OnExit        ExitHook
@@ -328,6 +336,26 @@ type Hooks struct {
 
 	// Block hash read
 	OnBlockHashRead BlockHashReadHook
+}
+
+// HasTxEndHook reports whether a transaction-end hook is registered.
+func (h *Hooks) HasTxEndHook() bool {
+	return h != nil && (h.OnTxEndV2 != nil || h.OnTxEnd != nil)
+}
+
+// EmitTxEnd dispatches a transaction-end event, preferring the multi-dimensional
+// hook. The single-dimensional one receives the receipt alone.
+func (h *Hooks) EmitTxEnd(receipt *types.Receipt, usage *TxGasUsage, err error) {
+	if h == nil {
+		return
+	}
+	if h.OnTxEndV2 != nil {
+		h.OnTxEndV2(receipt, usage, err)
+		return
+	}
+	if h.OnTxEnd != nil {
+		h.OnTxEnd(receipt, err)
+	}
 }
 
 // EmitSystemCallStart dispatches a system call start, preferring the hook that
@@ -533,6 +561,17 @@ const (
 type Gas struct {
 	Execution uint64 // Execution is the budget for ordinary execution gas.
 	State     uint64 // State is the budget dedicated to state-access gas (zero pre-Amsterdam).
+}
+
+// TxGasUsage is the EIP-8037 gas settlement of a transaction.
+type TxGasUsage struct {
+	// Block is the transaction's contribution to the block's execution- and
+	// state-gas counters. The execution part includes the calldata floor and,
+	// per EIP-7778, is not reduced by the refund.
+	Block Gas
+	// Refund is the EIP-3529 refund, capped at a fifth of the gas used before
+	// refunds, as applied before the calldata floor.
+	Refund uint64
 }
 
 // OpCost is the two-dimensional cost of a single opcode (EIP-8037). State is
