@@ -114,7 +114,9 @@ func (h *runtimeHistogramSnapshot) calc() {
 	}
 	h.min = min
 	h.max = int64(max)
-	h.mean = sum / float64(count)
+	if count > 0 {
+		h.mean = sum / float64(count)
+	}
 	h.count = count
 }
 
