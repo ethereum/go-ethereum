@@ -134,6 +134,13 @@ type StateDB struct {
 	// Block access index (0 for pre-execution, 1..n for transactions, n+1 for post-execution)
 	blockAccessIndex uint32
 
+	// Balances of accounts as they were when the current block access index
+	// began, captured the first time the index records a balance change. The
+	// system calls and the withdrawals sharing one index are finalised one by
+	// one, so their balance changes are netted against these rather than
+	// against each other.
+	indexStartBalances map[common.Address]*uint256.Int
+
 	// Transient storage
 	transientStorage transientStorage
 
@@ -751,6 +758,12 @@ func (s *StateDB) Copy() *StateDB {
 	if s.stateAccessList != nil {
 		state.stateAccessList = s.stateAccessList.Copy()
 	}
+	if s.indexStartBalances != nil {
+		state.indexStartBalances = make(map[common.Address]*uint256.Int, len(s.indexStartBalances))
+		for addr, balance := range s.indexStartBalances {
+			state.indexStartBalances[addr] = balance.Clone()
+		}
+	}
 	return state
 }
 
@@ -832,8 +845,24 @@ func (s *StateDB) recordAccessListChanges(addr common.Address, state *journalMut
 	if obj != nil {
 		balance, nonce = obj.Balance(), obj.Nonce()
 	}
-	if state.balanceSet && balance.Cmp(state.balance) != 0 {
-		s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+	if state.balanceSet {
+		start, shared := s.indexStartBalances[addr]
+		if !shared {
+			start = state.balance
+		}
+		if balance.Cmp(start) != 0 {
+			s.stateAccessList.BalanceChange(s.blockAccessIndex, addr, balance)
+			if !shared {
+				if s.indexStartBalances == nil {
+					s.indexStartBalances = make(map[common.Address]*uint256.Int)
+				}
+				s.indexStartBalances[addr] = start.Clone()
+			}
+		} else if shared {
+			// An earlier scope at this index recorded a balance change
+			// which has now been undone, drop it.
+			s.stateAccessList.BalanceRevert(s.blockAccessIndex, addr)
+		}
 	}
 	if state.nonceSet && nonce != state.nonce {
 		s.stateAccessList.NonceChange(addr, s.blockAccessIndex, nonce)
@@ -1142,6 +1171,9 @@ func (s *StateDB) IntermediateRoot(rules params.Rules) common.Hash {
 func (s *StateDB) SetTxContext(thash common.Hash, ti int, blockAccessIndex uint32) {
 	s.thash = thash
 	s.txIndex = ti
+	if s.blockAccessIndex != blockAccessIndex {
+		s.indexStartBalances = nil
+	}
 	s.blockAccessIndex = blockAccessIndex
 }
 

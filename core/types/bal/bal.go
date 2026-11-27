@@ -51,6 +51,11 @@ type ConstructionAccountAccess struct {
 	// CodeChange contains the post-state contract code of an account keyed
 	// by tx index.
 	CodeChange map[uint32][]byte `json:"codeChange,omitempty"`
+
+	// balanceReverts is the set of tx indices at which the account's balance
+	// was restored to the value it held when the index began, dropping any
+	// balance change recorded earlier at the same index once merged.
+	balanceReverts map[uint32]struct{}
 }
 
 // NewConstructionAccountAccess initializes the account access object.
@@ -136,6 +141,23 @@ func (b *ConstructionBlockAccessList) BalanceChange(txIdx uint32, address common
 	b.Accounts[address].BalanceChanges[txIdx] = balance.Clone()
 }
 
+// BalanceRevert records that the balance of an account is back to the value
+// it held when the given tx index began. The withdrawals and the system calls
+// sharing one index are finalised separately, so a later one can undo the
+// balance change recorded by an earlier one. Merging this list on top of the
+// earlier one drops that change.
+func (b *ConstructionBlockAccessList) BalanceRevert(txIdx uint32, address common.Address) {
+	if _, ok := b.Accounts[address]; !ok {
+		b.Accounts[address] = NewConstructionAccountAccess()
+	}
+	acc := b.Accounts[address]
+	delete(acc.BalanceChanges, txIdx)
+	if acc.balanceReverts == nil {
+		acc.balanceReverts = make(map[uint32]struct{})
+	}
+	acc.balanceReverts[txIdx] = struct{}{}
+}
+
 // PrettyPrint returns a human-readable representation of the access list
 func (b *ConstructionBlockAccessList) PrettyPrint() string {
 	enc := b.ToEncodingObj()
@@ -145,8 +167,9 @@ func (b *ConstructionBlockAccessList) PrettyPrint() string {
 // Merge applies other on top of the local block access list. For colliding
 // entries (a (slot, txIdx) write or a txIdx-keyed balance/nonce/code change),
 // the value from other wins, matching the semantics of applying the local
-// effects first and then other's. Storage reads are unioned; any slot
-// written by either side is dropped from StorageReads.
+// effects first and then other's. Balance changes reverted by other (see
+// BalanceRevert) are dropped. Storage reads are unioned; any slot written by
+// either side is dropped from StorageReads.
 //
 // Typically each list covers its own tx index, so txIdx-level collisions are
 // not expected; the exception is pre/post-transition system calls, which
@@ -182,6 +205,9 @@ func (b *ConstructionBlockAccessList) Merge(other *ConstructionBlockAccessList) 
 			}
 			acc.StorageReads[key] = struct{}{}
 		}
+		for txIdx := range otherAcc.balanceReverts {
+			delete(acc.BalanceChanges, txIdx)
+		}
 		for txIdx, balance := range otherAcc.BalanceChanges {
 			acc.BalanceChanges[txIdx] = balance
 		}
@@ -212,6 +238,7 @@ func (b *ConstructionBlockAccessList) Copy() *ConstructionBlockAccessList {
 			balances[index] = balance.Clone()
 		}
 		aaCopy.BalanceChanges = balances
+		aaCopy.balanceReverts = maps.Clone(aa.balanceReverts)
 		aaCopy.NonceChanges = maps.Clone(aa.NonceChanges)
 
 		codes := make(map[uint32][]byte, len(aa.CodeChange))
