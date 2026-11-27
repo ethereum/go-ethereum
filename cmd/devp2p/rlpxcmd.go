@@ -65,6 +65,9 @@ var (
 			rlpxEthTestCommand,
 			rlpxSnapTestCommand,
 			rlpxSnap2TestCommand,
+			rlpxEth75TestCommand,
+			rlpxEth75PreForkTestCommand,
+			rlpxEth76TestCommand,
 		},
 	}
 	rlpxPingCommand = &cli.Command{
@@ -105,6 +108,48 @@ var (
 		Usage:     "Runs snap/2 (EIP-8189) protocol tests against a node",
 		ArgsUsage: "",
 		Action:    rlpxSnap2Test,
+		Flags: []cli.Flag{
+			testPatternFlag,
+			testTAPFlag,
+			testChainDirFlag,
+			testNodeFlag,
+			testNodeJWTFlag,
+			testNodeEngineFlag,
+		},
+	}
+	rlpxEth75TestCommand = &cli.Command{
+		Name:      "eth75-test",
+		Usage:     "Runs eth/75 (EIP-8437) proof wrapper tests against a node running the EIP-8288 test chain",
+		ArgsUsage: "",
+		Action:    rlpxEth75Test,
+		Flags: []cli.Flag{
+			testPatternFlag,
+			testTAPFlag,
+			testChainDirFlag,
+			testNodeFlag,
+			testNodeJWTFlag,
+			testNodeEngineFlag,
+		},
+	}
+	rlpxEth75PreForkTestCommand = &cli.Command{
+		Name:      "eth75-prefork-test",
+		Usage:     "Runs eth/75 (EIP-8437) tests against a node whose EIP-8288 test chain schedules the fork in the future",
+		ArgsUsage: "",
+		Action:    rlpxEth75PreForkTest,
+		Flags: []cli.Flag{
+			testPatternFlag,
+			testTAPFlag,
+			testChainDirFlag,
+			testNodeFlag,
+			testNodeJWTFlag,
+			testNodeEngineFlag,
+		},
+	}
+	rlpxEth76TestCommand = &cli.Command{
+		Name:      "eth76-test",
+		Usage:     "Runs eth/76 aggregated proof wrapper tests against a node running the EIP-8288 test chain",
+		ArgsUsage: "",
+		Action:    rlpxEth76Test,
 		Flags: []cli.Flag{
 			testPatternFlag,
 			testTAPFlag,
@@ -187,6 +232,36 @@ func rlpxSnap2Test(ctx *cli.Context) error {
 		exit(err)
 	}
 	return runTests(ctx, suite.Snap2Tests())
+}
+
+// rlpxEth75Test runs the eth/75 (EIP-8437) proof wrapper test suite.
+func rlpxEth75Test(ctx *cli.Context) error {
+	p := cliTestParams(ctx)
+	suite, err := ethtest.NewSuite(p.node, p.chainDir, p.engineAPI, p.jwt)
+	if err != nil {
+		exit(err)
+	}
+	return runTests(ctx, suite.Eth75Tests())
+}
+
+// rlpxEth75PreForkTest runs the eth/75 tests for a node before EIP-8288 activates.
+func rlpxEth75PreForkTest(ctx *cli.Context) error {
+	p := cliTestParams(ctx)
+	suite, err := ethtest.NewSuite(p.node, p.chainDir, p.engineAPI, p.jwt)
+	if err != nil {
+		exit(err)
+	}
+	return runTests(ctx, suite.Eth75PreForkTests())
+}
+
+// rlpxEth76Test runs the eth/76 aggregated proof wrapper test suite.
+func rlpxEth76Test(ctx *cli.Context) error {
+	p := cliTestParams(ctx)
+	suite, err := ethtest.NewSuite(p.node, p.chainDir, p.engineAPI, p.jwt)
+	if err != nil {
+		exit(err)
+	}
+	return runTests(ctx, suite.Eth76Tests())
 }
 
 type testParams struct {

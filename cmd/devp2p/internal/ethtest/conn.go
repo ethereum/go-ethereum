@@ -126,6 +126,10 @@ type Conn struct {
 	// pending holds messages received by readUntil that did not match the
 	// caller's expected type.
 	pending []any
+
+	// pendingWrapperMsgs holds wrapper messages fetchWrappers read while waiting for
+	// its response, so a later readWrapperMsg still sees them.
+	pendingWrapperMsgs []*wrapperMsg
 }
 
 // Read reads a packet from the connection.
