@@ -51,7 +51,7 @@ const (
 	wrapperModeRecursive = 1
 
 	maxWrapperBytes         = 1 << 21
-	maxAnnouncementBytes    = 1 << 21
+	maxAnnouncementBytes    = 1 << 18
 	maxWrapperAnnouncements = 64
 	maxWrapperRequest       = 32
 	maxInlineTransactions   = 17
