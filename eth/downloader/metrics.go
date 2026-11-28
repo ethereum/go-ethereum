@@ -27,6 +27,14 @@ var (
 	headerReqTimer     = metrics.NewRegisteredTimer("eth/downloader/headers/req", nil)
 	headerTimeoutMeter = metrics.NewRegisteredMeter("eth/downloader/headers/timeout", nil)
 
+	// Skeleton header sync scheduling metrics
+	skeletonHeaderInMeter    = metrics.NewRegisteredMeter("eth/downloader/skeleton/headers/in", nil)         // Headers accepted into the scratch space
+	skeletonHeaderWasteMeter = metrics.NewRegisteredMeter("eth/downloader/skeleton/headers/waste", nil)      // Headers delivered but not needed any more
+	skeletonDuplicateMeter   = metrics.NewRegisteredMeter("eth/downloader/skeleton/requests/duplicate", nil) // Batches requested from a second peer
+	skeletonInflightGauge    = metrics.NewRegisteredGauge("eth/downloader/skeleton/requests/inflight", nil)  // Requests in flight after an assignment round
+	skeletonIdlePeersGauge   = metrics.NewRegisteredGauge("eth/downloader/skeleton/peers/idle", nil)         // Peers with spare slots left without a request
+	skeletonFilledGauge      = metrics.NewRegisteredGauge("eth/downloader/skeleton/scratch/filled", nil)     // Batches filled in the scratch space
+
 	bodyInMeter      = metrics.NewRegisteredMeter("eth/downloader/bodies/in", nil)
 	bodyReqTimer     = metrics.NewRegisteredTimer("eth/downloader/bodies/req", nil)
 	bodyDropMeter    = metrics.NewRegisteredMeter("eth/downloader/bodies/drop", nil)

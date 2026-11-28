@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"slices"
 	"sort"
 	"time"
 
@@ -47,6 +48,11 @@ const scratchHeaders = 131072
 // since headers are relatively small and it's easier to work with fixed batches
 // vs. dynamic interval fillings.
 const requestHeaders = 512
+
+// maxPeerRequests is the number of header requests that may be in flight to a
+// single peer. A peer serves its requests back to back, so pipelining a few hides
+// the round trip latency that would otherwise leave its bandwidth idle.
+const maxPeerRequests = 4
 
 // errSyncLinked is an internal helper error to signal that the current sync
 // cycle linked up to the genesis block, this the skeleton syncer should ping
@@ -147,7 +153,16 @@ type headerRequest struct {
 	cancel  chan struct{}        // Channel to track sync cancellation
 	stale   chan struct{}        // Channel to signal the request was dropped
 
-	head uint64 // Head number of the requested batch of headers
+	head  uint64 // Head number of the requested batch of headers
+	queue int    // Number of requests already in flight to the peer when sent
+}
+
+// skeletonTask is a batch of headers in the scratch space. A batch held by a slow
+// peer may be requested from a second one, the first delivery wins.
+type skeletonTask struct {
+	headers  []*types.Header  // Delivered headers, nil until the batch is filled
+	owner    string           // Peer which delivered the headers
+	requests []*headerRequest // Requests in flight for the batch
 }
 
 // headerResponse is an already verified remote response to a header request.
@@ -209,18 +224,18 @@ type skeleton struct {
 	filler backfiller     // Chain syncer suspended/resumed by head events
 	chain  chainReader    // Underlying block chain
 
-	peers *peerSet                   // Set of peers we can sync from
-	idles map[string]*peerConnection // Set of idle peers in the current sync cycle
-	drop  peerDropFn                 // Drops a peer for misbehaving
+	peers    *peerSet                   // Set of peers we can sync from
+	idles    map[string]*peerConnection // Set of usable peers in the current sync cycle
+	inflight map[string]int             // Number of requests in flight per peer
+	drop     peerDropFn                 // Drops a peer for misbehaving
 
 	progress *skeletonProgress // Sync progress tracker for resumption and metrics
 	started  time.Time         // Timestamp when the skeleton syncer was created
 	logged   time.Time         // Timestamp when progress was last logged to the user
 	pulled   uint64            // Number of headers downloaded in this run
 
-	scratchSpace  []*types.Header // Scratch space to accumulate headers in (first = recent)
-	scratchOwners []string        // Peer IDs owning chunks of the scratch space (pend or delivered)
-	scratchHead   uint64          // Block number of the first item in the scratch space
+	scratchSpace []*skeletonTask // Scratch space to accumulate header batches in (first = recent)
+	scratchHead  uint64          // Block number of the first item in the scratch space
 
 	requests map[uint64]*headerRequest // Header requests currently running
 
@@ -365,16 +380,6 @@ func (s *skeleton) Sync(head *types.Header, final *types.Header, force bool) err
 // linked returns the flag indicating whether the skeleton has been linked with
 // the local chain.
 func (s *skeleton) linked(number uint64, hash common.Hash) bool {
-	// Require the canonical mapping, not just presence by hash. A block present
-	// only by hash (side chain or orphan from an unclean shutdown) must not be
-	// used as the link-up point, otherwise it's left in place forever without its
-	// canonical mapping ever being rewritten. Keep descending to a real canonical
-	// block.
-	linked := rawdb.ReadCanonicalHash(s.db, number) == hash &&
-		rawdb.HasHeader(s.db, hash, number) &&
-		rawdb.HasBody(s.db, hash, number) &&
-		rawdb.HasReceipts(s.db, hash, number)
-
 	// Ensure the skeleton chain links to the local chain below the chain head.
 	// This accounts for edge cases where leftover chain segments above the head
 	// may still link to the skeleton chain. In such cases, synchronization is
@@ -385,10 +390,20 @@ func (s *skeleton) linked(number uint64, hash common.Hash) bool {
 	// - debug.setHead(`0x1`)
 	// - kill the geth process (the chain segment will be left with chain head rewound)
 	// - restart
-	if s.chain.CurrentSnapBlock() != nil {
-		linked = linked && s.chain.CurrentSnapBlock().Number.Uint64() >= number
+	//
+	// It's checked first as it's cheap and rules out most of the synced headers.
+	if head := s.chain.CurrentSnapBlock(); head != nil && head.Number.Uint64() < number {
+		return false
 	}
-	return linked
+	// Require the canonical mapping, not just presence by hash. A block present
+	// only by hash (side chain or orphan from an unclean shutdown) must not be
+	// used as the link-up point, otherwise it's left in place forever without its
+	// canonical mapping ever being rewritten. Keep descending to a real canonical
+	// block.
+	return rawdb.ReadCanonicalHash(s.db, number) == hash &&
+		rawdb.HasHeader(s.db, hash, number) &&
+		rawdb.HasBody(s.db, hash, number) &&
+		rawdb.HasReceipts(s.db, hash, number)
 }
 
 // sync is the internal version of Sync that executes a single sync cycle, either
@@ -405,11 +420,11 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 		s.initSync(head)
 	}
 	// Create the scratch space to fill with concurrently downloaded headers
-	s.scratchSpace = make([]*types.Header, scratchHeaders)
+	s.scratchSpace = make([]*skeletonTask, scratchHeaders/requestHeaders)
+	for i := range s.scratchSpace {
+		s.scratchSpace[i] = new(skeletonTask)
+	}
 	defer func() { s.scratchSpace = nil }() // don't hold on to references after sync
-
-	s.scratchOwners = make([]string, scratchHeaders/requestHeaders)
-	defer func() { s.scratchOwners = nil }() // don't hold on to references after sync
 
 	s.scratchHead = s.progress.Subchains[0].Tail - 1 // tail must not be 0!
 
@@ -476,6 +491,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 	defer peeringSub.Unsubscribe()
 
 	s.idles = make(map[string]*peerConnection)
+	s.inflight = make(map[string]int)
 	for _, peer := range s.peers.AllPeers() {
 		s.idles[peer.id] = peer
 	}
@@ -501,6 +517,7 @@ func (s *skeleton) sync(head *types.Header) (*types.Header, error) {
 				log.Debug("Leaving skeleton peer", "id", peerid)
 				s.revertRequests(peerid)
 				delete(s.idles, peerid)
+				delete(s.inflight, peerid)
 			}
 
 		case errc := <-s.terminate:
@@ -740,71 +757,119 @@ func (s *skeleton) processNewHead(head *types.Header, final *types.Header) error
 
 // assignTasks attempts to match idle peers to pending header retrievals.
 func (s *skeleton) assignTasks(success chan *headerResponse, fail chan *headerRequest, cancel chan struct{}) {
-	// Sort the peers by download capacity to use faster ones if many available
+	// Sort the peers with spare request slots by download capacity to use faster
+	// ones if many available. Pipeline as many requests to a peer as it can serve
+	// within a round trip, slow peers only get one.
+	var (
+		depths    = make(map[string]int)
+		targetRTT = s.peers.rates.TargetRoundTrip()
+		idlePeers []*peerConnection
+	)
+	defer func() {
+		var filled int
+		for _, task := range s.scratchSpace {
+			if task.headers != nil {
+				filled++
+			}
+		}
+		skeletonFilledGauge.Update(int64(filled))
+		skeletonInflightGauge.Update(int64(len(s.requests)))
+		skeletonIdlePeersGauge.Update(int64(len(idlePeers)))
+	}()
 	idlers := &peerCapacitySort{
 		peers: make([]*peerConnection, 0, len(s.idles)),
 		caps:  make([]int, 0, len(s.idles)),
 	}
-	targetTTL := s.peers.rates.TargetTimeout()
-	for _, peer := range s.idles {
+	for id, peer := range s.idles {
+		pcap := s.peers.rates.Capacity(id, eth.BlockHeadersMsg, targetRTT)
+		depths[id] = max(1, min(pcap/requestHeaders, maxPeerRequests))
+		if s.inflight[id] >= depths[id] {
+			continue
+		}
 		idlers.peers = append(idlers.peers, peer)
-		idlers.caps = append(idlers.caps, s.peers.rates.Capacity(peer.id, eth.BlockHeadersMsg, targetTTL))
+		idlers.caps = append(idlers.caps, pcap)
 	}
 	if len(idlers.peers) == 0 {
 		return
 	}
 	sort.Sort(idlers)
+	idlePeers = idlers.peers
 
-	// Find header regions not yet downloading and fill them
-	for task, owner := range s.scratchOwners {
-		// If we're out of idle peers, stop assigning tasks
-		if len(idlers.peers) == 0 {
-			return
-		}
-		// Skip any tasks already filling
-		if owner != "" {
-			continue
-		}
-		// If we've reached the genesis, stop assigning tasks
-		if uint64(task*requestHeaders) >= s.scratchHead {
-			return
-		}
-		// Found a task and have peers available, assign it
-		idle := idlers.peers[0]
-
-		idlers.peers = idlers.peers[1:]
-		idlers.caps = idlers.caps[1:]
-
-		// Matched a pending task to an idle peer, allocate a unique request id
-		var reqid uint64
-		for {
-			reqid = uint64(rand.Int63())
-			if reqid == 0 {
+	// Find header batches not yet downloading and fill them. If all of them are
+	// taken, request the ones held by much slower peers from a second peer,
+	// starting at the head of the scratch space as that one blocks all others.
+	for _, duplicate := range []bool{false, true} {
+		for i, task := range s.scratchSpace {
+			// If we're out of peers or reached the genesis, stop assigning tasks
+			if len(idlePeers) == 0 || uint64(i*requestHeaders) >= s.scratchHead {
+				break
+			}
+			// Skip any tasks already filled, or filling and not to be duplicated
+			if task.headers != nil {
 				continue
 			}
-			if _, ok := s.requests[reqid]; ok {
+			// First pass takes idle batches only, second one duplicates batches
+			// with a single request, capping each batch at two requests in flight.
+			if (!duplicate && len(task.requests) > 0) || (duplicate && len(task.requests) != 1) {
 				continue
 			}
-			break
-		}
-		// Generate the network query and send it to the peer
-		req := &headerRequest{
-			peer:    idle.id,
-			id:      reqid,
-			deliver: success,
-			revert:  fail,
-			cancel:  cancel,
-			stale:   make(chan struct{}),
-			head:    s.scratchHead - uint64(task*requestHeaders),
-		}
-		s.requests[reqid] = req
-		delete(s.idles, idle.id)
+			// Pick the fastest peer not already retrieving the batch
+			pick := -1
+			for j, peer := range idlePeers {
+				if len(task.requests) == 0 || task.requests[0].peer != peer.id {
+					pick = j
+					break
+				}
+			}
+			if pick < 0 {
+				continue
+			}
+			peer := idlePeers[pick]
+			if duplicate {
+				pcap := s.peers.rates.Capacity(peer.id, eth.BlockHeadersMsg, targetRTT)
+				ocap := s.peers.rates.Capacity(task.requests[0].peer, eth.BlockHeadersMsg, targetRTT)
+				if pcap < 2*ocap {
+					continue
+				}
+				skeletonDuplicateMeter.Mark(1)
+			}
+			idlePeers = append(idlePeers[:pick:pick], idlePeers[pick+1:]...)
 
-		// Generate the network query and send it to the peer
-		go s.executeTask(idle, req)
+			// Matched a pending task to a peer, allocate a unique request id
+			var reqid uint64
+			for {
+				reqid = uint64(rand.Int63())
+				if reqid == 0 {
+					continue
+				}
+				if _, ok := s.requests[reqid]; ok {
+					continue
+				}
+				break
+			}
+			// Generate the network query and send it to the peer
+			req := &headerRequest{
+				peer:    peer.id,
+				id:      reqid,
+				deliver: success,
+				revert:  fail,
+				cancel:  cancel,
+				stale:   make(chan struct{}),
+				head:    s.scratchHead - uint64(i*requestHeaders),
+				queue:   s.inflight[peer.id],
+			}
+			s.requests[reqid] = req
+			s.inflight[peer.id]++
+			task.requests = append(task.requests, req)
 
-		// Inject the request into the task to block further assignments
-		s.scratchOwners[task] = idle.id
+			go s.executeTask(peer, req)
+
+			// Requeue the peer behind the others if it can take more requests, so
+			// consecutive batches are spread across peers
+			if s.inflight[peer.id] < depths[peer.id] {
+				idlePeers = append(idlePeers, peer)
+			}
+		}
 	}
 }
 
@@ -832,8 +897,9 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 	}
 	defer netreq.Close()
 
-	// Wait until the response arrives, the request is cancelled or times out
-	ttl := s.peers.rates.TargetTimeout()
+	// Wait until the response arrives, the request is cancelled or times out. The
+	// peer serves the requests sent before this one first, so allow for those.
+	ttl := s.peers.rates.TargetTimeout() * time.Duration(req.queue+1)
 
 	timeoutTimer := time.NewTimer(ttl)
 	defer timeoutTimer.Stop()
@@ -842,6 +908,10 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 	case <-req.cancel:
 		peer.log.Debug("Header request cancelled")
 		s.scheduleRevertRequest(req)
+
+	case <-req.stale:
+		// The request was reverted or another peer delivered the batch first
+		peer.log.Trace("Header request no longer needed")
 
 	case <-timeoutTimer.C:
 		// Header retrieval timed out, update the metrics
@@ -918,6 +988,8 @@ func (s *skeleton) executeTask(peer *peerConnection, req *headerRequest) {
 				headers: headers,
 			}:
 			case <-req.cancel:
+			case <-req.stale:
+				skeletonHeaderWasteMeter.Mark(int64(len(headers)))
 			}
 		}
 	}
@@ -967,12 +1039,34 @@ func (s *skeleton) revertRequest(req *headerRequest) {
 	}
 	close(req.stale)
 
-	// Remove the request from the tracked set
+	// Remove the request from the tracked set and the task, marking it as not
+	// pending and ready for rescheduling if no other request is filling it
 	delete(s.requests, req.id)
+	s.releaseRequest(req)
 
-	// Remove the request from the tracked set and mark the task as not-pending,
-	// ready for rescheduling
-	s.scratchOwners[(s.scratchHead-req.head)/requestHeaders] = ""
+	// The peer failed to deliver, don't assign it further tasks in this cycle
+	delete(s.idles, req.peer)
+}
+
+// abortRequest cancels a request whose batch was delivered by another peer. The
+// peer did nothing wrong, so it stays available for further tasks.
+func (s *skeleton) abortRequest(req *headerRequest) {
+	close(req.stale)
+	delete(s.requests, req.id)
+	s.releaseRequest(req)
+}
+
+// releaseRequest frees the request slot of the peer and detaches the request
+// from the batch it retrieves.
+func (s *skeleton) releaseRequest(req *headerRequest) {
+	if s.inflight[req.peer] > 0 {
+		s.inflight[req.peer]--
+	}
+	if req.head > s.scratchHead {
+		return // batch already consumed
+	}
+	task := s.scratchSpace[(s.scratchHead-req.head)/requestHeaders]
+	task.requests = slices.DeleteFunc(task.requests, func(r *headerRequest) bool { return r == req })
 }
 
 // mergeSubchains is invoked once certain beacon headers have been persisted locally
@@ -1022,76 +1116,88 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 	// drop the peer in a bit.
 	s.idles[res.peer.id] = res.peer
 
-	// Ensure the response is for a valid request
-	if _, ok := s.requests[res.reqid]; !ok {
-		// Some internal accounting is broken. A request either times out or it
-		// gets fulfilled successfully. It should not be possible to deliver a
-		// response to a non-existing request.
-		res.peer.log.Error("Unexpected header packet")
+	// Ensure the response is for a live request. It might have been aborted in
+	// the meantime because another peer delivered the same batch first.
+	req, ok := s.requests[res.reqid]
+	if !ok {
+		res.peer.log.Debug("Discarding stale header packet")
+		skeletonHeaderWasteMeter.Mark(int64(len(res.headers)))
 		return false, false
 	}
 	delete(s.requests, res.reqid)
+	s.releaseRequest(req)
 
 	// Insert the delivered headers into the scratch space independent of the
-	// content or continuation; those will be validated in a moment
+	// content or continuation; those will be validated in a moment. Any other
+	// request for the same batch is not needed any more.
 	head := res.headers[0].Number.Uint64()
-	copy(s.scratchSpace[s.scratchHead-head:], res.headers)
+	if head > s.scratchHead {
+		skeletonHeaderWasteMeter.Mark(int64(len(res.headers)))
+		return false, false
+	}
+	task := s.scratchSpace[(s.scratchHead-head)/requestHeaders]
+	if task.headers != nil {
+		skeletonHeaderWasteMeter.Mark(int64(len(res.headers)))
+		return false, false
+	}
+	task.headers, task.owner = res.headers, res.peer.id
+	skeletonHeaderInMeter.Mark(int64(len(res.headers)))
 
+	// Abort the siding requests for the same header segment
+	for len(task.requests) > 0 {
+		s.abortRequest(task.requests[0])
+	}
 	// If there's still a gap in the head of the scratch space, abort
-	if s.scratchSpace[0] == nil {
+	if s.scratchSpace[0].headers == nil {
 		return false, false
 	}
 	// Try to consume any head headers, validating the boundary conditions
 	batch := s.db.NewBatch()
-	for s.scratchSpace[0] != nil {
+	for s.scratchSpace[0].headers != nil {
 		// Next batch of headers available, cross-reference with the subchain
 		// we are extending and either accept or discard
-		if s.progress.Subchains[0].Next != s.scratchSpace[0].Hash() {
+		first := s.scratchSpace[0]
+		if s.progress.Subchains[0].Next != first.headers[0].Hash() {
 			// Print a log messages to track what's going on
 			tail := s.progress.Subchains[0].Tail
 			want := s.progress.Subchains[0].Next
-			have := s.scratchSpace[0].Hash()
+			have := first.headers[0].Hash()
 
-			log.Warn("Invalid skeleton headers", "peer", s.scratchOwners[0], "number", tail-1, "want", want, "have", have)
+			log.Warn("Invalid skeleton headers", "peer", first.owner, "number", tail-1, "want", want, "have", have)
 
 			// The peer delivered junk, or at least not the subchain we are
 			// syncing to. Free up the scratch space and assignment, reassign
 			// and drop the original peer.
-			for i := 0; i < requestHeaders; i++ {
-				s.scratchSpace[i] = nil
-			}
-			s.drop(s.scratchOwners[0])
-			s.scratchOwners[0] = ""
+			s.drop(first.owner)
+			first.headers, first.owner = nil, ""
 			break
 		}
 		// Scratch delivery matches required subchain, deliver the batch of
 		// headers and push the subchain forward
 		var consumed int
-		for _, header := range s.scratchSpace[:requestHeaders] {
-			if header != nil { // nil when the genesis is reached
-				consumed++
+		for _, header := range first.headers {
+			consumed++
 
-				rawdb.WriteSkeletonHeader(batch, header)
-				s.pulled++
+			rawdb.WriteSkeletonHeader(batch, header)
+			s.pulled++
 
-				s.progress.Subchains[0].Tail--
-				s.progress.Subchains[0].Next = header.ParentHash
+			s.progress.Subchains[0].Tail--
+			s.progress.Subchains[0].Next = header.ParentHash
 
-				// If we've reached an existing block in the chain, stop retrieving
-				// headers. Note, if we want to support light clients with the same
-				// code we'd need to switch here based on the downloader mode. That
-				// said, there's no such functionality for now, so don't complicate.
-				//
-				// In the case of full sync it would be enough to check for the body,
-				// but even a full syncing node will generate a receipt once block
-				// processing is done, so it's just one more "needless" check.
-				//
-				// The weird cascading checks are done to minimize the database reads.
-				linked = s.linked(header.Number.Uint64()-1, header.ParentHash)
-				if linked {
-					log.Debug("Primary subchain linked", "number", header.Number.Uint64()-1, "hash", header.ParentHash)
-					break
-				}
+			// If we've reached an existing block in the chain, stop retrieving
+			// headers. Note, if we want to support light clients with the same
+			// code we'd need to switch here based on the downloader mode. That
+			// said, there's no such functionality for now, so don't complicate.
+			//
+			// In the case of full sync it would be enough to check for the body,
+			// but even a full syncing node will generate a receipt once block
+			// processing is done, so it's just one more "needless" check.
+			//
+			// The weird cascading checks are done to minimize the database reads.
+			linked = s.linked(header.Number.Uint64()-1, header.ParentHash)
+			if linked {
+				log.Debug("Primary subchain linked", "number", header.Number.Uint64()-1, "hash", header.ParentHash)
+				break
 			}
 		}
 		head := s.progress.Subchains[0].Head
@@ -1154,12 +1260,8 @@ func (s *skeleton) processResponse(res *headerResponse) (linked bool, merged boo
 			break
 		}
 		// Batch of headers consumed, shift the download window forward
-		copy(s.scratchSpace, s.scratchSpace[requestHeaders:])
-		for i := 0; i < requestHeaders; i++ {
-			s.scratchSpace[scratchHeaders-i-1] = nil
-		}
-		copy(s.scratchOwners, s.scratchOwners[1:])
-		s.scratchOwners[scratchHeaders/requestHeaders-1] = ""
+		copy(s.scratchSpace, s.scratchSpace[1:])
+		s.scratchSpace[len(s.scratchSpace)-1] = new(skeletonTask)
 
 		s.scratchHead -= uint64(consumed)
 
