@@ -32,6 +32,11 @@ func TestRoundtrip(t *testing.T) {
 		"0xf880806482520894d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0a1010000000000000000000000000000000000000000000000000000000000000001801ba0c16787a8e25e941d67691954642876c08f00996163ae7dfadbbfd6cd436f549da06180e5626cae31590f40641fe8f63734316c4bfeb4cdfab6714198c1044d2e28",
 		"0xd5c0d3cb84746573742a2a808213378667617a6f6e6b",
 		"0xc780c0c1c0825208",
+		"0x83616263",   // top-level string
+		"0x820102",     // top-level bytes
+		"0xc0",         // top-level empty list
+		"0xc483612262", // string containing a quote
+		"0x80",         // top-level empty string
 	} {
 		var out strings.Builder
 		in := newInStream(bytes.NewReader(common.FromHex(want)), 0)
