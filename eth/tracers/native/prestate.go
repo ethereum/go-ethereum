@@ -278,6 +278,10 @@ func (t *prestateTracer) processDiffState() {
 		if t.pre[addr].CodeHash != nil {
 			prevCodeHash = *t.pre[addr].CodeHash
 		}
+		// GetCodeHash returns the zero hash for a non-existent account, which has no code
+		if newCodeHash == (common.Hash{}) {
+			newCodeHash = types.EmptyCodeHash
+		}
 		if newCodeHash != prevCodeHash {
 			modified = true
 			postAccount.CodeHash = &newCodeHash
