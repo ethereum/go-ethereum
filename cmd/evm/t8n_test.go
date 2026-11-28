@@ -446,6 +446,22 @@ func TestT9n(t *testing.T) {
 			},
 			expExitCode: t8ntool.ErrorIO,
 		},
+		{ // Gas limit above the EIP-8037 cap and an empty authorization list
+			base: "./testdata/36",
+			input: t9nInput{
+				inTxs:  "signed_txs.rlp",
+				stFork: "Amsterdam",
+			},
+			expOut: "exp.json",
+		},
+		{ // The same transactions under the EIP-7825 cap
+			base: "./testdata/36",
+			input: t9nInput{
+				inTxs:  "signed_txs.rlp",
+				stFork: "Osaka",
+			},
+			expOut: "exp2.json",
+		},
 	} {
 		args := []string{"t9n"}
 		args = append(args, tc.input.get(tc.base)...)

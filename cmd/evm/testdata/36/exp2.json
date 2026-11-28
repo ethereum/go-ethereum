@@ -1,0 +1,19 @@
+[
+  {
+    "error": "transaction gas limit too high (cap: 16777216, tx: 5000000000)",
+    "address": "0x71562b71999873db5b286df957af199ec94617f7",
+    "hash": "0x680f6f390842f6ffbcaf485bd9c51c7d21dd3e6cd90b951fd4f01eafaa0ea398",
+    "intrinsicGas": "0x5208"
+  },
+  {
+    "error": "EIP-7702 transaction with empty auth list",
+    "address": "0x71562b71999873db5b286df957af199ec94617f7",
+    "hash": "0x0018cab49cdfc0df58a69d5c002ef5f685f469e2522e3cc4a2707115f2c2e910",
+    "intrinsicGas": "0x5208"
+  },
+  {
+    "address": "0x71562b71999873db5b286df957af199ec94617f7",
+    "hash": "0x87421d307f208a36fa8c81bcd82229414c025c2854662e9e5f6b25da82bcd676",
+    "intrinsicGas": "0xb3b0"
+  }
+]
