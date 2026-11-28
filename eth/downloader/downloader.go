@@ -456,6 +456,12 @@ func (d *Downloader) ConfigSyncMode() SyncMode {
 	return d.moder.get(false)
 }
 
+// DisableSnap disables the snap sync mode and reports whether the mode was
+// actually flipped.
+func (d *Downloader) DisableSnap() bool {
+	return d.moder.disableSnap()
+}
+
 // SubscribeSyncEvents creates a subscription for downloader sync events
 func (d *Downloader) SubscribeSyncEvents(ch chan<- SyncEvent) event.Subscription {
 	return d.scope.Track(d.feed.Subscribe(ch))
