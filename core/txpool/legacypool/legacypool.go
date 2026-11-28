@@ -548,6 +548,19 @@ func (pool *LegacyPool) Pending(filter txpool.PendingFilter) (map[common.Address
 // This check is meant as an early check which only needs to be performed once,
 // and does not require the pool mutex to be held.
 func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
+	return pool.validateTxBasics(tx, pool.currentHead.Load(), pool.gasTip.Load().ToBig())
+}
+
+// forkChanged reports whether the two headers are under different chain rules.
+func (pool *LegacyPool) forkChanged(oldHead, newHead *types.Header) bool {
+	oldRules := pool.chainconfig.Rules(oldHead.Number, oldHead.Difficulty.Sign() == 0, oldHead.Time)
+	newRules := pool.chainconfig.Rules(newHead.Number, newHead.Difficulty.Sign() == 0, newHead.Time)
+	return oldRules != newRules
+}
+
+// validateTxBasics checks the stateless validity of a transaction against the
+// rules of the given head, with the given minimum gas tip.
+func (pool *LegacyPool) validateTxBasics(tx *types.Transaction, head *types.Header, minTip *big.Int) error {
 	opts := &txpool.ValidationOptions{
 		Config: pool.chainconfig,
 		Accept: 0 |
@@ -556,9 +569,9 @@ func (pool *LegacyPool) ValidateTxBasics(tx *types.Transaction) error {
 			1<<types.DynamicFeeTxType |
 			1<<types.SetCodeTxType,
 		MaxSize: txMaxSize,
-		MinTip:  pool.gasTip.Load().ToBig(),
+		MinTip:  minTip,
 	}
-	return txpool.ValidateTransaction(tx, pool.currentHead.Load(), pool.signer, opts)
+	return txpool.ValidateTransaction(tx, head, pool.signer, opts)
 }
 
 // validateTx checks whether a transaction is valid according to the consensus
@@ -1215,25 +1228,29 @@ func (pool *LegacyPool) runReorg(done chan struct{}, reset *txpoolResetRequest, 
 	}
 	pool.mu.Lock()
 	if reset != nil {
-		if reset.newHead != nil && reset.oldHead != nil {
-			// Discard the transactions with the gas limit higher than the cap at the
-			// Osaka fork boundary.
-			if pool.chainconfig.IsOsaka(reset.newHead.Number, reset.newHead.Time) &&
-				!pool.chainconfig.IsOsaka(reset.oldHead.Number, reset.oldHead.Time) {
-				var hashes []common.Hash
-				pool.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
-					if tx.Gas() > params.MaxTxGas {
-						hashes = append(hashes, hash)
-					}
-					return true
-				})
-				for _, hash := range hashes {
-					pool.removeTx(hash, true, true)
-				}
-			}
-		}
 		// Reset from the old head to the new, rescheduling any reorged transactions
 		pool.reset(reset.oldHead, reset.newHead)
+
+		// At a fork boundary, discard the transactions that the rules of the
+		// new fork make invalid, e.g. a gas limit above the EIP-7825 cap or
+		// below the intrinsic cost or calldata floor of the new fork. This runs
+		// after the reset, so it also covers the transactions reinjected by a
+		// reorg across the boundary.
+		if reset.newHead != nil && reset.oldHead != nil && pool.forkChanged(reset.oldHead, reset.newHead) {
+			var hashes []common.Hash
+			pool.all.Range(func(hash common.Hash, tx *types.Transaction) bool {
+				// The gas tip was checked on admission and SetGasTip
+				// handles changes to it, so only the fork rules matter here.
+				if err := pool.validateTxBasics(tx, reset.newHead, new(big.Int)); err != nil {
+					log.Trace("Discarding transaction invalid after fork", "hash", hash, "err", err)
+					hashes = append(hashes, hash)
+				}
+				return true
+			})
+			for _, hash := range hashes {
+				pool.removeTx(hash, true, true)
+			}
+		}
 
 		// Nonces were reset, discard any events that became stale
 		for addr := range events {
