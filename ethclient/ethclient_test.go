@@ -446,6 +446,15 @@ func testStatusFunctions(t *testing.T, client *rpc.Client) {
 	if !reflect.DeepEqual(history, want) {
 		t.Fatalf("FeeHistory result doesn't match expected: (got: %v, want: %v)", history, want)
 	}
+
+	// FeeHistory without reward percentiles
+	history, err = ec.FeeHistory(context.Background(), 1, big.NewInt(2), nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(history.Reward) != 0 || len(history.BaseFee) != 2 {
+		t.Fatalf("unexpected fee history: %v", history)
+	}
 }
 
 func testCallContractAtHash(t *testing.T, client *rpc.Client) {
