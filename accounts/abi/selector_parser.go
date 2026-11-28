@@ -19,6 +19,7 @@ package abi
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type SelectorMarshaling struct {
@@ -67,12 +68,22 @@ func parseElementaryType(unescapedSelector string) (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("failed to parse elementary type: %v", err)
 	}
-	// handle arrays
+	dims, rest, err := parseArrayDimensions(rest)
+	if err != nil {
+		return "", "", err
+	}
+	return parsedType + dims, rest, nil
+}
+
+// parseArrayDimensions consumes any trailing array dimensions such as "[]" or
+// "[2][]" and returns them as a string.
+func parseArrayDimensions(unescapedSelector string) (string, string, error) {
+	dims, rest := "", unescapedSelector
 	for len(rest) > 0 && rest[0] == '[' {
-		parsedType = parsedType + string(rest[0])
+		dims = dims + string(rest[0])
 		rest = rest[1:]
 		for len(rest) > 0 && isDigit(rest[0]) {
-			parsedType = parsedType + string(rest[0])
+			dims = dims + string(rest[0])
 			rest = rest[1:]
 		}
 		if len(rest) == 0 {
@@ -81,14 +92,17 @@ func parseElementaryType(unescapedSelector string) (string, string, error) {
 		if rest[0] != ']' {
 			return "", "", fmt.Errorf("failed to parse array: expected ']', got %c", rest[0])
 		}
-		parsedType = parsedType + string(rest[0])
+		dims = dims + string(rest[0])
 		rest = rest[1:]
 	}
-	return parsedType, rest, nil
+	return dims, rest, nil
 }
 
 func parseCompositeType(unescapedSelector string) ([]interface{}, string, error) {
-	if len(unescapedSelector) == 0 || unescapedSelector[0] != '(' {
+	if len(unescapedSelector) == 0 {
+		return nil, "", errors.New("expected '(', got end of string")
+	}
+	if unescapedSelector[0] != '(' {
 		return nil, "", fmt.Errorf("expected '(', got %c", unescapedSelector[0])
 	}
 	parsedType, rest, err := parseType(unescapedSelector[1:])
@@ -106,9 +120,6 @@ func parseCompositeType(unescapedSelector string) ([]interface{}, string, error)
 	if len(rest) == 0 || rest[0] != ')' {
 		return nil, "", fmt.Errorf("expected ')', got '%s'", rest)
 	}
-	if len(rest) >= 3 && rest[1] == '[' && rest[2] == ']' {
-		return append(result, "[]"), rest[3:], nil
-	}
 	return result, rest[1:], nil
 }
 
@@ -117,10 +128,22 @@ func parseType(unescapedSelector string) (interface{}, string, error) {
 		return nil, "", errors.New("empty type")
 	}
 	if unescapedSelector[0] == '(' {
-		return parseCompositeType(unescapedSelector)
-	} else {
-		return parseElementaryType(unescapedSelector)
+		components, rest, err := parseCompositeType(unescapedSelector)
+		if err != nil {
+			return nil, "", err
+		}
+		// Array dimensions of a tuple are kept as a trailing marker element,
+		// which assembleArgs folds into the tuple type.
+		dims, rest, err := parseArrayDimensions(rest)
+		if err != nil {
+			return nil, "", err
+		}
+		if dims != "" {
+			components = append(components, dims)
+		}
+		return components, rest, nil
 	}
+	return parseElementaryType(unescapedSelector)
 }
 
 func assembleArgs(args []interface{}) ([]ArgumentMarshaling, error) {
@@ -136,9 +159,9 @@ func assembleArgs(args []interface{}) ([]ArgumentMarshaling, error) {
 				return nil, fmt.Errorf("failed to assemble components: %v", err)
 			}
 			tupleType := "tuple"
-			if len(subArgs) != 0 && subArgs[len(subArgs)-1].Type == "[]" {
-				subArgs = subArgs[:len(subArgs)-1]
-				tupleType = "tuple[]"
+			if n := len(subArgs); n != 0 && strings.HasPrefix(subArgs[n-1].Type, "[") {
+				tupleType += subArgs[n-1].Type
+				subArgs = subArgs[:n-1]
 			}
 			arguments = append(arguments, ArgumentMarshaling{name, tupleType, tupleType, subArgs, false})
 		} else {
