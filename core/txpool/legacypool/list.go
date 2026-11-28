@@ -276,6 +276,52 @@ type list struct {
 	costcap   *uint256.Int // Price of the highest costing transaction (reset only if exceeds balance)
 	gascap    uint64       // Gas limit of the highest spending transaction (reset only if exceeds block limit)
 	totalcost *uint256.Int // Total cost of all transactions in the list
+
+	size *pendingSize   // Counter of the pool's pending transactions (pending lists only)
+	addr common.Address // Account of the list, for size
+}
+
+// newPendingList creates the pending list of addr, which reports the changes
+// of its length to size.
+func newPendingList(addr common.Address, size *pendingSize) *list {
+	l := newList(true)
+	l.addr, l.size = addr, size
+	return l
+}
+
+// resized reports the list's change of length to its counter; queued lists
+// have none.
+func (l *list) resized(before int) {
+	if l.size != nil {
+		l.size.update(l.addr, before, l.Len())
+	}
+}
+
+// pendingSize counts the pool's pending transactions, as the pending lists
+// report their changes, and keeps the accounts that have more than slots of
+// them: truncatePending reads these instead of visiting every account. Like
+// the lists, it is guarded by the pool's mu. slots is the pool's AccountSlots,
+// which doesn't change once the pool is created.
+type pendingSize struct {
+	slots uint64                      // Pending transactions an account can have without being heavy
+	total int                         // All pending transactions
+	heavy map[common.Address]struct{} // Accounts with more than slots pending transactions
+}
+
+func newPendingSize(slots uint64) *pendingSize {
+	return &pendingSize{slots: slots, heavy: make(map[common.Address]struct{})}
+}
+
+// update records that the pending list of addr went from before to after
+// transactions.
+func (s *pendingSize) update(addr common.Address, before, after int) {
+	s.total += after - before
+	switch {
+	case uint64(after) > s.slots:
+		s.heavy[addr] = struct{}{}
+	case uint64(before) > s.slots:
+		delete(s.heavy, addr)
+	}
 }
 
 // newList creates a new transaction list for maintaining nonce-indexable fast,
@@ -301,6 +347,7 @@ func (l *list) Contains(nonce uint64) bool {
 // If the new transaction is accepted into the list, the lists' cost and gas
 // thresholds are also potentially updated.
 func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transaction) {
+	defer l.resized(l.Len())
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
 	if old != nil {
@@ -355,6 +402,7 @@ func (l *list) Add(tx *types.Transaction, priceBump uint64) (bool, *types.Transa
 // provided threshold. Every removed transaction is returned for any post-removal
 // maintenance.
 func (l *list) Forward(threshold uint64) types.Transactions {
+	defer l.resized(l.Len())
 	txs := l.txs.Forward(threshold)
 	l.subTotalCost(txs)
 	return txs
@@ -370,6 +418,7 @@ func (l *list) Forward(threshold uint64) types.Transactions {
 // is lower than the costgas cap, the caps will be reset to a new high after removing
 // the newly invalidated transactions.
 func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactions, types.Transactions) {
+	defer l.resized(l.Len())
 	// If all transactions are below the threshold, short circuit
 	if l.costcap.Cmp(costLimit) <= 0 && l.gascap <= gasLimit {
 		return nil, nil
@@ -406,6 +455,7 @@ func (l *list) Filter(costLimit *uint256.Int, gasLimit uint64) (types.Transactio
 // Cap places a hard limit on the number of items, returning all transactions
 // exceeding that limit.
 func (l *list) Cap(threshold int) types.Transactions {
+	defer l.resized(l.Len())
 	txs := l.txs.Cap(threshold)
 	l.subTotalCost(txs)
 	return txs
@@ -415,6 +465,7 @@ func (l *list) Cap(threshold int) types.Transactions {
 // transaction was found, and also returning any transaction invalidated due to
 // the deletion (strict mode only).
 func (l *list) Remove(tx *types.Transaction) (bool, types.Transactions) {
+	defer l.resized(l.Len())
 	// Remove the transaction from the set
 	nonce := tx.Nonce()
 	if removed := l.txs.Remove(nonce); !removed {
@@ -438,6 +489,7 @@ func (l *list) Remove(tx *types.Transaction) (bool, types.Transactions) {
 // prevent getting into an invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
 func (l *list) Ready(start uint64) types.Transactions {
+	defer l.resized(l.Len())
 	txs := l.txs.Ready(start)
 	l.subTotalCost(txs)
 	return txs
