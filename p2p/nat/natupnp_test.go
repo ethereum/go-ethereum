@@ -17,16 +17,19 @@
 package nat
 
 import (
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/huin/goupnp/httpu"
+	"github.com/huin/goupnp/soap"
 )
 
 func TestUPNP_DDWRT(t *testing.T) {
@@ -246,4 +249,73 @@ func (dev *fakeIGD) serve() {
 func (dev *fakeIGD) close() {
 	dev.mcastListener.Close()
 	dev.listener.Close()
+}
+
+// permanentLeaseClient is a upnpClient which rejects port mappings with a
+// finite lease duration, like some NETGEAR routers do.
+type permanentLeaseClient struct {
+	fault  error
+	leases []uint32
+}
+
+func (c *permanentLeaseClient) GetExternalIPAddress() (string, error) { return "", nil }
+func (c *permanentLeaseClient) DeletePortMapping(string, uint16, string) error {
+	return nil
+}
+func (c *permanentLeaseClient) GetNATRSIPStatus() (bool, bool, error) { return false, true, nil }
+
+func (c *permanentLeaseClient) AddPortMapping(_ string, _ uint16, _ string, _ uint16, _ string, _ bool, _ string, lease uint32) error {
+	c.leases = append(c.leases, lease)
+	if lease != 0 {
+		return c.fault
+	}
+	return nil
+}
+
+// permanentLeaseFault decodes the SOAP fault returned by a NETGEAR R8000
+// that only supports permanent leases.
+func permanentLeaseFault(t *testing.T) error {
+	const body = `<s:Fault>
+<faultcode>s:Client</faultcode>
+<faultstring>UPnPError</faultstring>
+<detail>
+<UPnPError xmlns="urn:schemas-upnp-org:control-1-0">
+<errorCode>725</errorCode>
+<errorDescription>OnlyPermanentLeasesSupported</errorDescription></UPnPError>
+</detail>
+</s:Fault>`
+	fault := new(soap.SOAPFaultError)
+	if err := xml.Unmarshal([]byte(body), fault); err != nil {
+		t.Fatal(err)
+	}
+	return fault
+}
+
+func TestUPNPOnlyPermanentLeasesSupported(t *testing.T) {
+	fault := permanentLeaseFault(t)
+	if !isOnlyPermanentLeasesSupported(fault) {
+		t.Fatal("fault not recognized as OnlyPermanentLeasesSupported")
+	}
+
+	client := &permanentLeaseClient{fault: fault}
+	n := &upnp{client: client}
+	port, err := n.addAnyPortMapping("TCP", 30303, 30303, net.IPv4(192, 168, 1, 49), "test", 1200)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if port != 30303 {
+		t.Errorf("wrong external port %d, want 30303", port)
+	}
+	if want := []uint32{1200, 0}; !slices.Equal(client.leases, want) {
+		t.Errorf("wrong lease durations requested: %v, want %v", client.leases, want)
+	}
+
+	// Subsequent mappings (e.g. refreshes) should request a permanent lease directly.
+	client.leases = nil
+	if _, err := n.addAnyPortMapping("UDP", 30303, 30303, net.IPv4(192, 168, 1, 49), "test", 1200); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := []uint32{0}; !slices.Equal(client.leases, want) {
+		t.Errorf("wrong lease durations requested on refresh: %v, want %v", client.leases, want)
+	}
 }
