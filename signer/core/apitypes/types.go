@@ -103,6 +103,9 @@ type SendTxArgs struct {
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 
+	// For SetCodeTxType
+	AuthorizationList []types.SetCodeAuthorization `json:"authorizationList,omitempty"`
+
 	// For BlobTxType
 	BlobFeeCap *hexutil.Big  `json:"maxFeePerBlobGas,omitempty"`
 	BlobHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
@@ -173,6 +176,24 @@ func (args *SendTxArgs) ToTransaction() (*types.Transaction, error) {
 				version = types.BlobSidecarVersion1
 			}
 			data.(*types.BlobTx).Sidecar = types.NewBlobTxSidecar(version, args.Blobs, args.Commitments, args.Proofs)
+		}
+
+	case args.AuthorizationList != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.SetCodeTx{
+			To:         *to,
+			ChainID:    uint256.MustFromBig((*big.Int)(args.ChainID)),
+			Nonce:      uint64(args.Nonce),
+			Gas:        uint64(args.Gas),
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(args.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(args.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(&args.Value)),
+			Data:       args.data(),
+			AccessList: al,
+			AuthList:   args.AuthorizationList,
 		}
 
 	case args.MaxFeePerGas != nil:
