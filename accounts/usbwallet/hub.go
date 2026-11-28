@@ -220,7 +220,7 @@ func (hub *Hub) refreshWallets() {
 		for len(hub.wallets) > 0 {
 			// Abort if we're past the current device and found an operational one
 			_, failure := hub.wallets[0].Status()
-			if hub.wallets[0].URL().Cmp(url) >= 0 || failure == nil {
+			if hub.wallets[0].URL().Cmp(url) >= 0 && failure == nil {
 				break
 			}
 			// Drop the stale and failed devices
