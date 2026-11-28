@@ -18,6 +18,7 @@ package types
 
 import (
 	"crypto/ecdsa"
+	"encoding/json"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -71,6 +72,51 @@ func TestBlobTxSize(t *testing.T) {
 	}
 	if sz := withBlobsStripped.Size(); sz != sizeNoBlobs {
 		t.Fatal("wrong size on tx after WithoutBlobTxSidecar:", sz)
+	}
+}
+
+func TestBlobTxJSONRejectsSidecar(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	withBlobs := createEmptyBlobTx(key, true)
+	withBlobsJSON, err := withBlobs.MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded Transaction
+	if err := decoded.UnmarshalJSON(withBlobsJSON); err != errBlobTxSidecarInJSON {
+		t.Fatalf("wrong error: got %v, want %v", err, errBlobTxSidecarInJSON)
+	}
+
+	withoutBlobsJSON, err := withBlobs.WithoutBlobTxSidecar().MarshalJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := decoded.UnmarshalJSON(withoutBlobsJSON); err != nil {
+		t.Fatalf("failed to unmarshal tx without sidecar: %v", err)
+	}
+
+	var blobtx map[string]any
+	if err := json.Unmarshal(withoutBlobsJSON, &blobtx); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		field string
+		value any
+	}{
+		{field: "version", value: "0x0"},
+		{field: "blobs", value: []any{}},
+		{field: "commitments", value: []any{}},
+		{field: "proofs", value: []any{}},
+	} {
+		blobtx[tc.field] = tc.value
+		payload, err := json.Marshal(blobtx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := decoded.UnmarshalJSON(payload); err != errBlobTxSidecarInJSON {
+			t.Fatalf("field %q: wrong error: got %v, want %v", tc.field, err, errBlobTxSidecarInJSON)
+		}
+		delete(blobtx, tc.field)
 	}
 }
 
