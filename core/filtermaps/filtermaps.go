@@ -87,7 +87,6 @@ type FilterMaps struct {
 	indexLock    sync.RWMutex
 	indexedRange filterMapsRange
 	indexedView  *ChainView // always consistent with the log index
-	hasTempRange bool
 
 	// cleanedEpochsBefore indicates that all unindexed data before this point
 	// has been cleaned.
@@ -490,7 +489,6 @@ func (f *FilterMaps) safeDeleteWithLogs(deleteFn func(db ethdb.KeyValueStore, ha
 func (f *FilterMaps) setRange(batch ethdb.KeyValueWriter, newView *ChainView, newRange filterMapsRange, isTempRange bool) {
 	f.indexedView = newView
 	f.indexedRange = newRange
-	f.hasTempRange = isTempRange
 	f.updateMatchersValidRange()
 	if newRange.initialized {
 		rs := rawdb.FilterMapsRange{

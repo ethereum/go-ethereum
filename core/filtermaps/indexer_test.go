@@ -21,11 +21,13 @@ import (
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
+	"math"
 	"math/big"
 	"math/rand"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -271,6 +273,117 @@ func TestLogsByIndex(t *testing.T) {
 		head := rand.Intn(len(chain))
 		ts.chain.setCanonicalChain(chain[:head+1])
 		ts.fm.WaitIdle()
+	}
+}
+
+// TestMatcherSyncDuringMapWrite checks that a matcher sync request is served
+// while the indexer is in the middle of writing finished maps, instead of being
+// held back until the entire write is completed. The returned ranges should be
+// limited to the temporary range that excludes the maps being rewritten, so that
+// the search falls back to unindexed mode in that section.
+func TestMatcherSyncDuringMapWrite(t *testing.T) {
+	ts := newTestSetup(t)
+	defer ts.close()
+
+	ts.chain.addBlocks(100, 5, 2, 4, true)
+	ts.setHistory(0, false)
+	ts.fm.WaitIdle()
+	ts.fm.Stop()
+	ts.fm = nil
+
+	// Open the rendered index without starting the indexer loop, so that the
+	// test can step through the indexer events deterministically.
+	head := ts.chain.CurrentBlock()
+	view := NewChainView(ts.chain, head.Number.Uint64(), head.Hash())
+	fm, err := NewFilterMaps(ts.db, view, 0, 0, ts.params, Config{})
+	if err != nil {
+		t.Fatalf("Failed to open log index: %v", err)
+	}
+	fullRange := fm.indexedRange
+	if !fullRange.headIndexed || fullRange.maps.Count() < 2 {
+		t.Fatalf("Unexpected indexed range (head indexed: %v, maps: %d)", fullRange.headIndexed, fullRange.maps.Count())
+	}
+	mb := fm.NewMatcherBackend()
+	defer mb.Close()
+
+	syncLogIndex := func() SyncRange {
+		t.Helper()
+		type result struct {
+			sr  SyncRange
+			err error
+		}
+		resCh := make(chan result, 1)
+		go func() {
+			sr, err := mb.SyncLogIndex(context.Background())
+			resCh <- result{sr, err}
+		}()
+		fm.processSingleEvent(true)  // receive sync request
+		fm.processSingleEvent(false) // serve pending sync requests
+		select {
+		case res := <-resCh:
+			if res.err != nil {
+				t.Fatalf("Matcher sync failed: %v", res.err)
+			}
+			return res.sr
+		case <-time.After(time.Second * 5):
+			t.Fatal("Matcher sync request not served")
+			return SyncRange{}
+		}
+	}
+
+	// Enter the state where the first batch of a head map update is written;
+	// the indexed range is reverted to the temporary range.
+	renderer := &mapRenderer{
+		f:            fm,
+		renderBefore: math.MaxUint32,
+		finished:     common.NewRange(fullRange.maps.Last(), 1),
+	}
+	fm.indexLock.Lock()
+	tempRange, err := renderer.getTempRange()
+	if err != nil {
+		fm.indexLock.Unlock()
+		t.Fatalf("Failed to get temporary range: %v", err)
+	}
+	batch := ts.db.NewBatch()
+	fm.setRange(batch, fm.indexedView, tempRange, true)
+	if err := batch.Write(); err != nil {
+		fm.indexLock.Unlock()
+		t.Fatalf("Failed to write temporary range: %v", err)
+	}
+	fm.indexLock.Unlock()
+
+	if tempRange.blocks.IsEmpty() || tempRange.blocks.AfterLast() >= fullRange.blocks.AfterLast() {
+		t.Fatalf("Unexpected temporary block range %v (full range: %v)", tempRange.blocks, fullRange.blocks)
+	}
+	sr := syncLogIndex()
+	if sr.IndexedView != view {
+		t.Fatal("Unexpected indexed view during map write")
+	}
+	if sr.IndexedBlocks.IsEmpty() || sr.IndexedBlocks.First() != tempRange.blocks.First() || sr.IndexedBlocks.AfterLast() > tempRange.blocks.AfterLast() {
+		t.Fatalf("Indexed range %v not limited to temporary range %v during map write", sr.IndexedBlocks, tempRange.blocks)
+	}
+	if sr.ValidBlocks.Intersection(tempRange.blocks) != sr.ValidBlocks {
+		t.Fatalf("Valid range %v not limited to temporary range %v during map write", sr.ValidBlocks, tempRange.blocks)
+	}
+	validDuringWrite := sr.IndexedBlocks
+
+	// Finish the write; the entire range is indexed again but the section that
+	// has been rewritten should not be reported as valid.
+	fm.indexLock.Lock()
+	batch = ts.db.NewBatch()
+	fm.setRange(batch, view, fullRange, false)
+	if err := batch.Write(); err != nil {
+		fm.indexLock.Unlock()
+		t.Fatalf("Failed to write final range: %v", err)
+	}
+	fm.indexLock.Unlock()
+
+	sr = syncLogIndex()
+	if sr.IndexedBlocks != fullRange.blocks {
+		t.Fatalf("Unexpected indexed range after map write (got %v, want %v)", sr.IndexedBlocks, fullRange.blocks)
+	}
+	if sr.ValidBlocks != validDuringWrite {
+		t.Fatalf("Unexpected valid range after map write (got %v, want %v)", sr.ValidBlocks, validDuringWrite)
 	}
 }
 
