@@ -121,6 +121,33 @@ func TestResubscribeAbort(t *testing.T) {
 	}
 }
 
+func TestResubscribeAbortUnsubscribesReturnedSubscription(t *testing.T) {
+	t.Parallel()
+
+	started := make(chan struct{})
+	stopped := make(chan struct{})
+	inner := NewSubscription(func(quit <-chan struct{}) error {
+		<-quit
+		close(stopped)
+		return nil
+	})
+	defer inner.Unsubscribe()
+
+	sub := Resubscribe(0, func(ctx context.Context) (Subscription, error) {
+		close(started)
+		<-ctx.Done()
+		return inner, nil
+	})
+	<-started
+	sub.Unsubscribe()
+
+	select {
+	case <-stopped:
+	default:
+		t.Fatal("subscription returned after cancellation was not unsubscribed")
+	}
+}
+
 func TestResubscribeWithErrorHandler(t *testing.T) {
 	t.Parallel()
 
