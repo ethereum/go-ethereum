@@ -2002,6 +2002,18 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 		// `insertChain` while a part of them have higher total difficulty than current
 		// head full block(new pivot point).
 		for block != nil && bc.skipBlock(err, it) {
+			if !setHead {
+				// Post-merge beacon insertion: the chain head can only be
+				// updated via SetCanonical (forkchoiceUpdated). A re-announced
+				// block must not reorg the chain here, otherwise a side block
+				// deleted by the freezer could move the head below the
+				// finalized block.
+				log.Debug("Ignoring already known beacon block", "number", block.Number(), "hash", block.Hash())
+				stats.ignored++
+
+				block, err = it.next()
+				continue
+			}
 			log.Debug("Writing previously known block", "number", block.Number(), "hash", block.Hash())
 			if err := bc.writeKnownBlock(block); err != nil {
 				return nil, it.index, err
@@ -2057,6 +2069,23 @@ func (bc *BlockChain) insertChain(ctx context.Context, chain types.Blocks, setHe
 				"uncles", len(block.Uncles()), "txs", len(block.Transactions()), "gas", block.GasUsed(),
 				"root", block.Root())
 
+			// Post-merge beacon insertion: a re-announced payload must not
+			// move the chain head, that is exclusively done via
+			// forkchoiceUpdated. Skip the block entirely, otherwise a side
+			// block deleted by the freezer could reorg the head below the
+			// finalized block.
+			if !setHead {
+				log.Debug("Ignoring already known beacon block", "number", block.Number(), "hash", block.Hash())
+				stats.ignored++
+				if bc.logger != nil && bc.logger.OnSkippedBlock != nil {
+					bc.logger.OnSkippedBlock(tracing.BlockEvent{
+						Block:     block,
+						Finalized: bc.CurrentFinalBlock(),
+						Safe:      bc.CurrentSafeBlock(),
+					})
+				}
+				continue
+			}
 			// Special case. Commit the empty receipt slice if we meet the known
 			// block in the middle. It can only happen in the clique chain. Whenever
 			// we insert blocks via `insertSideChain`, we only commit `td`, `header`
