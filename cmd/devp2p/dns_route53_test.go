@@ -24,7 +24,8 @@ import (
 )
 
 // This test checks that computeChanges/splitChanges create DNS changes in
-// leaf-added -> root-changed -> leaf-deleted order.
+// leaf-added -> root-changed -> leaf-deleted order, and that records of the
+// currently published tree are retained.
 func TestRoute53ChangeSort(t *testing.T) {
 	t.Parallel()
 	testTree0 := map[string]recordSet{
@@ -33,6 +34,8 @@ func TestRoute53ChangeSort(t *testing.T) {
 		}},
 		"fdxn3sn67na5dka4j2gok7bvqi.n": {ttl: treeNodeTTL, values: []string{`"enrtree-branch:"`}},
 		"n":                            {ttl: rootTTL, values: []string{`"enrtree-root:v1 e=2KFJOGVXDQTXXUGBH7GS7NAAAI l=FDXN3SN67NA5DKA4J2GOK7BVQI seq=0 sig=v_-J_q_9ICQg5ztExFvLQhDBGMb0lZPJLhe3ts9LAcgqhOhtT3YFJsl8BWNDSwGtamUdR-9xl88_w-X42SVpjwE"`}},
+		// Left over from an earlier deployment, not reachable from the current root.
+		"qhnwgu5dmt3erpthy7p2lu4bkm.n": {ttl: treeNodeTTL, values: []string{`"enrtree-branch:"`}},
 	}
 
 	testTree1 := map[string]string{
@@ -114,18 +117,7 @@ func TestRoute53ChangeSort(t *testing.T) {
 		{
 			Action: "DELETE",
 			ResourceRecordSet: &types.ResourceRecordSet{
-				Name: sp("2kfjogvxdqtxxugbh7gs7naaai.n"),
-				ResourceRecords: []types.ResourceRecord{
-					{Value: sp(`"enr:-HW4QO1ml1DdXLeZLsUxewnthhUy8eROqkDyoMTyavfks9JlYQIlMFEUoM78PovJDPQrAkrb3LRJ-""vtrymDguKCOIAWAgmlkgnY0iXNlY3AyNTZrMaEDffaGfJzgGhUif1JqFruZlYmA31HzathLSWxfbq_QoQ4"`)},
-				},
-				TTL:  ip(3333),
-				Type: "TXT",
-			},
-		},
-		{
-			Action: "DELETE",
-			ResourceRecordSet: &types.ResourceRecordSet{
-				Name: sp("fdxn3sn67na5dka4j2gok7bvqi.n"),
+				Name: sp("qhnwgu5dmt3erpthy7p2lu4bkm.n"),
 				ResourceRecords: []types.ResourceRecord{{
 					Value: sp(`"enrtree-branch:"`),
 				}},
@@ -144,8 +136,7 @@ func TestRoute53ChangeSort(t *testing.T) {
 	// Check splitting according to size.
 	wantSplit := [][]types.Change{
 		wantChanges[:4],
-		wantChanges[4:6],
-		wantChanges[6:],
+		wantChanges[4:],
 	}
 	split := splitChanges(changes, 600, 4000)
 	if !reflect.DeepEqual(split, wantSplit) {
