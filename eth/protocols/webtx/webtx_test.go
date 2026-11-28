@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/txpool/legacypool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -130,5 +132,51 @@ func TestBrowserTxSubprotocolInvalid(t *testing.T) {
 	}
 	if err := <-runErr; err != p2p.DiscSubprotocolError {
 		t.Fatalf("Run returned %v, want %v", err, p2p.DiscSubprotocolError)
+	}
+}
+
+// A transaction the pool already has, or can't take right now, is not invalid:
+// the peer gets its result but is not penalized.
+func TestBrowserTxSubprotocolNotPenalized(t *testing.T) {
+	key, _ := crypto.GenerateKey()
+	signer := types.LatestSignerForChainID(big.NewInt(1))
+	tx, err := types.SignTx(types.NewTransaction(0, common.Address{1}, big.NewInt(0), params.TxGas, big.NewInt(1), nil), signer, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		err  error
+		want uint8
+	}{
+		{txpool.ErrAlreadyKnown, txResultAlreadyKnown},
+		{legacypool.ErrTxPoolOverflow, txResultPoolError},
+	} {
+		proto := NewProtocol(&stubTxPool{err: tt.err})
+		app, srv := p2p.MsgPipe()
+		runErr := make(chan error, 1)
+		go func() { runErr <- proto.Run(nil, srv) }()
+
+		var packet TxSubmit
+		if err := packet.Append(tx); err != nil {
+			t.Fatal(err)
+		}
+		if err := p2p.Send(app, txSubmitMsg, packet); err != nil {
+			t.Fatal(err)
+		}
+		msg, err := app.ReadMsg()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var results []TxResult
+		if err := msg.Decode(&results); err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 1 || results[0].Result != tt.want {
+			t.Errorf("%v: got results %v, want [%d]", tt.err, results, tt.want)
+		}
+		if err := <-runErr; err != nil {
+			t.Errorf("%v: Run returned %v, want nil", tt.err, err)
+		}
+		app.Close()
 	}
 }

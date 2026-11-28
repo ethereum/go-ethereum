@@ -120,7 +120,7 @@ func handle(pool TxPool, rw p2p.MsgReadWriter) error {
 	invalid := false
 	for i, err := range errs {
 		results[i].Result = txResultCode(err)
-		if results[i].Result != txResultOK {
+		if isInvalid(results[i].Result) {
 			invalid = true
 		}
 	}
@@ -132,6 +132,18 @@ func handle(pool TxPool, rw p2p.MsgReadWriter) error {
 		return p2p.DiscSubprotocolError
 	}
 	return nil
+}
+
+// isInvalid reports whether a result code means the transaction itself is
+// invalid. A transaction the pool already has, or rejects because of its own
+// state, is not the peer's fault.
+func isInvalid(code uint8) bool {
+	switch code {
+	case txResultOK, txResultAlreadyKnown, txResultPoolError:
+		return false
+	default:
+		return true
+	}
 }
 
 // txResultCode maps a pool error to a result code.
