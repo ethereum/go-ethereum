@@ -192,6 +192,9 @@ func (s *resubscribeSub) subscribe() Subscription {
 		case <-s.unsub:
 			cancel()
 			<-subscribed // avoid leaking the s.fn goroutine.
+			if sub != nil {
+				sub.Unsubscribe()
+			}
 			return nil
 		}
 	}
