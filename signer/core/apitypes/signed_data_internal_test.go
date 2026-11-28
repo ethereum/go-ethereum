@@ -190,6 +190,25 @@ func TestParseInteger(t *testing.T) {
 		{"int32", big.NewInt(-124), big.NewInt(-124)},
 		{"uint32", "0xff", big.NewInt(0xff)},
 		{"int8", "0xffff", nil},
+		// Range boundaries of signed and unsigned types.
+		{"uint8", "255", big.NewInt(255)},
+		{"uint8", "256", nil},
+		{"int8", "127", big.NewInt(127)},
+		{"int8", "128", nil},
+		{"int8", "200", nil},
+		{"int8", "-128", big.NewInt(-128)},
+		{"int8", "-129", nil},
+		{"int8", big.NewInt(-129), nil},
+		{"int16", "32767", big.NewInt(32767)},
+		{"int16", "32768", nil},
+		{"int16", "-32768", big.NewInt(-32768)},
+		{"int16", "-32769", nil},
+		{"int256", "0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 255), big.NewInt(1))},
+		{"int256", "0x8000000000000000000000000000000000000000000000000000000000000000", nil},
+		{"int", "0x8000000000000000000000000000000000000000000000000000000000000000", nil},
+		{"int256", new(big.Int).Neg(new(big.Int).Lsh(big.NewInt(1), 255)), new(big.Int).Neg(new(big.Int).Lsh(big.NewInt(1), 255))},
+		{"int256", new(big.Int).Sub(new(big.Int).Neg(new(big.Int).Lsh(big.NewInt(1), 255)), big.NewInt(1)), nil},
+		{"uint256", "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))},
 	} {
 		res, err := parseInteger(tt.t, tt.v)
 		if tt.exp == nil && res == nil {
