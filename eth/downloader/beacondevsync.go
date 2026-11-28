@@ -45,12 +45,7 @@ func (d *Downloader) BeaconDevSync(header *types.Header) error {
 
 // GetHeader tries to retrieve the header with a given hash from a random peer.
 func (d *Downloader) GetHeader(hash common.Hash) (*types.Header, error) {
-	// Pick a random peer to sync from and keep retrying if none are yet
-	// available due to fresh startup
-	d.peers.lock.RLock()
-	defer d.peers.lock.RUnlock()
-
-	for _, peer := range d.peers.peers {
+	for _, peer := range d.peers.AllPeers() {
 		if peer == nil {
 			log.Warn("Encountered nil peer while retrieving sync target", "hash", hash)
 			continue
