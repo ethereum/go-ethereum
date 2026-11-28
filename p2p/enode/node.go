@@ -223,6 +223,41 @@ func (n *Node) TCPEndpoint() (netip.AddrPort, bool) {
 	return netip.AddrPortFrom(n.ip, n.tcp), true
 }
 
+// AltTCPEndpoint returns the TCP endpoint of the address family that was not
+// chosen as the preferred endpoint, for a node that announces both IPv4 and IPv6.
+// It returns false if the record has no such endpoint, or if its address is more
+// local than the preferred one, so that a record cannot turn a failed dial to a
+// public address into a dial to a loopback or LAN address.
+func (n *Node) AltTCPEndpoint() (netip.AddrPort, bool) {
+	if !n.ip.IsValid() || n.ip.IsUnspecified() {
+		return netip.AddrPort{}, false
+	}
+	var (
+		ip   netip.Addr
+		port uint16
+	)
+	if n.ip.Is4() {
+		if n.Load((*enr.IPv6Addr)(&ip)) != nil || ip.Is4In6() {
+			return netip.AddrPort{}, false
+		}
+		if err := n.Load((*enr.TCP6)(&port)); err != nil {
+			n.Load((*enr.TCP)(&port))
+		}
+	} else {
+		if n.Load((*enr.IPv4Addr)(&ip)) != nil {
+			return netip.AddrPort{}, false
+		}
+		n.Load((*enr.TCP)(&port))
+	}
+	if !validIP(ip) || ip.IsUnspecified() || port == 0 {
+		return netip.AddrPort{}, false
+	}
+	if localityScore(ip) < localityScore(n.ip) {
+		return netip.AddrPort{}, false
+	}
+	return netip.AddrPortFrom(ip, port), true
+}
+
 // QUICEndpoint returns the announced QUIC endpoint.
 func (n *Node) QUICEndpoint() (netip.AddrPort, bool) {
 	var quic uint16
