@@ -1044,16 +1044,16 @@ func (c *ChainConfig) LatestFork(time uint64) forks.Fork {
 	london := c.LondonBlock
 
 	switch {
-	case c.IsBogota(london, time):
-		return forks.Bogota
-	case c.IsAmsterdam(london, time):
-		return forks.Amsterdam
 	case c.IsBPO5(london, time):
 		return forks.BPO5
 	case c.IsBPO4(london, time):
 		return forks.BPO4
 	case c.IsBPO3(london, time):
 		return forks.BPO3
+	case c.IsBogota(london, time):
+		return forks.Bogota
+	case c.IsAmsterdam(london, time):
+		return forks.Amsterdam
 	case c.IsBPO2(london, time):
 		return forks.BPO2
 	case c.IsBPO1(london, time):
@@ -1105,7 +1105,7 @@ func (c *ChainConfig) BlobConfig(fork forks.Fork) *BlobConfig {
 func (c *ChainConfig) ActiveSystemContracts(time uint64) map[string]common.Address {
 	fork := c.LatestFork(time)
 	active := make(map[string]common.Address)
-	if fork >= forks.Amsterdam {
+	if c.IsAmsterdam(c.LondonBlock, time) {
 		// EIP-8282 - Builder Execution Requests
 		active["BUILDER_DEPOSIT_CONTRACT_ADDRESS"] = BuilderDepositAddress
 		active["BUILDER_EXIT_CONTRACT_ADDRESS"] = BuilderExitAddress

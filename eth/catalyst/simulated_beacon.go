@@ -103,9 +103,11 @@ type SimulatedBeacon struct {
 }
 
 func payloadVersion(config *params.ChainConfig, time uint64) engine.PayloadVersion {
-	switch config.LatestFork(time) {
-	case forks.Amsterdam:
+	// Forks after Amsterdam, such as BPO forks, keep using the Amsterdam payload.
+	if config.IsAmsterdam(config.LondonBlock, time) {
 		return engine.PayloadV4
+	}
+	switch config.LatestFork(time) {
 	case forks.Bogota, forks.BPO5, forks.BPO4, forks.BPO3, forks.BPO2, forks.BPO1, forks.Osaka, forks.Prague, forks.Cancun:
 		return engine.PayloadV3
 	case forks.Paris, forks.Shanghai:
