@@ -1131,9 +1131,12 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 
 	switch tx.Type() {
 	case types.LegacyTxType:
-		// if a legacy transaction has an EIP-155 chain id, include it explicitly
-		if id := tx.ChainId(); id.Sign() != 0 {
-			result.ChainID = (*hexutil.Big)(id)
+		// if a legacy transaction has an EIP-155 chain id, include it explicitly.
+		// An unprotected transaction (v of 0, 1, 27 or 28) carries no chain id.
+		if tx.Protected() {
+			if id := tx.ChainId(); id.Sign() != 0 {
+				result.ChainID = (*hexutil.Big)(id)
+			}
 		}
 
 	case types.AccessListTxType:

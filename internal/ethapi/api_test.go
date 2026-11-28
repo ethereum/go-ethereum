@@ -3707,7 +3707,6 @@ func TestRPCMarshalBlock(t *testing.T) {
 						"transactionIndex": "0x1",
 						"value": "0x6f",
 						"type": "0x0",
-						"chainId": "0x7fffffffffffffee",
 						"v": "0x0",
 						"r": "0x0",
 						"s": "0x0"
@@ -3747,7 +3746,6 @@ func TestRPCMarshalBlock(t *testing.T) {
 						"transactionIndex": "0x3",
 						"value": "0x6f",
 						"type": "0x0",
-						"chainId": "0x7fffffffffffffee",
 						"v": "0x0",
 						"r": "0x0",
 						"s": "0x0"
