@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/internal/testlog"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/enr"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
@@ -391,6 +392,42 @@ func TestDialSchedResolve(t *testing.T) {
 			wantNewDials: []*enode.Node{
 				resolved2,
 			},
+		},
+	})
+}
+
+// This test checks that a failed dial to a dual-stack node is retried on the
+// other address family before the task ends.
+func TestDialSchedAlternateFamily(t *testing.T) {
+	t.Parallel()
+
+	config := dialConfig{
+		maxActiveDials: 1,
+		maxDialPeers:   1,
+	}
+	var r enr.Record
+	r.Set(enr.IPv4Addr(netip.MustParseAddr("127.0.0.1")))
+	r.Set(enr.IPv6Addr(netip.MustParseAddr("::1")))
+	r.Set(enr.TCP(30303))
+	node := enode.SignNull(&r, uintID(0x01))
+	alt, ok := node.WithAlternateFamily()
+	if !ok {
+		t.Fatal("test node has no alternate family")
+	}
+
+	runDialTest(t, config, []dialTestRound{
+		{
+			discovered:   []*enode.Node{node},
+			wantNewDials: []*enode.Node{node},
+		},
+		// The IPv4 dial fails; the task dials the IPv6 endpoint of the same node.
+		{
+			failed:       []enode.ID{uintID(0x01)},
+			wantNewDials: []*enode.Node{alt},
+		},
+		// The IPv6 dial fails too; the task ends without further dials.
+		{
+			failed: []enode.ID{uintID(0x01)},
 		},
 	})
 }
