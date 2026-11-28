@@ -63,8 +63,9 @@ func rpcRequest(method string, params ...any) ([]byte, error) {
 	return fmt.Appendf(nil, `{"jsonrpc":"2.0","id":1,"method":%q,"params":%s}`, method, p), nil
 }
 
-// call sends an Engine API JSON-RPC request.
-func (ec *EngineClient) call(method string, params ...any) error {
+// call sends an Engine API JSON-RPC request and decodes the result into
+// result, if non-nil.
+func (ec *EngineClient) call(result any, method string, params ...any) error {
 	body, err := rpcRequest(method, params...)
 	if err != nil {
 		return err
@@ -77,8 +78,31 @@ func (ec *EngineClient) call(method string, params ...any) error {
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+ec.token())
 
-	_, err = ec.http.Do(req)
-	return err
+	resp, err := ec.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s: unexpected HTTP status %s", method, resp.Status)
+	}
+	var reply struct {
+		Error *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+		Result json.RawMessage `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&reply); err != nil {
+		return fmt.Errorf("%s: invalid response: %v", method, err)
+	}
+	if reply.Error != nil {
+		return fmt.Errorf("%s: %s (code %d)", method, reply.Error.Message, reply.Error.Code)
+	}
+	if result != nil {
+		return json.Unmarshal(reply.Result, result)
+	}
+	return nil
 }
 
 // sendForkchoiceUpdated sends an fcu for the head of the generated chain.
@@ -89,8 +113,24 @@ func (ec *EngineClient) sendForkchoiceUpdated(custody *types.CustodyBitmap) erro
 		SafeBlockHash:      head,
 		FinalizedBlockHash: head,
 	}
+	var (
+		resp engine.ForkChoiceResponse
+		err  error
+	)
 	if custody != nil {
-		return ec.call("engine_forkchoiceUpdatedV4", state, nil, custody)
+		err = ec.call(&resp, "engine_forkchoiceUpdatedV4", state, nil, custody)
+	} else {
+		err = ec.call(&resp, "engine_forkchoiceUpdatedV3", state, nil)
 	}
-	return ec.call("engine_forkchoiceUpdatedV3", state, nil)
+	if err != nil {
+		return err
+	}
+	if status := resp.PayloadStatus; status.Status != engine.VALID {
+		msg := ""
+		if status.ValidationError != nil {
+			msg = ": " + *status.ValidationError
+		}
+		return fmt.Errorf("forkchoice update not accepted: status %s%s", status.Status, msg)
+	}
+	return nil
 }
